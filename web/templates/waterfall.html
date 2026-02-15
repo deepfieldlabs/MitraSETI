@@ -1,0 +1,535 @@
+{% extends "base.html" %}
+{% block title %}Waterfall Viewer{% endblock %}
+
+{% block extra_head %}
+<style>
+    .waterfall-layout {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 20px;
+    }
+
+    .spectrogram-panel {
+        background: var(--bg-surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 22px;
+        position: relative;
+    }
+
+    .spectrogram-panel canvas {
+        width: 100%;
+        border-radius: 10px;
+        cursor: crosshair;
+        display: block;
+    }
+
+    .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+
+    .toolbar label {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .toolbar select, .toolbar input[type="range"] {
+        background: rgba(15, 25, 45, 0.6);
+        border: 1px solid var(--glass-border);
+        border-radius: 6px;
+        color: var(--text-primary);
+        padding: 6px 10px;
+        font-size: 12px;
+        font-family: inherit;
+    }
+
+    .toolbar select:focus, .toolbar input:focus {
+        outline: none;
+        border-color: var(--accent-cyan-border);
+    }
+
+    .drop-zone {
+        border: 2px dashed rgba(0, 212, 255, 0.2);
+        border-radius: 14px;
+        padding: 40px;
+        text-align: center;
+        transition: all 0.3s;
+        margin-bottom: 16px;
+        cursor: pointer;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+        border-color: var(--accent-cyan);
+        background: rgba(0, 212, 255, 0.04);
+    }
+
+    .drop-zone .icon {
+        font-size: 36px;
+        margin-bottom: 12px;
+        display: block;
+        color: var(--accent-cyan-dim);
+    }
+
+    .drop-zone .text {
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+
+    .drop-zone .subtext {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-top: 6px;
+    }
+
+    .signal-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .detail-card {
+        background: var(--bg-surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 18px;
+    }
+
+    .detail-card h3 {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent-cyan);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 14px;
+    }
+
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border-dim);
+    }
+
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+
+    .detail-row .key {
+        font-size: 11px;
+        color: var(--text-tertiary);
+    }
+
+    .detail-row .val {
+        font-size: 13px;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .zoom-controls {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .zoom-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid var(--glass-border);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .zoom-btn:hover {
+        border-color: var(--accent-cyan-border);
+        background: var(--bg-hover);
+    }
+
+    .cursor-info {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-top: 10px;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    .colorbar {
+        height: 12px;
+        border-radius: 6px;
+        margin-top: 10px;
+        position: relative;
+    }
+
+    .colorbar-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: var(--text-tertiary);
+        margin-top: 4px;
+    }
+
+    @media (max-width: 1024px) {
+        .waterfall-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Waterfall Viewer</h1>
+    <p class="subtitle">Interactive spectrogram visualization &amp; signal inspection</p>
+</div>
+
+<!-- Upload Zone -->
+<div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <span class="icon">&#x2261;</span>
+    <div class="text">Drop a filterbank file here or click to upload</div>
+    <div class="subtext">.fil, .h5, .hdf5 supported &mdash; or view demo spectrogram below</div>
+    <input type="file" id="file-input" accept=".fil,.h5,.hdf5" style="display:none">
+</div>
+
+<div class="waterfall-layout">
+    <!-- Main Spectrogram -->
+    <div class="spectrogram-panel">
+        <div class="toolbar">
+            <div>
+                <label>Color Map</label>
+                <select id="colormap-select" onchange="changeColormap()">
+                    <option value="viridis">Viridis</option>
+                    <option value="inferno">Inferno</option>
+                    <option value="plasma">Plasma</option>
+                    <option value="magma">Magma</option>
+                    <option value="hot">Hot</option>
+                    <option value="cool">Cool</option>
+                    <option value="grayscale">Grayscale</option>
+                </select>
+            </div>
+            <div>
+                <label>Brightness</label>
+                <input type="range" id="brightness" min="0.5" max="3" step="0.1" value="1.0" oninput="renderSpectrogram()">
+            </div>
+            <div>
+                <label>Contrast</label>
+                <input type="range" id="contrast" min="0.5" max="3" step="0.1" value="1.2" oninput="renderSpectrogram()">
+            </div>
+            <div class="zoom-controls">
+                <label>Zoom</label>
+                <button class="zoom-btn" onclick="zoomIn()">+</button>
+                <button class="zoom-btn" onclick="zoomOut()">&minus;</button>
+                <button class="zoom-btn" onclick="resetZoom()">&#x21BA;</button>
+            </div>
+        </div>
+
+        <canvas id="spectrogram" width="900" height="500"></canvas>
+
+        <div class="cursor-info" id="cursor-info">
+            Hover over spectrogram &mdash; Freq: -- MHz | Time: -- s | Power: -- dB
+        </div>
+
+        <!-- Colorbar -->
+        <div class="colorbar" id="colorbar"></div>
+        <div class="colorbar-labels">
+            <span>Low Power</span>
+            <span>High Power</span>
+        </div>
+    </div>
+
+    <!-- Signal Detail Sidebar -->
+    <div class="signal-sidebar">
+        <div class="detail-card">
+            <h3>File Info</h3>
+            <div class="detail-row">
+                <span class="key">Filename</span>
+                <span class="val" id="info-filename">Demo Data</span>
+            </div>
+            <div class="detail-row">
+                <span class="key">Center Freq</span>
+                <span class="val" id="info-freq">1420.405 MHz</span>
+            </div>
+            <div class="detail-row">
+                <span class="key">Bandwidth</span>
+                <span class="val" id="info-bw">300.0 MHz</span>
+            </div>
+            <div class="detail-row">
+                <span class="key">Time Span</span>
+                <span class="val" id="info-time">300.0 s</span>
+            </div>
+            <div class="detail-row">
+                <span class="key">Channels</span>
+                <span class="val" id="info-channels">900</span>
+            </div>
+            <div class="detail-row">
+                <span class="key">Time Steps</span>
+                <span class="val" id="info-steps">500</span>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h3>Detected Signals</h3>
+            <div id="detected-signals">
+                <div class="detail-row">
+                    <span class="key">Signal 1</span>
+                    <span class="val" style="color: var(--accent-green);">1420.41 MHz, DR: 0.12 Hz/s</span>
+                </div>
+                <div class="detail-row">
+                    <span class="key">Signal 2</span>
+                    <span class="val" style="color: var(--accent-amber);">1420.50 MHz, DR: -0.05 Hz/s</span>
+                </div>
+                <div class="detail-row">
+                    <span class="key">Signal 3</span>
+                    <span class="val" style="color: var(--accent-rose);">1420.25 MHz, RFI</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h3>Classification</h3>
+            <div class="detail-row">
+                <span class="key">Type</span>
+                <span class="val"><span class="badge badge-narrowband">Narrowband</span></span>
+            </div>
+            <div class="detail-row">
+                <span class="key">SNR</span>
+                <span class="val" style="color: var(--accent-cyan);">18.4</span>
+            </div>
+            <div class="detail-row">
+                <span class="key">RFI Score</span>
+                <span class="val" style="color: var(--accent-green);">0.12</span>
+            </div>
+            <div class="detail-row">
+                <span class="key">Drift Rate</span>
+                <span class="val">0.12 Hz/s</span>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" style="width: 100%;" onclick="analyzeSpectrogram()">
+            Run Analysis
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Colormap definitions ──
+const colormaps = {
+    viridis: [[68,1,84],[72,35,116],[64,67,135],[52,94,141],[41,120,142],[32,144,140],[34,167,132],[68,190,112],[121,209,81],[189,222,38],[253,231,37]],
+    inferno: [[0,0,4],[22,11,57],[66,10,104],[106,23,110],[147,38,103],[186,54,85],[221,81,58],[243,118,27],[252,165,10],[246,215,70],[252,255,164]],
+    plasma: [[13,8,135],[65,4,157],[106,0,168],[143,13,164],[176,42,143],[199,73,119],[216,104,91],[228,136,65],[236,169,43],[240,205,34],[240,249,33]],
+    magma: [[0,0,4],[18,13,60],[51,16,104],[89,17,123],[128,28,119],[165,44,107],[201,72,86],[229,109,65],[244,154,49],[249,203,60],[252,253,191]],
+    hot: [[10,0,0],[80,0,0],[160,0,0],[230,30,0],[255,80,0],[255,140,0],[255,200,20],[255,230,80],[255,250,160],[255,255,220],[255,255,255]],
+    cool: [[0,255,255],[25,230,255],[50,200,255],[80,170,255],[110,140,255],[140,110,255],[170,80,255],[200,50,255],[230,25,255],[255,0,255],[255,0,255]],
+    grayscale: [[0,0,0],[25,25,25],[51,51,51],[76,76,76],[102,102,102],[127,127,127],[153,153,153],[178,178,178],[204,204,204],[229,229,229],[255,255,255]]
+};
+
+let currentColormap = 'viridis';
+let spectrogramData = null;
+let zoomLevel = 1;
+let panX = 0, panY = 0;
+const canvas = document.getElementById('spectrogram');
+const ctx = canvas.getContext('2d');
+
+// ── Generate synthetic spectrogram data ──
+function generateDemoData(width, height) {
+    const data = new Float32Array(width * height);
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            // Background noise
+            let val = Math.random() * 0.3;
+
+            // Add Gaussian noise envelope
+            val += 0.1 * Math.exp(-Math.pow((x - width/2) / (width * 0.3), 2));
+
+            // Signal 1: Strong drifting narrowband (candidate)
+            const s1_freq = width * 0.47 + y * 0.15;
+            const s1_dist = Math.abs(x - s1_freq);
+            if (s1_dist < 3) {
+                val += (1.0 - s1_dist / 3) * (0.7 + 0.3 * Math.sin(y * 0.1));
+            }
+
+            // Signal 2: Weaker drifting signal
+            const s2_freq = width * 0.55 - y * 0.08;
+            const s2_dist = Math.abs(x - s2_freq);
+            if (s2_dist < 2) {
+                val += (1.0 - s2_dist / 2) * 0.45;
+            }
+
+            // Signal 3: RFI — vertical (no drift)
+            const s3_freq = width * 0.35;
+            const s3_dist = Math.abs(x - s3_freq);
+            if (s3_dist < 4) {
+                val += (1.0 - s3_dist / 4) * 0.5;
+            }
+
+            // Additional broadband RFI burst
+            if (y > height * 0.6 && y < height * 0.65) {
+                val += 0.2 * Math.random();
+            }
+
+            // Hydrogen line region enhancement
+            const h1_center = width * 0.47;
+            const h1_dist = Math.abs(x - h1_center);
+            if (h1_dist < width * 0.02) {
+                val += 0.08;
+            }
+
+            data[y * width + x] = Math.min(val, 1.0);
+        }
+    }
+    return data;
+}
+
+// ── Interpolate colormap ──
+function getColor(value, cmap) {
+    const colors = colormaps[cmap] || colormaps.viridis;
+    const scaled = Math.max(0, Math.min(1, value)) * (colors.length - 1);
+    const idx = Math.floor(scaled);
+    const frac = scaled - idx;
+
+    if (idx >= colors.length - 1) return colors[colors.length - 1];
+
+    const c0 = colors[idx];
+    const c1 = colors[idx + 1];
+    return [
+        Math.round(c0[0] + (c1[0] - c0[0]) * frac),
+        Math.round(c0[1] + (c1[1] - c0[1]) * frac),
+        Math.round(c0[2] + (c1[2] - c0[2]) * frac),
+    ];
+}
+
+// ── Render spectrogram ──
+function renderSpectrogram() {
+    if (!spectrogramData) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const brightness = parseFloat(document.getElementById('brightness').value);
+    const contrast = parseFloat(document.getElementById('contrast').value);
+
+    const imageData = ctx.createImageData(w, h);
+    const pixels = imageData.data;
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            let val = spectrogramData[y * w + x];
+
+            // Apply brightness and contrast
+            val = ((val - 0.5) * contrast + 0.5) * brightness;
+            val = Math.max(0, Math.min(1, val));
+
+            const [r, g, b] = getColor(val, currentColormap);
+            const idx = (y * w + x) * 4;
+            pixels[idx] = r;
+            pixels[idx + 1] = g;
+            pixels[idx + 2] = b;
+            pixels[idx + 3] = 255;
+        }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    updateColorbar();
+}
+
+// ── Update colorbar ──
+function updateColorbar() {
+    const bar = document.getElementById('colorbar');
+    const colors = colormaps[currentColormap] || colormaps.viridis;
+    const stops = colors.map((c, i) => {
+        const pct = (i / (colors.length - 1)) * 100;
+        return `rgb(${c[0]},${c[1]},${c[2]}) ${pct}%`;
+    }).join(', ');
+    bar.style.background = `linear-gradient(90deg, ${stops})`;
+}
+
+// ── Colormap change ──
+function changeColormap() {
+    currentColormap = document.getElementById('colormap-select').value;
+    renderSpectrogram();
+}
+
+// ── Zoom controls ──
+function zoomIn() {
+    zoomLevel = Math.min(zoomLevel * 1.3, 5);
+    canvas.style.transform = `scale(${zoomLevel})`;
+    canvas.style.transformOrigin = 'center center';
+}
+
+function zoomOut() {
+    zoomLevel = Math.max(zoomLevel / 1.3, 1);
+    canvas.style.transform = `scale(${zoomLevel})`;
+}
+
+function resetZoom() {
+    zoomLevel = 1;
+    canvas.style.transform = 'scale(1)';
+}
+
+// ── Mouse tracking ──
+canvas.addEventListener('mousemove', function(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.floor((e.clientX - rect.left) * scaleX);
+    const y = Math.floor((e.clientY - rect.top) * scaleY);
+
+    if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+        const freq = (1420.405 - 150 + (x / canvas.width) * 300).toFixed(3);
+        const time = (y / canvas.height * 300).toFixed(1);
+        const power = spectrogramData ? (spectrogramData[y * canvas.width + x] * 40 - 20).toFixed(1) : '--';
+        document.getElementById('cursor-info').textContent =
+            `Freq: ${freq} MHz | Time: ${time} s | Power: ${power} dB`;
+    }
+});
+
+// ── Drag & drop ──
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    this.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', function() {
+    this.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
+});
+document.getElementById('file-input').addEventListener('change', function(e) {
+    if (e.target.files[0]) handleFileUpload(e.target.files[0]);
+});
+
+function handleFileUpload(file) {
+    document.getElementById('info-filename').textContent = file.name;
+    // Re-render with demo data (real parsing would need backend)
+    spectrogramData = generateDemoData(canvas.width, canvas.height);
+    renderSpectrogram();
+}
+
+function analyzeSpectrogram() {
+    alert('Analysis would submit the spectrogram to the astroSETI API for classification and RFI filtering.');
+}
+
+// ── Initialize with demo data on load ──
+spectrogramData = generateDemoData(canvas.width, canvas.height);
+renderSpectrogram();
+</script>
+{% endblock %}

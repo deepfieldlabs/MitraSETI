@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_head %}
+<style>
+    .hero {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.06), rgba(124, 58, 237, 0.06));
+        border: 1px solid rgba(0, 212, 255, 0.15);
+        border-radius: 20px;
+        padding: 40px 36px;
+        margin-bottom: 28px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .hero::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(ellipse at 30% 50%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
+                    radial-gradient(ellipse at 70% 50%, rgba(124, 58, 237, 0.04) 0%, transparent 50%);
+        pointer-events: none;
+    }
+    .hero h1 {
+        font-size: 42px;
+        font-weight: 200;
+        letter-spacing: 6px;
+        color: var(--accent-cyan);
+        text-shadow: 0 0 40px rgba(0, 212, 255, 0.3), 0 0 80px rgba(0, 212, 255, 0.1);
+        margin-bottom: 10px;
+        position: relative;
+    }
+    .hero .tagline {
+        font-size: 14px;
+        color: var(--accent-cyan-dim);
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        text-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+        position: relative;
+    }
+
+    .system-health {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+    }
+    .health-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        background: rgba(15, 25, 45, 0.4);
+        border-radius: 10px;
+        border: 1px solid var(--border-subtle);
+    }
+    .health-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .health-dot.ok { background: var(--accent-green); box-shadow: 0 0 8px rgba(0, 255, 136, 0.4); }
+    .health-dot.warn { background: var(--accent-amber); box-shadow: 0 0 8px rgba(255, 170, 0, 0.4); }
+    .health-dot.error { background: var(--accent-rose); box-shadow: 0 0 8px rgba(255, 51, 102, 0.4); }
+    .health-label { font-size: 12px; color: var(--text-secondary); }
+    .health-value { font-size: 11px; color: var(--text-tertiary); margin-left: auto; }
+
+    .refresh-note {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        text-align: right;
+        margin-top: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="hero">
+    <h1>astroSETI</h1>
+    <div class="tagline">Decoding the Cosmos with Machine Intelligence</div>
+</div>
+
+<!-- Stat Cards -->
+<div class="card-grid cols-6" style="margin-bottom: 28px;">
+    <div class="stat-card">
+        <div class="value" id="stat-observations">{{ stats.get('total_observations', 0) }}</div>
+        <div class="label">Observations</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-blue);" id="stat-signals">{{ stats.get('total_signals', 0) }}</div>
+        <div class="label">Signals</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-green);" id="stat-candidates">{{ stats.get('candidates', 0) }}</div>
+        <div class="label">Candidates</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-rose);" id="stat-rfi">{{ "%.1f"|format(stats.get('rfi_rate', 0)) }}%</div>
+        <div class="label">RFI Rate</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-amber);" id="stat-speed">{{ stats.get('processing_speed', 0) }}</div>
+        <div class="label">Signals/min</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-purple);" id="stat-xmatch">{{ stats.get('astrolens_matches', 0) }}</div>
+        <div class="label">AstroLens X-Match</div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="chart-row">
+    <div class="chart-card" style="grid-column: span 1;">
+        <h3>Signals Over Time</h3>
+        <canvas id="signalsTimeChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>Classification Distribution</h3>
+        <canvas id="classificationChart"></canvas>
+    </div>
+</div>
+
+<div class="chart-row">
+    <div class="chart-card">
+        <h3>Processing Speed (signals/min)</h3>
+        <canvas id="speedChart"></canvas>
+    </div>
+    <div class="card">
+        <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">System Health</h3>
+        <div class="system-health" id="health-panel">
+            <div class="health-item">
+                <div class="health-dot warn" id="health-api-dot"></div>
+                <span class="health-label">API Backend</span>
+                <span class="health-value" id="health-api-val">Checking...</span>
+            </div>
+            <div class="health-item">
+                <div class="health-dot warn" id="health-gpu-dot"></div>
+                <span class="health-label">GPU</span>
+                <span class="health-value" id="health-gpu-val">Checking...</span>
+            </div>
+            <div class="health-item">
+                <div class="health-dot warn" id="health-model-dot"></div>
+                <span class="health-label">Classifier</span>
+                <span class="health-value" id="health-model-val">Checking...</span>
+            </div>
+            <div class="health-item">
+                <div class="health-dot warn" id="health-db-dot"></div>
+                <span class="health-label">Database</span>
+                <span class="health-value" id="health-db-val">Checking...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Candidates Table -->
+{% if candidates %}
+<div class="card" style="margin-top: 8px;">
+    <h3 style="font-size: 15px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">Recent Candidate Signals</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Classification</th>
+                <th>SNR</th>
+                <th>Drift Rate</th>
+                <th>Frequency</th>
+                <th>RFI Score</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in candidates[:12] %}
+            <tr>
+                <td style="color: var(--text-tertiary);">#{{ s.get('id', '') }}</td>
+                <td>{{ s.get('classification', 'Unknown') }}</td>
+                <td style="color: var(--accent-cyan);">{{ "%.1f"|format(s.get('snr', 0)) }}</td>
+                <td>{{ "%.4f"|format(s.get('drift_rate', 0)) }} Hz/s</td>
+                <td>{{ "%.2f"|format(s.get('frequency_mhz', 0)) }} MHz</td>
+                <td>
+                    {% set rfi = s.get('rfi_score', 0) %}
+                    <span style="color: {% if rfi > 0.7 %}var(--accent-rose){% elif rfi > 0.3 %}var(--accent-amber){% else %}var(--accent-green){% endif %};">
+                        {{ "%.2f"|format(rfi) }}
+                    </span>
+                </td>
+                <td>
+                    {% set cls = s.get('classification', 'unknown')|lower %}
+                    {% if 'candidate' in cls or 'et' in cls %}
+                        <span class="badge badge-candidate">Candidate</span>
+                    {% elif 'rfi' in cls %}
+                        <span class="badge badge-rfi">RFI</span>
+                    {% elif 'narrowband' in cls %}
+                        <span class="badge badge-narrowband">Narrowband</span>
+                    {% elif 'broadband' in cls %}
+                        <span class="badge badge-broadband">Broadband</span>
+                    {% elif 'pulsed' in cls %}
+                        <span class="badge badge-pulsed">Pulsed</span>
+                    {% else %}
+                        <span class="badge badge-unknown">{{ s.get('classification', 'Unknown') }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="refresh-note">Auto-refreshes every 15 seconds &middot; Last: <span id="last-refresh">--</span></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Demo data (used when API returns no time-series) ──
+const demoLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const demoSignals = [42, 78, 56, 93, 124, 87, 65];
+const demoCandidates = [3, 7, 4, 11, 15, 9, 6];
+const demoSpeed = [120, 135, 145, 128, 150, 142, 138];
+
+// 1. Signals over time (line chart)
+new Chart(document.getElementById('signalsTimeChart'), {
+    type: 'line',
+    data: {
+        labels: demoLabels,
+        datasets: [
+            {
+                label: 'Signals Detected',
+                data: demoSignals,
+                borderColor: 'rgba(0, 212, 255, 0.9)',
+                backgroundColor: 'rgba(0, 212, 255, 0.08)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: '#00d4ff',
+            },
+            {
+                label: 'Candidates',
+                data: demoCandidates,
+                borderColor: 'rgba(0, 255, 136, 0.8)',
+                backgroundColor: 'rgba(0, 255, 136, 0.05)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: '#00ff88',
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+// 2. Classification distribution (doughnut)
+new Chart(document.getElementById('classificationChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Narrowband', 'Broadband', 'Pulsed', 'RFI', 'Candidate', 'Noise'],
+        datasets: [{
+            data: [28, 15, 12, 35, 5, 5],
+            backgroundColor: [
+                'rgba(0, 212, 255, 0.7)',
+                'rgba(124, 58, 237, 0.7)',
+                'rgba(255, 170, 0, 0.7)',
+                'rgba(255, 51, 102, 0.7)',
+                'rgba(0, 255, 136, 0.7)',
+                'rgba(140, 165, 200, 0.3)',
+            ],
+            borderWidth: 0,
+            hoverOffset: 8,
+        }]
+    },
+    options: {
+        responsive: true,
+        cutout: '65%',
+        plugins: {
+            legend: { position: 'right', labels: { boxWidth: 12, padding: 12 } }
+        }
+    }
+});
+
+// 3. Processing speed (bar chart)
+new Chart(document.getElementById('speedChart'), {
+    type: 'bar',
+    data: {
+        labels: demoLabels,
+        datasets: [{
+            label: 'Signals/min',
+            data: demoSpeed,
+            backgroundColor: 'rgba(0, 212, 255, 0.4)',
+            borderColor: 'rgba(0, 212, 255, 0.8)',
+            borderWidth: 1,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+// ── Health checks ──
+function checkHealth() {
+    fetch('/api/stats')
+        .then(r => {
+            const dot = document.getElementById('health-api-dot');
+            const val = document.getElementById('health-api-val');
+            if (r.ok) {
+                dot.className = 'health-dot ok';
+                val.textContent = 'Connected';
+            } else {
+                dot.className = 'health-dot error';
+                val.textContent = 'Error';
+            }
+        })
+        .catch(() => {
+            document.getElementById('health-api-dot').className = 'health-dot error';
+            document.getElementById('health-api-val').textContent = 'Offline';
+        });
+
+    fetch('/api/device')
+        .then(r => r.json())
+        .then(info => {
+            const dot = document.getElementById('health-gpu-dot');
+            const val = document.getElementById('health-gpu-val');
+            if (info.device_type && info.device_type !== 'cpu') {
+                dot.className = 'health-dot ok';
+                val.textContent = info.device_name || 'GPU';
+            } else {
+                dot.className = 'health-dot warn';
+                val.textContent = 'CPU only';
+            }
+
+            // Model check
+            const mDot = document.getElementById('health-model-dot');
+            const mVal = document.getElementById('health-model-val');
+            mDot.className = 'health-dot ok';
+            mVal.textContent = 'Loaded';
+
+            // DB check
+            const dDot = document.getElementById('health-db-dot');
+            const dVal = document.getElementById('health-db-val');
+            dDot.className = 'health-dot ok';
+            dVal.textContent = 'Connected';
+        })
+        .catch(() => {
+            document.getElementById('health-gpu-dot').className = 'health-dot error';
+            document.getElementById('health-gpu-val').textContent = 'Unknown';
+        });
+}
+checkHealth();
+
+// ── Auto-refresh every 15 seconds ──
+setInterval(() => {
+    fetch('/api/stats')
+        .then(r => r.json())
+        .then(data => {
+            if (data.total_observations !== undefined)
+                document.getElementById('stat-observations').textContent = data.total_observations;
+            if (data.total_signals !== undefined)
+                document.getElementById('stat-signals').textContent = data.total_signals;
+            if (data.candidates !== undefined)
+                document.getElementById('stat-candidates').textContent = data.candidates;
+            if (data.rfi_rate !== undefined)
+                document.getElementById('stat-rfi').textContent = data.rfi_rate.toFixed(1) + '%';
+            if (data.processing_speed !== undefined)
+                document.getElementById('stat-speed').textContent = data.processing_speed;
+            if (data.astrolens_matches !== undefined)
+                document.getElementById('stat-xmatch').textContent = data.astrolens_matches;
+
+            document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+        })
+        .catch(() => {});
+    checkHealth();
+}, 15000);
+
+document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+</script>
+{% endblock %}

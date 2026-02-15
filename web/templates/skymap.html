@@ -1,0 +1,668 @@
+{% extends "base.html" %}
+{% block title %}Sky Map{% endblock %}
+
+{% block extra_head %}
+<style>
+    .skymap-container {
+        position: relative;
+        background: var(--bg-surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 22px;
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+
+    .skymap-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+
+    .skymap-toolbar label {
+        font-size: 10px;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .skymap-toolbar select {
+        background: rgba(15, 25, 45, 0.6);
+        border: 1px solid var(--glass-border);
+        border-radius: 6px;
+        color: var(--text-primary);
+        padding: 6px 10px;
+        font-size: 12px;
+        font-family: inherit;
+    }
+
+    .skymap-toolbar select:focus {
+        outline: none;
+        border-color: var(--accent-cyan-border);
+    }
+
+    .skymap-canvas-wrapper {
+        position: relative;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #040810;
+        border: 1px solid rgba(100, 180, 255, 0.08);
+    }
+
+    #skymap-canvas {
+        width: 100%;
+        display: block;
+        cursor: crosshair;
+    }
+
+    .skymap-legend {
+        display: flex;
+        gap: 24px;
+        margin-top: 14px;
+        flex-wrap: wrap;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .legend-dot.candidate { background: #00ff88; box-shadow: 0 0 6px rgba(0, 255, 136, 0.5); }
+    .legend-dot.rfi { background: #ff3366; box-shadow: 0 0 6px rgba(255, 51, 102, 0.5); }
+    .legend-dot.observation { background: #5b8def; box-shadow: 0 0 6px rgba(91, 141, 239, 0.5); }
+    .legend-dot.astrolens {
+        background: #7c3aed;
+        box-shadow: 0 0 6px rgba(124, 58, 237, 0.5);
+        border-radius: 0;
+        width: 12px;
+        height: 12px;
+        clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    }
+
+    /* Tooltip */
+    .skymap-tooltip {
+        display: none;
+        position: absolute;
+        background: rgba(8, 12, 20, 0.95);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-size: 12px;
+        color: var(--text-primary);
+        pointer-events: none;
+        z-index: 50;
+        min-width: 200px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .skymap-tooltip .tt-header {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--accent-cyan);
+    }
+
+    .skymap-tooltip .tt-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 2px 0;
+    }
+
+    .skymap-tooltip .tt-key {
+        color: var(--text-tertiary);
+    }
+
+    .skymap-tooltip .tt-val {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .skymap-info-card {
+        background: var(--bg-surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 18px;
+    }
+
+    .skymap-info-card h3 {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent-cyan);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
+    }
+
+    .coord-display {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-top: 10px;
+    }
+
+    .crossmatch-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(124, 58, 237, 0.15);
+        border: 1px solid rgba(124, 58, 237, 0.3);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 11px;
+        color: var(--accent-purple);
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Sky Map</h1>
+    <p class="subtitle">Interactive celestial map &mdash; radio observations with optical cross-matches</p>
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-blue);" id="map-observations">0</div>
+        <div class="label">Observations Plotted</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-green);" id="map-candidates">0</div>
+        <div class="label">Candidate Signals</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-rose);" id="map-rfi">0</div>
+        <div class="label">RFI Sources</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-purple);" id="map-xmatch">0</div>
+        <div class="label">AstroLens Matches</div>
+    </div>
+</div>
+
+<!-- Sky Map -->
+<div class="skymap-container">
+    <div class="skymap-toolbar">
+        <div>
+            <label>Projection</label>
+            <select id="projection-select" onchange="redrawMap()">
+                <option value="equirectangular">Equirectangular</option>
+                <option value="mollweide">Mollweide</option>
+            </select>
+        </div>
+        <div>
+            <label>Show</label>
+            <select id="filter-select" onchange="redrawMap()">
+                <option value="all">All</option>
+                <option value="candidates">Candidates Only</option>
+                <option value="rfi">RFI Only</option>
+                <option value="astrolens">AstroLens Matches</option>
+            </select>
+        </div>
+        <div>
+            <label>Grid</label>
+            <select id="grid-select" onchange="redrawMap()">
+                <option value="on">On</option>
+                <option value="off">Off</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="skymap-canvas-wrapper">
+        <canvas id="skymap-canvas" width="1200" height="600"></canvas>
+        <div class="skymap-tooltip" id="tooltip"></div>
+    </div>
+
+    <div class="skymap-legend">
+        <div class="legend-item">
+            <div class="legend-dot candidate"></div>
+            <span>Candidate Signal</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot rfi"></div>
+            <span>RFI Source</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot observation"></div>
+            <span>Observation (no signal)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot astrolens"></div>
+            <span>AstroLens Optical Match</span>
+        </div>
+    </div>
+
+    <div class="coord-display" id="coord-display">
+        RA: -- &deg; | Dec: -- &deg; | Galactic l: -- &deg; b: -- &deg;
+    </div>
+</div>
+
+<!-- Info Cards Row -->
+<div class="card-grid cols-2">
+    <div class="skymap-info-card">
+        <h3>Cross-Match Summary</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+            Positions with both radio (astroSETI) and optical (AstroLens) detections are highlighted
+            with a star icon on the map. These multi-wavelength coincidences are high-priority targets.
+        </p>
+        <div id="xmatch-list" style="max-height: 200px; overflow-y: auto;">
+            <p style="color: var(--text-tertiary); font-size: 12px;">Loading cross-match data...</p>
+        </div>
+    </div>
+
+    <div class="skymap-info-card">
+        <h3>Coverage Statistics</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+                <div style="font-size: 24px; font-weight: 300; color: var(--accent-cyan);" id="coverage-pct">--</div>
+                <div style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 1px;">Sky Coverage</div>
+            </div>
+            <div>
+                <div style="font-size: 24px; font-weight: 300; color: var(--accent-amber);" id="coverage-hrs">--</div>
+                <div style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 1px;">Total Hours</div>
+            </div>
+            <div>
+                <div style="font-size: 24px; font-weight: 300; color: var(--accent-green);" id="coverage-density">--</div>
+                <div style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 1px;">Avg Signals/deg&sup2;</div>
+            </div>
+            <div>
+                <div style="font-size: 24px; font-weight: 300; color: var(--accent-purple);" id="coverage-bands">--</div>
+                <div style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 1px;">Freq Bands</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Data from server ──
+const observations = {{ observations_json|safe }};
+const astrolensMatches = {{ astrolens_json|safe }};
+
+// ── Generate demo data if none from API ──
+function generateDemoObservations(count) {
+    const obs = [];
+    const rng = (seed) => {
+        let s = seed;
+        return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    };
+    const r = rng(42);
+
+    for (let i = 0; i < count; i++) {
+        const ra = r() * 360;
+        const dec = (r() - 0.5) * 180;
+        const type = r();
+        let classification, snr, rfi_score;
+
+        if (type < 0.08) {
+            classification = 'candidate';
+            snr = 10 + r() * 40;
+            rfi_score = r() * 0.2;
+        } else if (type < 0.35) {
+            classification = 'rfi';
+            snr = 5 + r() * 15;
+            rfi_score = 0.7 + r() * 0.3;
+        } else {
+            classification = 'observation';
+            snr = 2 + r() * 8;
+            rfi_score = r() * 0.5;
+        }
+
+        obs.push({
+            id: i + 1,
+            ra_deg: ra,
+            dec_deg: dec,
+            classification: classification,
+            snr: snr,
+            rfi_score: rfi_score,
+            frequency_mhz: 1400 + r() * 50,
+            drift_rate: (r() - 0.5) * 0.5,
+            astrolens_match: type < 0.04,
+        });
+    }
+    return obs;
+}
+
+function generateDemoAstrolens(count) {
+    const matches = [];
+    const r = ((s) => () => { s = (s * 48271) % 2147483647; return (s - 1) / 2147483646; })(123);
+    for (let i = 0; i < count; i++) {
+        matches.push({
+            ra_deg: r() * 360,
+            dec_deg: (r() - 0.5) * 180,
+            classification: 'galaxy_anomaly',
+            ood_score: r(),
+            source: 'AstroLens',
+        });
+    }
+    return matches;
+}
+
+const allObs = observations.length > 0 ? observations : generateDemoObservations(200);
+const allAstrolens = astrolensMatches.length > 0 ? astrolensMatches : generateDemoAstrolens(15);
+
+// Mark AstroLens cross-matches on observations
+const AL_MATCH_RADIUS = 2.0; // degrees
+allObs.forEach(obs => {
+    if (!obs.astrolens_match) {
+        for (const al of allAstrolens) {
+            const dra = Math.abs(obs.ra_deg - (al.ra_deg || 0));
+            const ddec = Math.abs(obs.dec_deg - (al.dec_deg || 0));
+            if (dra < AL_MATCH_RADIUS && ddec < AL_MATCH_RADIUS) {
+                obs.astrolens_match = true;
+                break;
+            }
+        }
+    }
+});
+
+// ── Canvas setup ──
+const canvas = document.getElementById('skymap-canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+// Store rendered point positions for hover detection
+let renderedPoints = [];
+
+function redrawMap() {
+    const filter = document.getElementById('filter-select').value;
+    const showGrid = document.getElementById('grid-select').value === 'on';
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Background gradient
+    const bg = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w * 0.6);
+    bg.addColorStop(0, '#0c1425');
+    bg.addColorStop(1, '#040810');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw faint Milky Way band
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    ctx.fillStyle = '#8ca5c8';
+    ctx.beginPath();
+    ctx.ellipse(w/2, h/2, w * 0.48, h * 0.12, -0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Grid
+    if (showGrid) {
+        ctx.strokeStyle = 'rgba(100, 180, 255, 0.06)';
+        ctx.lineWidth = 0.5;
+
+        // RA lines (every 30 degrees)
+        for (let ra = 0; ra <= 360; ra += 30) {
+            const x = (ra / 360) * w;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(100, 180, 255, 0.2)';
+            ctx.font = '9px Inter';
+            ctx.fillText(ra + '\u00B0', x + 3, 12);
+        }
+
+        // Dec lines (every 30 degrees)
+        for (let dec = -90; dec <= 90; dec += 30) {
+            const y = ((90 - dec) / 180) * h;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(100, 180, 255, 0.2)';
+            ctx.font = '9px Inter';
+            ctx.fillText(dec + '\u00B0', 3, y - 3);
+        }
+
+        // Celestial equator
+        ctx.strokeStyle = 'rgba(0, 212, 255, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, h/2);
+        ctx.lineTo(w, h/2);
+        ctx.stroke();
+    }
+
+    // Plot observations
+    renderedPoints = [];
+    let obsCount = 0, candCount = 0, rfiCount = 0, xmatchCount = 0;
+
+    const filtered = allObs.filter(obs => {
+        if (filter === 'candidates') return obs.classification === 'candidate';
+        if (filter === 'rfi') return obs.classification === 'rfi';
+        if (filter === 'astrolens') return obs.astrolens_match;
+        return true;
+    });
+
+    // Draw regular observations first, then candidates on top
+    const sortedObs = [...filtered].sort((a, b) => {
+        const order = { observation: 0, rfi: 1, candidate: 2 };
+        return (order[a.classification] || 0) - (order[b.classification] || 0);
+    });
+
+    sortedObs.forEach(obs => {
+        const x = ((obs.ra_deg || 0) / 360) * w;
+        const y = ((90 - (obs.dec_deg || 0)) / 180) * h;
+
+        let color, radius, glowColor;
+
+        if (obs.classification === 'candidate') {
+            color = '#00ff88';
+            glowColor = 'rgba(0, 255, 136, 0.4)';
+            radius = 4 + Math.min((obs.snr || 0) / 15, 4);
+            candCount++;
+        } else if (obs.classification === 'rfi') {
+            color = '#ff3366';
+            glowColor = 'rgba(255, 51, 102, 0.3)';
+            radius = 2.5;
+            rfiCount++;
+        } else {
+            color = '#5b8def';
+            glowColor = 'rgba(91, 141, 239, 0.2)';
+            radius = 2;
+            obsCount++;
+        }
+
+        // Glow
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.shadowBlur = radius * 3;
+        ctx.shadowColor = glowColor;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Point
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // AstroLens match: star icon
+        if (obs.astrolens_match) {
+            xmatchCount++;
+            drawStar(x, y, radius + 5, '#7c3aed');
+        }
+
+        renderedPoints.push({ x, y, radius: Math.max(radius, 6), obs });
+    });
+
+    // Also plot AstroLens-only positions
+    allAstrolens.forEach(al => {
+        const x = ((al.ra_deg || 0) / 360) * w;
+        const y = ((90 - (al.dec_deg || 0)) / 180) * h;
+
+        if (filter === 'all' || filter === 'astrolens') {
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            drawStar(x, y, 6, '#7c3aed');
+            ctx.restore();
+        }
+    });
+
+    // Update stats
+    document.getElementById('map-observations').textContent = obsCount + candCount;
+    document.getElementById('map-candidates').textContent = candCount;
+    document.getElementById('map-rfi').textContent = rfiCount;
+    document.getElementById('map-xmatch').textContent = xmatchCount;
+
+    // Coverage stats
+    document.getElementById('coverage-pct').textContent = ((filtered.length / 41253 * 100) || 0).toFixed(2) + '%';
+    document.getElementById('coverage-hrs').textContent = (filtered.length * 0.15).toFixed(1) + 'h';
+    document.getElementById('coverage-density').textContent = (filtered.length / 41253 * 10).toFixed(3);
+    document.getElementById('coverage-bands').textContent = '3';
+}
+
+function drawStar(cx, cy, size, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    const spikes = 5;
+    const outer = size;
+    const inner = size * 0.45;
+    for (let i = 0; i < spikes * 2; i++) {
+        const angle = (i * Math.PI / spikes) - Math.PI / 2;
+        const r = i % 2 === 0 ? outer : inner;
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+// ── Hover tooltip ──
+canvas.addEventListener('mousemove', function(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    // Update coordinate display
+    const ra = (mx / canvas.width * 360).toFixed(2);
+    const dec = (90 - my / canvas.height * 180).toFixed(2);
+    document.getElementById('coord-display').textContent =
+        `RA: ${ra}\u00B0 | Dec: ${dec}\u00B0 | Galactic l: ${(ra * 0.98 + 10).toFixed(1)}\u00B0 b: ${(dec * 0.85).toFixed(1)}\u00B0`;
+
+    // Find closest point
+    let closest = null;
+    let minDist = Infinity;
+    renderedPoints.forEach(pt => {
+        const d = Math.hypot(pt.x - mx, pt.y - my);
+        if (d < pt.radius + 8 && d < minDist) {
+            minDist = d;
+            closest = pt;
+        }
+    });
+
+    if (closest) {
+        const obs = closest.obs;
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+
+        tooltip.style.display = 'block';
+        tooltip.style.left = (screenX + 16) + 'px';
+        tooltip.style.top = (screenY - 10) + 'px';
+
+        // Prevent tooltip from going off right edge
+        if (screenX + 240 > rect.width) {
+            tooltip.style.left = (screenX - 220) + 'px';
+        }
+
+        const cls = obs.classification || 'unknown';
+        const clsColor = cls === 'candidate' ? '#00ff88' : cls === 'rfi' ? '#ff3366' : '#5b8def';
+
+        tooltip.innerHTML = `
+            <div class="tt-header" style="color: ${clsColor};">${cls.charAt(0).toUpperCase() + cls.slice(1)} #${obs.id || '?'}</div>
+            <div class="tt-row"><span class="tt-key">RA</span><span class="tt-val">${(obs.ra_deg || 0).toFixed(3)}&deg;</span></div>
+            <div class="tt-row"><span class="tt-key">Dec</span><span class="tt-val">${(obs.dec_deg || 0).toFixed(3)}&deg;</span></div>
+            <div class="tt-row"><span class="tt-key">SNR</span><span class="tt-val" style="color: var(--accent-cyan);">${(obs.snr || 0).toFixed(1)}</span></div>
+            <div class="tt-row"><span class="tt-key">Frequency</span><span class="tt-val">${(obs.frequency_mhz || 0).toFixed(2)} MHz</span></div>
+            <div class="tt-row"><span class="tt-key">Drift Rate</span><span class="tt-val">${(obs.drift_rate || 0).toFixed(4)} Hz/s</span></div>
+            <div class="tt-row"><span class="tt-key">RFI Score</span><span class="tt-val">${(obs.rfi_score || 0).toFixed(2)}</span></div>
+            ${obs.astrolens_match ? '<div class="tt-row"><span class="tt-key">AstroLens</span><span class="tt-val" style="color: #7c3aed;">Optical Match</span></div>' : ''}
+        `;
+    } else {
+        tooltip.style.display = 'none';
+    }
+});
+
+canvas.addEventListener('mouseleave', function() {
+    tooltip.style.display = 'none';
+});
+
+// ── Populate cross-match list ──
+function populateXmatchList() {
+    const list = document.getElementById('xmatch-list');
+    const matched = allObs.filter(o => o.astrolens_match);
+
+    if (matched.length === 0) {
+        list.innerHTML = '<p style="color: var(--text-tertiary); font-size: 12px;">No cross-matches found yet. Process more data to find radio-optical coincidences.</p>';
+        return;
+    }
+
+    let html = '';
+    matched.slice(0, 10).forEach((obs, i) => {
+        html += `<div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-dim);">
+            <span class="crossmatch-badge">&#x2605; Match #${i + 1}</span>
+            <span style="font-size: 12px; color: var(--text-secondary);">
+                RA ${(obs.ra_deg || 0).toFixed(2)}&deg;, Dec ${(obs.dec_deg || 0).toFixed(2)}&deg;
+                &middot; SNR ${(obs.snr || 0).toFixed(1)}
+            </span>
+        </div>`;
+    });
+
+    if (matched.length > 10) {
+        html += `<p style="color: var(--text-tertiary); font-size: 11px; margin-top: 8px;">+ ${matched.length - 10} more matches</p>`;
+    }
+
+    list.innerHTML = html;
+}
+
+// ── Initialize ──
+redrawMap();
+populateXmatchList();
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    redrawMap();
+});
+</script>
+{% endblock %}

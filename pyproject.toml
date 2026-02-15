@@ -1,0 +1,82 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "astroseti"
+version = "0.1.0"
+description = "Intelligent SETI Signal Analysis — Decode the Cosmos with Machine Intelligence"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Saman Tabatabaeian", email = "saman@astroseti.dev" },
+]
+requires-python = ">=3.10"
+keywords = ["seti", "astronomy", "signal-processing", "machine-learning", "radio-astronomy", "rust"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "matplotlib>=3.7.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "httpx>=0.24.0",
+    "aiosqlite>=0.19.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.6",
+    "pydantic>=2.0.0",
+    "tqdm>=4.65.0",
+    "Pillow>=9.5.0",
+    "PyQt5>=5.15.0",
+    "astroquery>=0.4.6",
+    "websockets>=11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "maturin>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/SamanTabworlds/astroSETI"
+Repository = "https://github.com/SamanTabworlds/astroSETI"
+Issues = "https://github.com/SamanTabworlds/astroSETI/issues"
+Documentation = "https://github.com/SamanTabworlds/astroSETI#readme"
+
+[project.scripts]
+astroseti = "main:main"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "."
+module-name = "astroseti._core"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

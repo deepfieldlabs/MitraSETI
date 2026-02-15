@@ -1,0 +1,397 @@
+{% extends "base.html" %}
+{% block title %}RFI Dashboard{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rfi-hero {
+        background: linear-gradient(135deg, rgba(255, 51, 102, 0.06), rgba(255, 170, 0, 0.04));
+        border: 1px solid rgba(255, 51, 102, 0.15);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+
+    .rfi-hero h2 {
+        font-size: 18px;
+        font-weight: 400;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .rfi-hero .subtitle {
+        font-size: 12px;
+        color: var(--text-tertiary);
+    }
+
+    .rfi-bands-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .rfi-bands-table th {
+        text-align: left;
+        padding: 10px 14px;
+        font-size: 10px;
+        color: rgba(255, 51, 102, 0.7);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-bottom: 1px solid var(--border-subtle);
+        font-weight: 600;
+    }
+
+    .rfi-bands-table td {
+        padding: 10px 14px;
+        font-size: 13px;
+        border-bottom: 1px solid var(--border-dim);
+    }
+
+    .rfi-bands-table tr:hover td {
+        background: rgba(255, 51, 102, 0.03);
+    }
+
+    .rfi-type-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    .rfi-type-badge.satellite { background: rgba(255, 51, 102, 0.15); color: var(--accent-rose); }
+    .rfi-type-badge.terrestrial { background: rgba(255, 170, 0, 0.15); color: var(--accent-amber); }
+    .rfi-type-badge.self { background: rgba(124, 58, 237, 0.15); color: var(--accent-purple); }
+    .rfi-type-badge.aircraft { background: rgba(0, 212, 255, 0.15); color: var(--accent-cyan); }
+    .rfi-type-badge.unknown { background: rgba(140, 165, 200, 0.15); color: var(--text-secondary); }
+
+    .severity-bar {
+        height: 6px;
+        background: rgba(8, 12, 20, 0.7);
+        border-radius: 3px;
+        overflow: hidden;
+        width: 80px;
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    .severity-bar .fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.3s;
+    }
+
+    .severity-bar .fill.low { background: var(--accent-green); }
+    .severity-bar .fill.medium { background: var(--accent-amber); }
+    .severity-bar .fill.high { background: var(--accent-rose); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>RFI Dashboard</h1>
+    <p class="subtitle">Radio Frequency Interference monitoring &amp; mitigation</p>
+</div>
+
+<!-- RFI Hero -->
+<div class="rfi-hero">
+    <h2>RFI Monitoring &amp; Rejection</h2>
+    <p class="subtitle">Real-time interference tracking using Rust-accelerated DSP filters</p>
+</div>
+
+<!-- Stats Row -->
+<div class="card-grid cols-4" style="margin-bottom: 24px;">
+    <div class="stat-card">
+        <div class="value" id="rfi-total">{{ rfi_stats.get('total_signals', 0) }}</div>
+        <div class="label">Total Signals</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-rose);" id="rfi-rejected">{{ rfi_stats.get('rfi_rejected', 0) }}</div>
+        <div class="label">RFI Rejected</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-amber);" id="rfi-rate">{{ "%.1f"|format(rfi_stats.get('rfi_rate', 0)) }}%</div>
+        <div class="label">Rejection Rate</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-green);" id="rfi-fp">{{ rfi_stats.get('false_positives', 0) }}</div>
+        <div class="label">False Positives</div>
+    </div>
+</div>
+
+<!-- Charts Row 1 -->
+<div class="chart-row">
+    <div class="chart-card">
+        <h3>RFI Type Distribution</h3>
+        <canvas id="rfiTypeChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>Before / After RFI Filtering</h3>
+        <canvas id="rfiBeforeAfterChart"></canvas>
+    </div>
+</div>
+
+<!-- Charts Row 2 -->
+<div class="chart-row">
+    <div class="chart-card">
+        <h3>RFI Events Over Time</h3>
+        <canvas id="rfiTimelineChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>RFI by Frequency Band</h3>
+        <canvas id="rfiBandChart"></canvas>
+    </div>
+</div>
+
+<!-- Known RFI Bands Table -->
+<div class="card" style="margin-top: 8px;">
+    <h3 style="font-size: 15px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">Known RFI Bands</h3>
+    <table class="rfi-bands-table">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Freq Range (MHz)</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Occurrences</th>
+                <th>Last Detected</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>GPS L1</td>
+                <td>1575.2 &mdash; 1576.5 MHz</td>
+                <td><span class="rfi-type-badge satellite">Satellite</span></td>
+                <td>
+                    <div class="severity-bar"><div class="fill high" style="width: 85%"></div></div>
+                </td>
+                <td style="color: var(--accent-rose);">12,847</td>
+                <td style="color: var(--text-tertiary);">2 min ago</td>
+                <td><span class="badge badge-rfi">Active</span></td>
+            </tr>
+            <tr>
+                <td>Iridium</td>
+                <td>1616.0 &mdash; 1626.5 MHz</td>
+                <td><span class="rfi-type-badge satellite">Satellite</span></td>
+                <td>
+                    <div class="severity-bar"><div class="fill high" style="width: 75%"></div></div>
+                </td>
+                <td style="color: var(--accent-rose);">8,234</td>
+                <td style="color: var(--text-tertiary);">5 min ago</td>
+                <td><span class="badge badge-rfi">Active</span></td>
+            </tr>
+            <tr>
+                <td>Cell Tower</td>
+                <td>1710.0 &mdash; 1755.0 MHz</td>
+                <td><span class="rfi-type-badge terrestrial">Terrestrial</span></td>
+                <td>
+                    <div class="severity-bar"><div class="fill medium" style="width: 55%"></div></div>
+                </td>
+                <td style="color: var(--accent-amber);">5,102</td>
+                <td style="color: var(--text-tertiary);">12 min ago</td>
+                <td><span class="badge badge-rfi">Active</span></td>
+            </tr>
+            <tr>
+                <td>Aircraft ADS-B</td>
+                <td>1090.0 &mdash; 1090.5 MHz</td>
+                <td><span class="rfi-type-badge aircraft">Aircraft</span></td>
+                <td>
+                    <div class="severity-bar"><div class="fill medium" style="width: 45%"></div></div>
+                </td>
+                <td style="color: var(--accent-amber);">3,456</td>
+                <td style="color: var(--text-tertiary);">8 min ago</td>
+                <td><span class="badge badge-rfi">Active</span></td>
+            </tr>
+            <tr>
+                <td>Instrument Harmonics</td>
+                <td>1420.0 &mdash; 1420.1 MHz</td>
+                <td><span class="rfi-type-badge self">Self-generated</span></td>
+                <td>
+                    <div class="severity-bar"><div class="fill low" style="width: 20%"></div></div>
+                </td>
+                <td style="color: var(--accent-green);">234</td>
+                <td style="color: var(--text-tertiary);">1 hr ago</td>
+                <td><span class="badge badge-noise">Intermittent</span></td>
+            </tr>
+            <tr>
+                <td>WiFi Leakage</td>
+                <td>2400.0 &mdash; 2483.5 MHz</td>
+                <td><span class="rfi-type-badge terrestrial">Terrestrial</span></td>
+                <td>
+                    <div class="severity-bar"><div class="fill low" style="width: 30%"></div></div>
+                </td>
+                <td style="color: var(--accent-green);">891</td>
+                <td style="color: var(--text-tertiary);">32 min ago</td>
+                <td><span class="badge badge-noise">Intermittent</span></td>
+            </tr>
+            <tr>
+                <td>Unknown Broadband</td>
+                <td>1300.0 &mdash; 1350.0 MHz</td>
+                <td><span class="rfi-type-badge unknown">Unknown</span></td>
+                <td>
+                    <div class="severity-bar"><div class="fill medium" style="width: 40%"></div></div>
+                </td>
+                <td style="color: var(--accent-amber);">156</td>
+                <td style="color: var(--text-tertiary);">3 hr ago</td>
+                <td><span class="badge badge-unknown">Investigating</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Parse RFI stats from server (or use demo)
+const rfiStats = {{ rfi_stats_json|safe if rfi_stats_json is defined else '{}' }};
+
+// ── 1. RFI Type Distribution (Pie) ──
+new Chart(document.getElementById('rfiTypeChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Satellite', 'Terrestrial', 'Aircraft', 'Self-generated', 'Unknown'],
+        datasets: [{
+            data: [
+                rfiStats.satellite || 38,
+                rfiStats.terrestrial || 28,
+                rfiStats.aircraft || 15,
+                rfiStats.self_generated || 12,
+                rfiStats.unknown || 7
+            ],
+            backgroundColor: [
+                'rgba(255, 51, 102, 0.7)',
+                'rgba(255, 170, 0, 0.7)',
+                'rgba(0, 212, 255, 0.7)',
+                'rgba(124, 58, 237, 0.7)',
+                'rgba(140, 165, 200, 0.4)',
+            ],
+            borderWidth: 0,
+            hoverOffset: 8,
+        }]
+    },
+    options: {
+        responsive: true,
+        cutout: '60%',
+        plugins: {
+            legend: { position: 'right', labels: { boxWidth: 12, padding: 12 } }
+        }
+    }
+});
+
+// ── 2. Before/After RFI Filtering (Bar) ──
+const bands = ['1-1.2 GHz', '1.2-1.4 GHz', '1.4-1.5 GHz', '1.5-1.7 GHz', '1.7-2.0 GHz'];
+new Chart(document.getElementById('rfiBeforeAfterChart'), {
+    type: 'bar',
+    data: {
+        labels: bands,
+        datasets: [
+            {
+                label: 'Before Filtering',
+                data: [245, 380, 520, 310, 190],
+                backgroundColor: 'rgba(255, 51, 102, 0.5)',
+                borderColor: 'rgba(255, 51, 102, 0.8)',
+                borderWidth: 1,
+                borderRadius: 4,
+            },
+            {
+                label: 'After Filtering',
+                data: [12, 25, 18, 15, 8],
+                backgroundColor: 'rgba(0, 255, 136, 0.5)',
+                borderColor: 'rgba(0, 255, 136, 0.8)',
+                borderWidth: 1,
+                borderRadius: 4,
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } } },
+        scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'Signal Count', color: 'rgba(200,215,235,0.4)' } }
+        }
+    }
+});
+
+// ── 3. RFI Timeline (Line) ──
+const timeLabels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
+new Chart(document.getElementById('rfiTimelineChart'), {
+    type: 'line',
+    data: {
+        labels: timeLabels,
+        datasets: [
+            {
+                label: 'RFI Events',
+                data: [45, 32, 78, 120, 95, 65, 42],
+                borderColor: 'rgba(255, 51, 102, 0.8)',
+                backgroundColor: 'rgba(255, 51, 102, 0.08)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: '#ff3366',
+            },
+            {
+                label: 'False Positives',
+                data: [3, 2, 5, 8, 6, 4, 2],
+                borderColor: 'rgba(255, 170, 0, 0.8)',
+                backgroundColor: 'rgba(255, 170, 0, 0.05)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: '#ffaa00',
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } } },
+        scales: {
+            y: { beginAtZero: true },
+            x: { title: { display: true, text: 'Time (UTC)', color: 'rgba(200,215,235,0.4)' } }
+        }
+    }
+});
+
+// ── 4. RFI by Frequency Band (Horizontal Bar) ──
+new Chart(document.getElementById('rfiBandChart'), {
+    type: 'bar',
+    data: {
+        labels: ['GPS (1575 MHz)', 'Iridium (1621 MHz)', 'Cell (1710 MHz)', 'ADS-B (1090 MHz)', 'WiFi (2.4 GHz)', 'H-line (1420 MHz)', 'Other'],
+        datasets: [{
+            label: 'Detections',
+            data: [12847, 8234, 5102, 3456, 891, 234, 156],
+            backgroundColor: [
+                'rgba(255, 51, 102, 0.6)',
+                'rgba(255, 51, 102, 0.5)',
+                'rgba(255, 170, 0, 0.5)',
+                'rgba(0, 212, 255, 0.5)',
+                'rgba(255, 170, 0, 0.4)',
+                'rgba(124, 58, 237, 0.4)',
+                'rgba(140, 165, 200, 0.3)',
+            ],
+            borderWidth: 0,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { beginAtZero: true, title: { display: true, text: 'Detections', color: 'rgba(200,215,235,0.4)' } }
+        }
+    }
+});
+
+// ── Auto-refresh ──
+setInterval(() => {
+    fetch('/api/rfi-stats')
+        .then(r => r.json())
+        .then(data => {
+            if (data.total_signals !== undefined) document.getElementById('rfi-total').textContent = data.total_signals;
+            if (data.rfi_rejected !== undefined) document.getElementById('rfi-rejected').textContent = data.rfi_rejected;
+            if (data.rfi_rate !== undefined) document.getElementById('rfi-rate').textContent = data.rfi_rate.toFixed(1) + '%';
+            if (data.false_positives !== undefined) document.getElementById('rfi-fp').textContent = data.false_positives;
+        })
+        .catch(() => {});
+}, 30000);
+</script>
+{% endblock %}

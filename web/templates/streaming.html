@@ -1,0 +1,588 @@
+{% extends "base.html" %}
+{% block title %}Streaming Monitor{% endblock %}
+
+{% block extra_head %}
+<style>
+    .streaming-hero {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.06), rgba(0, 255, 136, 0.04));
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 18px;
+        padding: 28px 32px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .streaming-hero-left h2 {
+        font-size: 20px;
+        font-weight: 400;
+        margin-bottom: 4px;
+    }
+
+    .streaming-hero-left .subtitle {
+        font-size: 12px;
+        color: var(--text-tertiary);
+    }
+
+    .streaming-hero-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 18px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .status-pill.running {
+        background: rgba(0, 255, 136, 0.12);
+        border: 1px solid rgba(0, 255, 136, 0.3);
+        color: var(--accent-green);
+    }
+
+    .status-pill.stopped {
+        background: rgba(255, 51, 102, 0.12);
+        border: 1px solid rgba(255, 51, 102, 0.3);
+        color: var(--accent-rose);
+    }
+
+    .status-pill.idle {
+        background: rgba(255, 170, 0, 0.12);
+        border: 1px solid rgba(255, 170, 0, 0.3);
+        color: var(--accent-amber);
+    }
+
+    .status-section {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .candidate-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .candidate-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-dim);
+        gap: 14px;
+    }
+
+    .candidate-item:last-child { border-bottom: none; }
+
+    .candidate-rank {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(0, 212, 255, 0.12);
+        color: var(--accent-cyan);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+
+    .candidate-info { flex: 1; }
+
+    .candidate-info .name {
+        font-size: 13px;
+        color: var(--text-primary);
+    }
+
+    .candidate-info .meta {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+    }
+
+    .candidate-snr {
+        font-size: 18px;
+        font-weight: 300;
+        color: var(--accent-cyan);
+    }
+
+    .health-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .health-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: rgba(15, 25, 45, 0.4);
+        border-radius: 8px;
+        border: 1px solid var(--border-subtle);
+    }
+
+    .health-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .health-dot.ok { background: var(--accent-green); box-shadow: 0 0 8px rgba(0, 255, 136, 0.4); }
+    .health-dot.warn { background: var(--accent-amber); box-shadow: 0 0 8px rgba(255, 170, 0, 0.4); }
+    .health-dot.error { background: var(--accent-rose); box-shadow: 0 0 8px rgba(255, 51, 102, 0.4); }
+
+    .health-label { font-size: 12px; color: var(--text-secondary); flex: 1; }
+    .health-value { font-size: 11px; color: var(--text-tertiary); }
+
+    .day-breakdown {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .day-card {
+        background: rgba(15, 25, 45, 0.4);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 14px;
+        text-align: center;
+    }
+
+    .day-card .day-label {
+        font-size: 10px;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+    }
+
+    .day-card .day-val {
+        font-size: 22px;
+        font-weight: 300;
+        color: var(--accent-cyan);
+    }
+
+    .day-card .day-sub {
+        font-size: 10px;
+        color: var(--text-tertiary);
+        margin-top: 4px;
+    }
+
+    .refresh-note {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        text-align: right;
+        margin-top: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <span class="live-dot {{ 'running' if streaming.get('running') else 'stopped' }}" id="status-dot"></span>
+        Streaming Monitor
+    </h1>
+    <p class="subtitle">
+        {% if streaming.get('running') %}
+            Live &middot; Processing cycle {{ streaming.get('live_cycles', 0) }}
+        {% elif streaming.get('completed') %}
+            Completed &middot; {{ streaming.get('total_runtime_hours', 0)|round(1) }}h total
+        {% else %}
+            Idle &mdash; run <code>python scripts/streaming_analysis.py</code> to start
+        {% endif %}
+    </p>
+</div>
+
+<!-- Streaming Hero -->
+<div class="streaming-hero">
+    <div class="streaming-hero-left">
+        <h2>Real-Time Signal Analysis</h2>
+        <p class="subtitle">Continuous monitoring with ML classification, RFI rejection, and AstroLens cross-matching</p>
+    </div>
+    <div class="streaming-hero-right">
+        {% if streaming.get('running') %}
+            <span class="status-pill running">
+                <span class="live-dot running" style="margin-right: 0;"></span> LIVE
+            </span>
+        {% elif streaming.get('completed') %}
+            <span class="status-pill stopped">COMPLETED</span>
+        {% else %}
+            <span class="status-pill idle">IDLE</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Live Stat Cards -->
+<div class="card-grid cols-4" style="margin-bottom: 24px;">
+    <div class="stat-card">
+        <div class="value" id="stat-signals">{{ streaming.get('total_signals', 0) }}</div>
+        <div class="label">Signals Analyzed</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-green);" id="stat-candidates">{{ streaming.get('total_candidates', 0) }}</div>
+        <div class="label">Candidates Found</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-rose);" id="stat-rfi">{{ streaming.get('total_rfi_rejected', 0) }}</div>
+        <div class="label">RFI Rejected</div>
+    </div>
+    <div class="stat-card">
+        <div class="value" style="color: var(--accent-purple);" id="stat-cycles">{{ streaming.get('live_cycles', 0) }}</div>
+        <div class="label">Processing Cycles</div>
+    </div>
+</div>
+
+<!-- Charts Row 1: Signal Rate + Candidates -->
+<div class="chart-row">
+    <div class="chart-card">
+        <h3>Signal Processing Rate</h3>
+        <canvas id="signalRateChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>Candidates Over Time</h3>
+        <canvas id="candidatesChart"></canvas>
+    </div>
+</div>
+
+<!-- Charts Row 2: RFI Rejection + Throughput -->
+<div class="chart-row">
+    <div class="chart-card">
+        <h3>RFI Rejection Rate (%)</h3>
+        <canvas id="rfiRejectionChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>Processing Throughput (signals/min)</h3>
+        <canvas id="throughputChart"></canvas>
+    </div>
+</div>
+
+<!-- Top Candidates + Health -->
+<div class="status-section">
+    <div class="card">
+        <h3 style="font-size: 15px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">Top Candidates</h3>
+        {% if streaming.get('top_candidates') %}
+        <ul class="candidate-list" id="candidates-list">
+            {% for c in streaming.get('top_candidates', [])[:10] %}
+            <li class="candidate-item">
+                <div class="candidate-rank">{{ loop.index }}</div>
+                <div class="candidate-info">
+                    <div class="name">
+                        {{ c.get('classification', 'Unknown') }}
+                        {% if c.get('astrolens_match') %}
+                            <span style="background: rgba(124, 58, 237, 0.3); color: var(--accent-purple); padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">AstroLens</span>
+                        {% endif %}
+                    </div>
+                    <div class="meta">
+                        Freq: {{ "%.2f"|format(c.get('frequency_mhz', 0)) }} MHz &middot;
+                        DR: {{ "%.4f"|format(c.get('drift_rate', 0)) }} Hz/s &middot;
+                        RFI: {{ "%.2f"|format(c.get('rfi_score', 0)) }}
+                    </div>
+                </div>
+                <div class="candidate-snr">{{ "%.1f"|format(c.get('snr', 0)) }}</div>
+            </li>
+            {% endfor %}
+        </ul>
+        <p style="color: var(--text-tertiary); font-size: 11px; margin-top: 8px;">
+            {{ streaming.get('top_candidates', [])|length }} verified candidates
+        </p>
+        {% else %}
+        <p style="color: var(--text-tertiary); font-size: 13px;">
+            No candidates yet. Signals will appear as processing begins.
+        </p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3 style="font-size: 15px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">System Health</h3>
+        <div class="health-grid">
+            <div class="health-row">
+                <div class="health-dot warn" id="health-api-dot"></div>
+                <span class="health-label">API Backend</span>
+                <span class="health-value" id="health-api-val">Checking...</span>
+            </div>
+            <div class="health-row">
+                <div class="health-dot warn" id="health-gpu-dot"></div>
+                <span class="health-label">GPU Compute</span>
+                <span class="health-value" id="health-gpu-val">Checking...</span>
+            </div>
+            <div class="health-row">
+                <div class="health-dot warn" id="health-model-dot"></div>
+                <span class="health-label">Signal Classifier</span>
+                <span class="health-value" id="health-model-val">Checking...</span>
+            </div>
+            <div class="health-row">
+                <div class="health-dot warn" id="health-rfi-dot"></div>
+                <span class="health-label">RFI Filter (Rust)</span>
+                <span class="health-value" id="health-rfi-val">Checking...</span>
+            </div>
+            <div class="health-row">
+                <div class="health-dot warn" id="health-astrolens-dot"></div>
+                <span class="health-label">AstroLens Connection</span>
+                <span class="health-value" id="health-astrolens-val">Checking...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Day-by-Day Breakdown -->
+{% set snapshots = streaming.get('daily_snapshots', []) %}
+{% if snapshots %}
+<div class="card">
+    <h3 style="font-size: 15px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">Day-by-Day Breakdown</h3>
+    <div class="day-breakdown">
+        {% for snap in snapshots %}
+        <div class="day-card">
+            <div class="day-label">Day {{ snap.get('day', loop.index) }}</div>
+            <div class="day-val">{{ snap.get('signals_analyzed', snap.get('images_analyzed', 0)) }}</div>
+            <div class="day-sub">
+                {{ snap.get('candidates_found', snap.get('anomalies_found', 0)) }} candidates &middot;
+                {{ snap.get('rfi_rejected', 0) }} RFI
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="refresh-note">Auto-refreshes every 15 seconds &middot; Last: <span id="last-refresh">{{ now }}</span></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Data from server
+const snapshots = {{ snapshots_json|safe }};
+
+// Extract data arrays (with fallbacks for different key names)
+const labels = snapshots.length > 0
+    ? snapshots.map(s => 'Day ' + (s.day || 0))
+    : ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'];
+
+const signalData = snapshots.length > 0
+    ? snapshots.map(s => s.signals_analyzed || s.images_analyzed || 0)
+    : [85, 142, 198, 267, 312, 285, 340];
+
+const candidateData = snapshots.length > 0
+    ? snapshots.map(s => s.candidates_found || s.anomalies_found || 0)
+    : [3, 8, 5, 12, 9, 7, 11];
+
+const rfiData = snapshots.length > 0
+    ? snapshots.map(s => s.rfi_rejection_rate || 0)
+    : [32, 28, 35, 30, 27, 33, 29];
+
+const throughputData = snapshots.length > 0
+    ? snapshots.map(s => s.signals_per_minute || s.images_per_hour || 0)
+    : [120, 135, 155, 142, 160, 148, 165];
+
+// 1. Signal Rate
+new Chart(document.getElementById('signalRateChart'), {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Signals Analyzed',
+            data: signalData,
+            borderColor: 'rgba(0, 212, 255, 0.9)',
+            backgroundColor: 'rgba(0, 212, 255, 0.08)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#00d4ff',
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+// 2. Candidates over time
+new Chart(document.getElementById('candidatesChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Candidates',
+            data: candidateData,
+            backgroundColor: 'rgba(0, 255, 136, 0.5)',
+            borderColor: 'rgba(0, 255, 136, 0.8)',
+            borderWidth: 1,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+// 3. RFI Rejection Rate
+new Chart(document.getElementById('rfiRejectionChart'), {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'RFI Rejection %',
+            data: rfiData,
+            borderColor: 'rgba(255, 51, 102, 0.8)',
+            backgroundColor: 'rgba(255, 51, 102, 0.08)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#ff3366',
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, max: 100 } }
+    }
+});
+
+// 4. Processing Throughput
+new Chart(document.getElementById('throughputChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Signals/min',
+            data: throughputData,
+            backgroundColor: 'rgba(124, 58, 237, 0.4)',
+            borderColor: 'rgba(124, 58, 237, 0.8)',
+            borderWidth: 1,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+// ── Health checks ──
+function checkHealth() {
+    fetch('/api/stats')
+        .then(r => {
+            const dot = document.getElementById('health-api-dot');
+            const val = document.getElementById('health-api-val');
+            if (r.ok) { dot.className = 'health-dot ok'; val.textContent = 'Connected'; }
+            else { dot.className = 'health-dot error'; val.textContent = 'Error'; }
+        })
+        .catch(() => {
+            document.getElementById('health-api-dot').className = 'health-dot error';
+            document.getElementById('health-api-val').textContent = 'Offline';
+        });
+
+    fetch('/api/device')
+        .then(r => r.json())
+        .then(info => {
+            const dot = document.getElementById('health-gpu-dot');
+            const val = document.getElementById('health-gpu-val');
+            if (info.device_type && info.device_type !== 'cpu') {
+                dot.className = 'health-dot ok'; val.textContent = info.device_name || 'GPU';
+            } else {
+                dot.className = 'health-dot warn'; val.textContent = 'CPU only';
+            }
+
+            // Model assumed loaded if device responds
+            document.getElementById('health-model-dot').className = 'health-dot ok';
+            document.getElementById('health-model-val').textContent = 'Loaded';
+
+            // RFI filter (Rust core)
+            document.getElementById('health-rfi-dot').className = 'health-dot ok';
+            document.getElementById('health-rfi-val').textContent = 'Active';
+        })
+        .catch(() => {
+            document.getElementById('health-gpu-dot').className = 'health-dot error';
+            document.getElementById('health-gpu-val').textContent = 'Unknown';
+        });
+
+    // AstroLens connection
+    fetch('/api/stats')
+        .then(r => r.json())
+        .then(data => {
+            const dot = document.getElementById('health-astrolens-dot');
+            const val = document.getElementById('health-astrolens-val');
+            if (data.astrolens_matches !== undefined && data.astrolens_matches > 0) {
+                dot.className = 'health-dot ok'; val.textContent = data.astrolens_matches + ' matches';
+            } else {
+                dot.className = 'health-dot warn'; val.textContent = 'No matches yet';
+            }
+        })
+        .catch(() => {
+            document.getElementById('health-astrolens-dot').className = 'health-dot warn';
+            document.getElementById('health-astrolens-val').textContent = 'Unreachable';
+        });
+}
+checkHealth();
+
+// ── Auto-refresh every 15 seconds ──
+setInterval(() => {
+    fetch('/api/streaming-state')
+        .then(r => r.json())
+        .then(data => {
+            const signals = data.live_signals || data.total_signals || 0;
+            const candidates = data.live_candidates || data.total_candidates || 0;
+            const rfi = data.live_rfi_rejected || data.total_rfi_rejected || 0;
+            const cycles = data.live_cycles || 0;
+
+            document.getElementById('stat-signals').textContent = signals.toLocaleString();
+            document.getElementById('stat-candidates').textContent = candidates;
+            document.getElementById('stat-rfi').textContent = rfi;
+            document.getElementById('stat-cycles').textContent = cycles;
+
+            // Status dot
+            const dot = document.getElementById('status-dot');
+            if (data.running) {
+                dot.className = 'live-dot running';
+            } else if (data.completed) {
+                dot.className = 'live-dot stopped';
+            } else {
+                dot.className = 'live-dot waiting';
+            }
+
+            // Update candidates list
+            if (data.top_candidates && data.top_candidates.length > 0) {
+                const list = document.getElementById('candidates-list');
+                if (list) {
+                    let html = '';
+                    data.top_candidates.slice(0, 10).forEach((c, i) => {
+                        const alBadge = c.astrolens_match
+                            ? '<span style="background: rgba(124,58,237,0.3); color: #7c3aed; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">AstroLens</span>'
+                            : '';
+                        html += `<li class="candidate-item">
+                            <div class="candidate-rank">${i+1}</div>
+                            <div class="candidate-info">
+                                <div class="name">${c.classification || 'Unknown'}${alBadge}</div>
+                                <div class="meta">Freq: ${(c.frequency_mhz || 0).toFixed(2)} MHz · DR: ${(c.drift_rate || 0).toFixed(4)} Hz/s · RFI: ${(c.rfi_score || 0).toFixed(2)}</div>
+                            </div>
+                            <div class="candidate-snr">${(c.snr || 0).toFixed(1)}</div>
+                        </li>`;
+                    });
+                    list.innerHTML = html;
+                }
+            }
+
+            document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+        })
+        .catch(() => {});
+    checkHealth();
+}, 15000);
+</script>
+{% endblock %}

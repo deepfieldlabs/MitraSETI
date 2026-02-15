@@ -1,0 +1,479 @@
+"""
+astroSETI Dashboard — The First Thing Users See
+
+Hero section, stat cards, quick actions, recent activity,
+system health indicators, and mini waterfall preview.
+"""
+
+from __future__ import annotations
+
+import io
+import numpy as np
+
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QGridLayout, QScrollArea, QSizePolicy,
+)
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QLinearGradient
+
+import matplotlib
+matplotlib.use("Qt5Agg")
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+
+from .theme import COLORS, make_stat_card, create_glass_card, create_glow_button
+
+
+# ── Health indicator dot ──────────────────────────────────────────────────────
+
+class _HealthDot(QFrame):
+    """Tiny colored dot for system health."""
+
+    def __init__(self, size: int = 8, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(size, size)
+        self._color = QColor(COLORS["text_tertiary"])
+
+    def set_status(self, ok: bool):
+        self._color = QColor(COLORS["success"] if ok else COLORS["danger"])
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(QBrush(self._color))
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(1, 1, self.width() - 2, self.height() - 2)
+
+
+# ── Dashboard Panel ──────────────────────────────────────────────────────────
+
+class DashboardPanel(QWidget):
+    """Main dashboard — the landing page of astroSETI."""
+
+    navigate_to = pyqtSignal(int)  # Emit panel index to switch to
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._setup_ui()
+
+        # Render mini waterfall preview after a short delay
+        QTimer.singleShot(500, self._render_mini_waterfall)
+
+    def _setup_ui(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(32, 28, 32, 28)
+        layout.setSpacing(28)
+
+        # ══════════════════════════════════════════════════════════════════
+        # HERO SECTION
+        # ══════════════════════════════════════════════════════════════════
+        hero = QFrame()
+        hero.setMinimumHeight(160)
+        hero.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(0, 50, 100, 0.4),
+                    stop:0.5 rgba(0, 80, 140, 0.25),
+                    stop:1 rgba(124, 58, 237, 0.15));
+                border: 1px solid rgba(0, 212, 255, 0.12);
+                border-radius: 18px;
+            }
+        """)
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(40, 30, 40, 30)
+        hero_layout.setSpacing(8)
+
+        # Title with glow feel
+        hero_title = QLabel("astroSETI")
+        hero_title.setStyleSheet("""
+            font-size: 42px;
+            font-weight: 800;
+            color: #00d4ff;
+            letter-spacing: 2px;
+        """)
+        hero_layout.addWidget(hero_title)
+
+        hero_tagline = QLabel("Intelligent SETI Signal Analysis")
+        hero_tagline.setStyleSheet("""
+            font-size: 16px;
+            font-weight: 300;
+            color: rgba(200, 215, 235, 0.6);
+            letter-spacing: 1px;
+        """)
+        hero_layout.addWidget(hero_tagline)
+
+        hero_sub = QLabel(
+            "Detect narrowband drifting signals  ·  ML-powered RFI rejection  ·  "
+            "Cross-reference with AstroLens transients"
+        )
+        hero_sub.setStyleSheet("""
+            font-size: 12px;
+            color: rgba(140, 165, 200, 0.45);
+            margin-top: 8px;
+        """)
+        hero_sub.setWordWrap(True)
+        hero_layout.addWidget(hero_sub)
+
+        layout.addWidget(hero)
+
+        # ══════════════════════════════════════════════════════════════════
+        # STAT CARDS — 2x3 grid
+        # ══════════════════════════════════════════════════════════════════
+        stats_label = QLabel("OVERVIEW")
+        stats_label.setStyleSheet(
+            "font-size: 10px; font-weight: 600; color: rgba(0,212,255,0.5); "
+            "letter-spacing: 2px;"
+        )
+        layout.addWidget(stats_label)
+
+        stats_grid = QGridLayout()
+        stats_grid.setSpacing(12)
+
+        self._stat_cards = {}
+        stat_defs = [
+            ("observations", "Total Observations", "1,247", "#00d4ff"),
+            ("signals", "Signals Detected", "8,392", "#7c3aed"),
+            ("candidates", "Candidates Found", "51", "#00ff88"),
+            ("rfi_rate", "RFI Rejection Rate", "76.5%", "#ff3366"),
+            ("speed", "Processing Speed", "2.3 fil/min", "#ffaa00"),
+            ("yolo", "YOLO Transients", "12", "#00d4ff"),
+        ]
+
+        for i, (key, label, default, color) in enumerate(stat_defs):
+            card = make_stat_card(label, default, color)
+            row, col = divmod(i, 3)
+            stats_grid.addWidget(card, row, col)
+            self._stat_cards[key] = card
+
+        layout.addLayout(stats_grid)
+
+        # ══════════════════════════════════════════════════════════════════
+        # QUICK ACTIONS
+        # ══════════════════════════════════════════════════════════════════
+        actions_label = QLabel("QUICK ACTIONS")
+        actions_label.setStyleSheet(
+            "font-size: 10px; font-weight: 600; color: rgba(0,212,255,0.5); "
+            "letter-spacing: 2px;"
+        )
+        layout.addWidget(actions_label)
+
+        actions_row = QHBoxLayout()
+        actions_row.setSpacing(12)
+
+        load_btn = self._make_action_btn(
+            "📂  Load File", "#00d4ff",
+            "Open a filterbank (.fil) or HDF5 (.h5) file"
+        )
+        load_btn.clicked.connect(lambda: self.navigate_to.emit(1))
+        actions_row.addWidget(load_btn)
+
+        stream_btn = self._make_action_btn(
+            "📶  Start Streaming", "#00ff88",
+            "Begin continuous observation processing"
+        )
+        stream_btn.clicked.connect(lambda: self.navigate_to.emit(5))
+        actions_row.addWidget(stream_btn)
+
+        candidates_btn = self._make_action_btn(
+            "🔬  View Candidates", "#7c3aed",
+            "Browse candidate signals in gallery"
+        )
+        candidates_btn.clicked.connect(lambda: self.navigate_to.emit(2))
+        actions_row.addWidget(candidates_btn)
+
+        report_btn = self._make_action_btn(
+            "📊  Generate Report", "#ffaa00",
+            "Export analysis summary"
+        )
+        actions_row.addWidget(report_btn)
+
+        layout.addLayout(actions_row)
+
+        # ══════════════════════════════════════════════════════════════════
+        # BOTTOM ROW: Recent Activity + Health + Mini Waterfall
+        # ══════════════════════════════════════════════════════════════════
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(16)
+
+        # Recent activity feed
+        activity_card = QFrame()
+        activity_card.setStyleSheet("""
+            QFrame {
+                background: rgba(15, 25, 45, 0.55);
+                border: 1px solid rgba(100, 180, 255, 0.1);
+                border-radius: 14px;
+            }
+        """)
+        activity_layout = QVBoxLayout(activity_card)
+        activity_layout.setContentsMargins(20, 16, 20, 16)
+        activity_layout.setSpacing(8)
+
+        act_title = QLabel("Recent Activity")
+        act_title.setStyleSheet(
+            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
+        )
+        activity_layout.addWidget(act_title)
+
+        # Demo activity items
+        demo_activities = [
+            ("✦", "Candidate signal detected", "SNR 24.7 @ 1420.405 MHz", "#00ff88", "2 min ago"),
+            ("✕", "RFI rejected", "GPS L1 sidelobe @ 1575.42 MHz", "#ff3366", "5 min ago"),
+            ("✦", "Candidate signal detected", "SNR 18.2 @ 1667.3 MHz", "#00ff88", "12 min ago"),
+            ("⚡", "Pipeline completed", "observation_2024_0312.fil", "#00d4ff", "15 min ago"),
+            ("✕", "RFI rejected", "Broadband transient, terrestrial", "#ff3366", "18 min ago"),
+            ("✦", "Candidate signal detected", "SNR 31.4 @ 1420.8 MHz", "#00ff88", "22 min ago"),
+            ("⚡", "Pipeline completed", "observation_2024_0311.fil", "#00d4ff", "28 min ago"),
+            ("🔗", "AstroLens cross-ref", "YOLO transient match #12", "#7c3aed", "35 min ago"),
+            ("✕", "RFI rejected", "WiFi 2.4G spillover", "#ff3366", "42 min ago"),
+            ("✦", "Candidate signal detected", "SNR 15.8 @ 408.0 MHz", "#00ff88", "50 min ago"),
+        ]
+
+        for icon, title_text, detail, color, time_ago in demo_activities:
+            row = QHBoxLayout()
+            row.setSpacing(10)
+
+            icon_lbl = QLabel(icon)
+            icon_lbl.setFixedWidth(20)
+            icon_lbl.setStyleSheet(f"font-size: 12px; color: {color};")
+            row.addWidget(icon_lbl)
+
+            text_col = QVBoxLayout()
+            text_col.setSpacing(1)
+            t = QLabel(title_text)
+            t.setStyleSheet("font-size: 12px; color: #e0e8f0; font-weight: 500;")
+            text_col.addWidget(t)
+            d = QLabel(detail)
+            d.setStyleSheet("font-size: 10px; color: rgba(200,215,235,0.4);")
+            text_col.addWidget(d)
+            row.addLayout(text_col)
+
+            row.addStretch()
+
+            time_lbl = QLabel(time_ago)
+            time_lbl.setStyleSheet("font-size: 10px; color: rgba(140,165,200,0.35);")
+            row.addWidget(time_lbl)
+
+            activity_layout.addLayout(row)
+
+        activity_layout.addStretch()
+        bottom_row.addWidget(activity_card, 2)
+
+        # Right column: health + mini waterfall
+        right_col = QVBoxLayout()
+        right_col.setSpacing(16)
+
+        # System health card
+        health_card = QFrame()
+        health_card.setStyleSheet("""
+            QFrame {
+                background: rgba(15, 25, 45, 0.55);
+                border: 1px solid rgba(100, 180, 255, 0.1);
+                border-radius: 14px;
+            }
+        """)
+        health_layout = QVBoxLayout(health_card)
+        health_layout.setContentsMargins(20, 16, 20, 16)
+        health_layout.setSpacing(10)
+
+        health_title = QLabel("System Health")
+        health_title.setStyleSheet(
+            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
+        )
+        health_layout.addWidget(health_title)
+
+        self._health_items = {}
+        health_defs = [
+            ("api", "API Status", True),
+            ("gpu", "GPU Status", True),
+            ("models", "Models Loaded", True),
+            ("astrolens", "AstroLens Connection", False),
+        ]
+
+        for key, label, ok in health_defs:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            dot = _HealthDot(8)
+            dot.set_status(ok)
+            row.addWidget(dot)
+            lbl = QLabel(label)
+            lbl.setStyleSheet("font-size: 12px; color: rgba(200,215,235,0.7);")
+            row.addWidget(lbl)
+            row.addStretch()
+            status_lbl = QLabel("Online" if ok else "Offline")
+            status_lbl.setStyleSheet(
+                f"font-size: 11px; font-weight: 500; "
+                f"color: {COLORS['success'] if ok else COLORS['danger']};"
+            )
+            row.addWidget(status_lbl)
+            health_layout.addLayout(row)
+            self._health_items[key] = (dot, status_lbl)
+
+        right_col.addWidget(health_card)
+
+        # Mini waterfall preview
+        waterfall_card = QFrame()
+        waterfall_card.setStyleSheet("""
+            QFrame {
+                background: rgba(15, 25, 45, 0.55);
+                border: 1px solid rgba(100, 180, 255, 0.1);
+                border-radius: 14px;
+            }
+        """)
+        wf_layout = QVBoxLayout(waterfall_card)
+        wf_layout.setContentsMargins(16, 16, 16, 16)
+        wf_layout.setSpacing(8)
+
+        wf_title = QLabel("Latest Spectrogram")
+        wf_title.setStyleSheet(
+            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
+        )
+        wf_layout.addWidget(wf_title)
+
+        self._mini_waterfall = QLabel()
+        self._mini_waterfall.setFixedSize(320, 180)
+        self._mini_waterfall.setAlignment(Qt.AlignCenter)
+        self._mini_waterfall.setStyleSheet(
+            "background: rgba(8,12,20,0.8); border-radius: 10px;"
+        )
+        self._mini_waterfall.setText("Generating preview…")
+        self._mini_waterfall.setStyleSheet(
+            "background: rgba(8,12,20,0.8); border-radius: 10px; "
+            "color: rgba(140,165,200,0.3); font-size: 12px;"
+        )
+        wf_layout.addWidget(self._mini_waterfall)
+
+        view_btn = QPushButton("Open in Waterfall Viewer →")
+        view_btn.setCursor(Qt.PointingHandCursor)
+        view_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: rgba(0, 212, 255, 0.7);
+                font-size: 12px;
+                font-weight: 500;
+                text-align: left;
+                padding: 4px 0;
+            }
+            QPushButton:hover {
+                color: #00d4ff;
+            }
+        """)
+        view_btn.clicked.connect(lambda: self.navigate_to.emit(1))
+        wf_layout.addWidget(view_btn)
+
+        right_col.addWidget(waterfall_card)
+        right_col.addStretch()
+
+        bottom_row.addLayout(right_col, 1)
+        layout.addLayout(bottom_row, 1)
+
+        scroll.setWidget(content)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
+
+    # ── Helper: action button ─────────────────────────────────────────────
+
+    @staticmethod
+    def _make_action_btn(text: str, color: str, tooltip: str) -> QPushButton:
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+
+        btn = QPushButton(text)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setToolTip(tooltip)
+        btn.setMinimumHeight(52)
+        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba({r},{g},{b}, 0.08),
+                    stop:1 rgba({r},{g},{b}, 0.04));
+                border: 1px solid rgba({r},{g},{b}, 0.2);
+                border-radius: 12px;
+                padding: 14px 20px;
+                color: {color};
+                font-size: 14px;
+                font-weight: 600;
+                text-align: left;
+            }}
+            QPushButton:hover {{
+                background: rgba({r},{g},{b}, 0.15);
+                border-color: rgba({r},{g},{b}, 0.4);
+            }}
+        """)
+        return btn
+
+    # ── Mini waterfall rendering ──────────────────────────────────────────
+
+    def _render_mini_waterfall(self):
+        """Generate a small synthetic waterfall preview."""
+        rng = np.random.default_rng(42)
+        n_t, n_f = 128, 256
+        data = rng.normal(0, 1, (n_t, n_f)).astype(np.float32)
+
+        # Inject a couple of drifting signals
+        for snr, f0, dr in [(15, 100, 0.8), (20, 180, -1.2), (12, 60, 0.3)]:
+            for t in range(n_t):
+                fc = int(f0 + dr * t / n_t * 30)
+                if 0 <= fc < n_f:
+                    data[t, max(0, fc - 1):min(n_f, fc + 2)] += snr
+
+        fig = Figure(figsize=(320 / 72, 180 / 72), dpi=72)
+        ax = fig.add_subplot(111)
+        from matplotlib.colors import LinearSegmentedColormap
+        seti_cmap = LinearSegmentedColormap.from_list("seti", [
+            (0.0, "#020810"), (0.2, "#081838"), (0.4, "#0a3060"),
+            (0.6, "#0060a0"), (0.8, "#00b0e0"), (1.0, "#00ffff"),
+        ])
+        ax.imshow(data, aspect="auto", origin="lower", cmap=seti_cmap, interpolation="nearest")
+        ax.axis("off")
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+        buf = io.BytesIO()
+        fig.savefig(
+            buf, format="png", facecolor="#080c14",
+            bbox_inches="tight", pad_inches=0,
+        )
+        buf.seek(0)
+
+        img = QImage.fromData(buf.read())
+        if not img.isNull():
+            pm = QPixmap.fromImage(img).scaled(
+                320, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            self._mini_waterfall.setPixmap(pm)
+            self._mini_waterfall.setStyleSheet(
+                "background: rgba(8,12,20,0.8); border-radius: 10px;"
+            )
+
+    # ── Public API ────────────────────────────────────────────────────────
+
+    def update_stat(self, key: str, value: str):
+        """Update a specific stat card value."""
+        card = self._stat_cards.get(key)
+        if card:
+            val_lbl = card.findChild(QLabel, "value")
+            if val_lbl:
+                val_lbl.setText(value)
+
+    def set_health(self, key: str, ok: bool):
+        """Update a health indicator."""
+        if key in self._health_items:
+            dot, lbl = self._health_items[key]
+            dot.set_status(ok)
+            lbl.setText("Online" if ok else "Offline")
+            lbl.setStyleSheet(
+                f"font-size: 11px; font-weight: 500; "
+                f"color: {COLORS['success'] if ok else COLORS['danger']};"
+            )

@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+{% block title %}Signal Gallery{% endblock %}
+
+{% block extra_head %}
+<style>
+    .filter-bar {
+        background: var(--bg-surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .filter-group label {
+        font-size: 10px;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        white-space: nowrap;
+    }
+
+    .filter-group select,
+    .filter-group input {
+        background: rgba(15, 25, 45, 0.6);
+        border: 1px solid var(--glass-border);
+        border-radius: 6px;
+        color: var(--text-primary);
+        padding: 7px 12px;
+        font-size: 12px;
+        font-family: inherit;
+        min-width: 120px;
+    }
+
+    .filter-group input[type="number"] {
+        width: 80px;
+        min-width: 80px;
+    }
+
+    .filter-group select:focus, .filter-group input:focus {
+        outline: none;
+        border-color: var(--accent-cyan-border);
+    }
+
+    .filter-spacer { flex: 1; }
+
+    .sort-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .signal-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .signal-card {
+        background: var(--bg-surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        overflow: hidden;
+        transition: all 0.25s;
+        cursor: pointer;
+    }
+
+    .signal-card:hover {
+        border-color: var(--glass-border-hover);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(0, 212, 255, 0.08);
+    }
+
+    .signal-spectrogram {
+        width: 100%;
+        height: 120px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .signal-spectrogram canvas {
+        width: 100%;
+        height: 100%;
+    }
+
+    .signal-info {
+        padding: 14px 16px;
+    }
+
+    .signal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .signal-id {
+        font-size: 11px;
+        color: var(--text-tertiary);
+    }
+
+    .signal-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .signal-meta-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .signal-meta-item .meta-label {
+        font-size: 9px;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+    }
+
+    .signal-meta-item .meta-value {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+        margin-top: 8px;
+    }
+
+    .pagination .page-info {
+        font-size: 12px;
+        color: var(--text-tertiary);
+    }
+
+    .results-count {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-bottom: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Signal Gallery</h1>
+    <p class="subtitle">Browse, filter, and inspect detected signals</p>
+</div>
+
+<!-- Filter Bar -->
+<form class="filter-bar" method="get" action="/signals">
+    <div class="filter-group">
+        <label>Classification</label>
+        <select name="classification">
+            <option value="" {% if not classification %}selected{% endif %}>All Types</option>
+            <option value="narrowband" {% if classification == 'narrowband' %}selected{% endif %}>Narrowband</option>
+            <option value="broadband" {% if classification == 'broadband' %}selected{% endif %}>Broadband</option>
+            <option value="pulsed" {% if classification == 'pulsed' %}selected{% endif %}>Pulsed</option>
+            <option value="candidate" {% if classification == 'candidate' %}selected{% endif %}>Candidate</option>
+            <option value="rfi" {% if classification == 'rfi' %}selected{% endif %}>RFI</option>
+            <option value="noise" {% if classification == 'noise' %}selected{% endif %}>Noise</option>
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label>SNR Min</label>
+        <input type="number" name="min_snr" value="{{ min_snr }}" step="0.1" min="0">
+    </div>
+
+    <div class="filter-group">
+        <label>SNR Max</label>
+        <input type="number" name="max_snr" value="{{ max_snr }}" step="0.1" min="0">
+    </div>
+
+    <div class="filter-spacer"></div>
+
+    <div class="sort-group">
+        <label>Sort</label>
+        <select name="sort">
+            <option value="snr_desc" {% if sort == 'snr_desc' %}selected{% endif %}>SNR (High-Low)</option>
+            <option value="snr_asc" {% if sort == 'snr_asc' %}selected{% endif %}>SNR (Low-High)</option>
+            <option value="freq_asc" {% if sort == 'freq_asc' %}selected{% endif %}>Frequency (Low-High)</option>
+            <option value="freq_desc" {% if sort == 'freq_desc' %}selected{% endif %}>Frequency (High-Low)</option>
+            <option value="drift_desc" {% if sort == 'drift_desc' %}selected{% endif %}>Drift Rate (High)</option>
+            <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest First</option>
+        </select>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Apply</button>
+</form>
+
+<div class="results-count">
+    Showing {{ signals|length }} signals &middot; Page {{ page + 1 }}
+</div>
+
+<!-- Signal Grid -->
+<div class="signal-grid" id="signal-grid">
+    {% if signals %}
+        {% for s in signals %}
+        <div class="signal-card" data-id="{{ s.get('id', '') }}">
+            <div class="signal-spectrogram">
+                <canvas class="mini-spectrogram" data-seed="{{ s.get('id', loop.index) }}"></canvas>
+            </div>
+            <div class="signal-info">
+                <div class="signal-header">
+                    <span class="signal-id">#{{ s.get('id', '') }}</span>
+                    {% set cls = s.get('classification', 'unknown')|lower %}
+                    {% if 'candidate' in cls %}
+                        <span class="badge badge-candidate">Candidate</span>
+                    {% elif 'rfi' in cls %}
+                        <span class="badge badge-rfi">RFI</span>
+                    {% elif 'narrowband' in cls %}
+                        <span class="badge badge-narrowband">Narrowband</span>
+                    {% elif 'broadband' in cls %}
+                        <span class="badge badge-broadband">Broadband</span>
+                    {% elif 'pulsed' in cls %}
+                        <span class="badge badge-pulsed">Pulsed</span>
+                    {% elif 'noise' in cls %}
+                        <span class="badge badge-noise">Noise</span>
+                    {% else %}
+                        <span class="badge badge-unknown">{{ s.get('classification', 'Unknown') }}</span>
+                    {% endif %}
+                </div>
+                <div class="signal-meta">
+                    <div class="signal-meta-item">
+                        <span class="meta-label">SNR</span>
+                        <span class="meta-value" style="color: var(--accent-cyan);">{{ "%.1f"|format(s.get('snr', 0)) }}</span>
+                    </div>
+                    <div class="signal-meta-item">
+                        <span class="meta-label">Drift Rate</span>
+                        <span class="meta-value">{{ "%.4f"|format(s.get('drift_rate', 0)) }}</span>
+                    </div>
+                    <div class="signal-meta-item">
+                        <span class="meta-label">Frequency</span>
+                        <span class="meta-value">{{ "%.2f"|format(s.get('frequency_mhz', 0)) }} MHz</span>
+                    </div>
+                    <div class="signal-meta-item">
+                        <span class="meta-label">RFI Score</span>
+                        {% set rfi = s.get('rfi_score', 0) %}
+                        <span class="meta-value" style="color: {% if rfi > 0.7 %}var(--accent-rose){% elif rfi > 0.3 %}var(--accent-amber){% else %}var(--accent-green){% endif %};">
+                            {{ "%.2f"|format(rfi) }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <!-- Demo cards when no API data -->
+        {% for i in range(12) %}
+        <div class="signal-card" data-id="{{ i + 1 }}">
+            <div class="signal-spectrogram">
+                <canvas class="mini-spectrogram" data-seed="{{ i + 1 }}"></canvas>
+            </div>
+            <div class="signal-info">
+                <div class="signal-header">
+                    <span class="signal-id">#{{ i + 1 }}</span>
+                    {% if i % 6 == 0 %}
+                        <span class="badge badge-candidate">Candidate</span>
+                    {% elif i % 6 == 1 %}
+                        <span class="badge badge-narrowband">Narrowband</span>
+                    {% elif i % 6 == 2 %}
+                        <span class="badge badge-rfi">RFI</span>
+                    {% elif i % 6 == 3 %}
+                        <span class="badge badge-broadband">Broadband</span>
+                    {% elif i % 6 == 4 %}
+                        <span class="badge badge-pulsed">Pulsed</span>
+                    {% else %}
+                        <span class="badge badge-noise">Noise</span>
+                    {% endif %}
+                </div>
+                <div class="signal-meta">
+                    <div class="signal-meta-item">
+                        <span class="meta-label">SNR</span>
+                        <span class="meta-value" style="color: var(--accent-cyan);">{{ "%.1f"|format(5 + (i * 7.3) % 45) }}</span>
+                    </div>
+                    <div class="signal-meta-item">
+                        <span class="meta-label">Drift Rate</span>
+                        <span class="meta-value">{{ "%.4f"|format(((i * 0.037) % 0.5) - 0.25) }}</span>
+                    </div>
+                    <div class="signal-meta-item">
+                        <span class="meta-label">Frequency</span>
+                        <span class="meta-value">{{ "%.2f"|format(1400 + (i * 3.7) % 50) }} MHz</span>
+                    </div>
+                    <div class="signal-meta-item">
+                        <span class="meta-label">RFI Score</span>
+                        <span class="meta-value" style="color: {% if i % 3 == 0 %}var(--accent-green){% elif i % 3 == 1 %}var(--accent-amber){% else %}var(--accent-rose){% endif %};">
+                            {{ "%.2f"|format((i * 0.17) % 1.0) }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
+</div>
+
+<!-- Pagination -->
+<div class="pagination">
+    {% if page > 0 %}
+        <a href="/signals?page={{ page - 1 }}&limit={{ limit }}&classification={{ classification }}&min_snr={{ min_snr }}&max_snr={{ max_snr }}&sort={{ sort }}" class="btn">&larr; Previous</a>
+    {% endif %}
+    <span class="page-info">Page {{ page + 1 }}</span>
+    {% if signals|length == limit %}
+        <a href="/signals?page={{ page + 1 }}&limit={{ limit }}&classification={{ classification }}&min_snr={{ min_snr }}&max_snr={{ max_snr }}&sort={{ sort }}" class="btn">Next &rarr;</a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Generate mini spectrograms for each signal card ──
+function seededRandom(seed) {
+    let s = seed;
+    return function() {
+        s = (s * 16807 + 0) % 2147483647;
+        return (s - 1) / 2147483646;
+    };
+}
+
+const viridis = [[68,1,84],[72,35,116],[64,67,135],[52,94,141],[41,120,142],[32,144,140],[34,167,132],[68,190,112],[121,209,81],[189,222,38],[253,231,37]];
+
+function interpolateColor(value) {
+    const scaled = Math.max(0, Math.min(1, value)) * (viridis.length - 1);
+    const idx = Math.floor(scaled);
+    const frac = scaled - idx;
+    if (idx >= viridis.length - 1) return viridis[viridis.length - 1];
+    const c0 = viridis[idx], c1 = viridis[idx + 1];
+    return [
+        Math.round(c0[0] + (c1[0] - c0[0]) * frac),
+        Math.round(c0[1] + (c1[1] - c0[1]) * frac),
+        Math.round(c0[2] + (c1[2] - c0[2]) * frac),
+    ];
+}
+
+document.querySelectorAll('.mini-spectrogram').forEach(canvas => {
+    const seed = parseInt(canvas.dataset.seed) || 1;
+    const rand = seededRandom(seed * 12345);
+    const w = canvas.width = 280;
+    const h = canvas.height = 120;
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.createImageData(w, h);
+    const pixels = imageData.data;
+
+    const driftRate = (rand() - 0.5) * 0.3;
+    const signalPos = 0.3 + rand() * 0.4;
+    const signalStrength = 0.4 + rand() * 0.5;
+    const isRFI = rand() < 0.25;
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            let val = rand() * 0.25;
+
+            // Drifting signal
+            const sx = signalPos * w + (isRFI ? 0 : driftRate * y * w / h);
+            const dist = Math.abs(x - sx);
+            if (dist < 2.5) {
+                val += (1 - dist / 2.5) * signalStrength;
+            }
+
+            // Optional secondary signal
+            if (seed % 3 === 0) {
+                const sx2 = (signalPos + 0.15) * w - driftRate * 0.5 * y * w / h;
+                const dist2 = Math.abs(x - sx2);
+                if (dist2 < 2) val += (1 - dist2 / 2) * 0.3;
+            }
+
+            val = Math.min(val, 1);
+            const [r, g, b] = interpolateColor(val);
+            const idx = (y * w + x) * 4;
+            pixels[idx] = r;
+            pixels[idx + 1] = g;
+            pixels[idx + 2] = b;
+            pixels[idx + 3] = 255;
+        }
+    }
+    ctx.putImageData(imageData, 0, 0);
+});
+</script>
+{% endblock %}
