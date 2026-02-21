@@ -199,8 +199,17 @@ class StreamingObserver:
 
         # Load or create streaming state
         self.state = self._load_state()
-        if not self.state.started_at:
+
+        # If the previous session ended (completed_at set), start a fresh session
+        # but preserve cumulative totals for continuity
+        if self.state.completed_at or not self.state.started_at:
             self.state.started_at = datetime.now().isoformat()
+            self.state.completed = False
+            self.state.completed_at = ""
+            self.state.current_day = 0
+            self.state.consecutive_errors = 0
+            self.state.error_log = []
+            self.state.daily_snapshots = []
 
         # Always update from CLI args
         if target_days > 0:
@@ -256,7 +265,6 @@ class StreamingObserver:
     def _save_state(self):
         try:
             data = self._to_native(asdict(self.state))
-            # Write runtime fields for UI consumption
             if self.state.started_at:
                 try:
                     started = datetime.fromisoformat(self.state.started_at)
@@ -270,8 +278,10 @@ class StreamingObserver:
             rt = self.state.total_runtime_hours or 0.001
             data["processing_rate"] = f"{fps / max(rt, 0.001):.1f}/hr"
             data["current_file"] = getattr(self, "_current_file_name", "—")
-            with open(STREAMING_STATE, "w") as f:
+            tmp = STREAMING_STATE.with_suffix(".tmp")
+            with open(tmp, "w") as f:
                 json.dump(data, f, indent=2)
+            os.replace(str(tmp), str(STREAMING_STATE))
         except Exception as e:
             logger.warning(f"Failed to save streaming state: {e}")
 
@@ -485,18 +495,44 @@ class StreamingObserver:
 
         return cycle_summary
 
+    _MAX_STORED_CANDIDATES = 500
+
     def _record_candidate(self, result: dict):
-        """Append a candidate to the persistent candidates file."""
+        """Append a candidate to the persistent candidates file.
+
+        Keeps only the top candidates by SNR to prevent unbounded growth
+        during multi-day streaming.
+        """
         try:
             candidates = []
             if CANDIDATES_FILE.exists():
-                with open(CANDIDATES_FILE) as f:
-                    candidates = json.load(f)
+                try:
+                    with open(CANDIDATES_FILE) as f:
+                        candidates = json.load(f)
+                except (json.JSONDecodeError, ValueError):
+                    candidates = []
 
-            candidates.append(result)
+            entry = {
+                "file_name": result.get("file_name", ""),
+                "signal_type": result.get("signal_type", "unknown"),
+                "snr": result.get("snr", 0),
+                "drift_rate": result.get("drift_rate", 0),
+                "ood_score": result.get("ood_score", 0),
+                "confidence": result.get("confidence", 0),
+                "candidate_count": result.get("candidate_count", 0),
+                "anomaly_count": result.get("anomaly_count", 0),
+                "processed_at": result.get("processed_at", ""),
+            }
+            candidates.append(entry)
 
-            with open(CANDIDATES_FILE, "w") as f:
+            if len(candidates) > self._MAX_STORED_CANDIDATES:
+                candidates.sort(key=lambda c: c.get("snr", 0), reverse=True)
+                candidates = candidates[: self._MAX_STORED_CANDIDATES]
+
+            tmp = CANDIDATES_FILE.with_suffix(".tmp")
+            with open(tmp, "w") as f:
                 json.dump(candidates, f, indent=2, default=str)
+            os.replace(str(tmp), str(CANDIDATES_FILE))
         except Exception as e:
             logger.warning(f"Failed to record candidate: {e}")
 
@@ -587,6 +623,117 @@ class StreamingObserver:
             except Exception:
                 pass
         return []
+
+    # ── Auto-training ─────────────────────────────────────────────────────
+
+    _TRAIN_DATA_DIR = DATA_DIR / "training"
+    _MIN_FILES_FOR_TRAIN = 50
+
+    def _maybe_auto_train(self):
+        """Generate training data and train the model if not yet trained.
+
+        Triggered once after enough files have been processed to build a
+        useful training set.  Subsequent fine-tuning can happen at each
+        daily snapshot.
+        """
+        model_path = MODELS_DIR / "signal_classifier_v1.pt"
+        if model_path.exists():
+            return
+
+        if self.state.total_files_processed < self._MIN_FILES_FOR_TRAIN:
+            return
+
+        logger.info("\n" + "=" * 60)
+        logger.info("  AUTO-TRAINING — generating synthetic training data")
+        logger.info("=" * 60)
+
+        try:
+            from scripts.generate_training_data import main as gen_main
+            sys.argv = [
+                "generate_training_data",
+                "--output-dir", str(self._TRAIN_DATA_DIR),
+                "--count", "600",
+            ]
+            gen_main()
+            logger.info("  Training data generated")
+        except Exception as e:
+            logger.warning(f"  Training data generation failed: {e}")
+            return
+
+        logger.info("  Starting model training (20 epochs)...")
+        try:
+            from scripts.train_model import (
+                get_device, load_data, _build_model, train_one_epoch,
+                evaluate, extract_embeddings, compute_ood_calibration,
+                N_CLASSES,
+            )
+            import torch
+
+            device = get_device()
+            train_ds, val_ds, full_specs, full_labels = load_data(
+                self._TRAIN_DATA_DIR, seed=42,
+            )
+            from torch.utils.data import DataLoader
+
+            train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
+            val_loader = DataLoader(val_ds, batch_size=64, shuffle=False)
+
+            model = _build_model(
+                num_classes=N_CLASSES,
+                freq_bins=full_specs.shape[1],
+                time_steps=full_specs.shape[2],
+            ).to(device)
+
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
+            criterion = torch.nn.CrossEntropyLoss()
+
+            best_acc = 0.0
+            MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+            for epoch in range(1, 21):
+                t_loss, t_acc = train_one_epoch(
+                    model, train_loader, criterion, optimizer, device, None, False,
+                )
+                v_loss, v_acc = evaluate(model, val_loader, criterion, device)
+                scheduler.step()
+
+                if v_acc > best_acc:
+                    best_acc = v_acc
+                    torch.save(model.state_dict(), model_path)
+
+                if epoch % 5 == 0:
+                    logger.info(
+                        f"  Epoch {epoch}/20: "
+                        f"train_acc={t_acc:.4f} val_acc={v_acc:.4f} "
+                        f"{'*BEST*' if v_acc == best_acc else ''}"
+                    )
+
+            logger.info(f"  Training complete — best val accuracy: {best_acc:.4f}")
+
+            # OOD calibration
+            model.load_state_dict(
+                torch.load(model_path, map_location=device, weights_only=True)
+            )
+            embeddings = extract_embeddings(
+                model, full_specs, full_labels, device, batch_size=64,
+            )
+            calibration = compute_ood_calibration(embeddings, full_labels, N_CLASSES)
+            cal_path = MODELS_DIR / "ood_calibration.json"
+            with open(cal_path, "w") as f:
+                json.dump(calibration, f, indent=2)
+            logger.info(f"  OOD calibration saved → {cal_path}")
+
+            # Reload pipeline with trained model
+            self._pipeline = None
+            _ = self.pipeline
+            logger.info("  Pipeline reloaded with trained model")
+            logger.info("=" * 60)
+
+        except Exception as e:
+            logger.warning(f"  Auto-training failed: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
     def _self_correct(
         self,
@@ -703,7 +850,19 @@ class StreamingObserver:
         except Exception:
             pass
 
-        # 3. Model files exist
+        # 3. Log file size — rotate when > 10MB
+        try:
+            if LOG_FILE.exists() and LOG_FILE.stat().st_size > 10 * 1024 * 1024:
+                rotated = LOG_FILE.with_suffix(".log.1")
+                if rotated.exists():
+                    rotated.unlink()
+                LOG_FILE.rename(rotated)
+                LOG_FILE.touch()
+                logger.info("  Log rotated (exceeded 10MB)")
+        except Exception:
+            pass
+
+        # 4. Model files exist
         model_dir = MODELS_DIR
         if not any(model_dir.glob("*.pt")) and not any(model_dir.glob("*.pth")):
             issues.append("No model weights found (using untrained models)")
@@ -909,6 +1068,13 @@ class StreamingObserver:
                     if snapshot.corrections_applied:
                         for c in snapshot.corrections_applied:
                             logger.info(f"    - {c}")
+
+                # Auto-train model after enough data collected
+                if cycle_count == self._MIN_FILES_FOR_TRAIN or (
+                    now.date() != self._last_report_date
+                    and not (MODELS_DIR / "signal_classifier_v1.pt").exists()
+                ):
+                    self._maybe_auto_train()
 
                 # Save state every cycle so UI stays responsive
                 self.state.total_runtime_hours = (

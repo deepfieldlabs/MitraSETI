@@ -357,10 +357,34 @@ class StreamingPanel(QWidget):
         else:
             self._start_streaming()
 
+    def _kill_stale_streaming(self):
+        """Kill any orphaned streaming_observation.py processes."""
+        try:
+            import signal as _sig
+            result = subprocess.run(
+                ["pgrep", "-f", "streaming_observation.py"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.strip().split("\n"):
+                pid = line.strip()
+                if pid and pid.isdigit():
+                    pid_int = int(pid)
+                    try:
+                        os.kill(pid_int, _sig.SIGTERM)
+                    except OSError:
+                        pass
+            if result.stdout.strip():
+                import time
+                time.sleep(1)
+        except Exception:
+            pass
+
     def _start_streaming(self):
         days = self._days_spin.value()
         hours = days * 24
         mode = self._mode_combo.currentText().lower()
+
+        self._kill_stale_streaming()
 
         self._log_file_pos = 0
         self._log_text.setPlainText(
@@ -551,12 +575,19 @@ class StreamingPanel(QWidget):
             else:
                 subprocess.Popen(["explorer", str(_REPORTS_DIR)])
 
-    @staticmethod
-    def _read_json(path: Path) -> dict:
+    _last_valid_state: dict = {}
+
+    @classmethod
+    def _read_json(cls, path: Path) -> dict:
         if path.exists():
             try:
                 with open(path) as f:
-                    return json.load(f)
+                    data = json.load(f)
+                if isinstance(data, dict) and data.get("started_at"):
+                    cls._last_valid_state = data
+                    return data
+            except (json.JSONDecodeError, ValueError):
+                return cls._last_valid_state
             except Exception:
-                pass
-        return {}
+                return cls._last_valid_state
+        return cls._last_valid_state
