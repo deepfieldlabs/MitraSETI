@@ -214,18 +214,15 @@ impl FilterbankIO for SigprocReader {
 // HDF5 .h5 reader
 // ---------------------------------------------------------------------------
 
-/// Reader for Breakthrough Listen HDF5 filterbank files.
-///
-/// These files store the spectrogram in a dataset called `"data"` and the
-/// header fields as root-group attributes.
+/// HDF5 reader is available when compiled with the `hdf5-support` feature.
+/// For standard use, .h5 files are read via Python's h5py library instead.
+#[cfg(feature = "hdf5-support")]
 pub struct Hdf5Reader;
 
+#[cfg(feature = "hdf5-support")]
 impl FilterbankIO for Hdf5Reader {
     fn read(&self, path: &str) -> Result<(FilterbankHeader, Array2<f32>), FilterbankError> {
-        // Open the HDF5 file.
         let file = hdf5::File::open(path).map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
-
-        // --- Read header attributes ----------------------------------------
         let root = file.group("/").map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
 
         let nchans = read_attr_usize(&root, "nchans")?;
@@ -239,83 +236,44 @@ impl FilterbankIO for Hdf5Reader {
         let ra = read_attr_f64(&root, "src_raj").unwrap_or(0.0);
         let dec = read_attr_f64(&root, "src_dej").unwrap_or(0.0);
 
-        let header = FilterbankHeader {
-            nchans,
-            nifs,
-            nbits,
-            tsamp,
-            fch1,
-            foff,
-            tstart,
-            source_name,
-            ra,
-            dec,
-        };
+        let header = FilterbankHeader { nchans, nifs, nbits, tsamp, fch1, foff, tstart, source_name, ra, dec };
 
-        // --- Read spectrogram data -----------------------------------------
-        let dataset = file
-            .dataset("data")
-            .map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
-
-        // The BL HDF5 format stores data as (n_times, n_ifs, n_chans).
-        // We read it as a flat Vec<f32> and reshape.
-        let flat: Vec<f32> = dataset
-            .read_raw()
-            .map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
-
+        let dataset = file.dataset("data").map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
+        let flat: Vec<f32> = dataset.read_raw().map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
         let n_times = flat.len() / (nifs * nchans);
-        // Take only the first IF for simplicity (most SETI searches use
-        // total-power data with nifs=1).
-        let data: Vec<f32> = if nifs == 1 {
-            flat
-        } else {
-            flat.chunks(nifs * nchans)
-                .flat_map(|frame| frame[..nchans].iter().copied())
-                .collect()
+        let data: Vec<f32> = if nifs == 1 { flat } else {
+            flat.chunks(nifs * nchans).flat_map(|frame| frame[..nchans].iter().copied()).collect()
         };
 
         let array = Array2::from_shape_vec((n_times, nchans), data).map_err(|e| {
-            FilterbankError::ShapeMismatch {
-                expected: format!("({}, {})", n_times, nchans),
-                actual: e.to_string(),
-            }
+            FilterbankError::ShapeMismatch { expected: format!("({}, {})", n_times, nchans), actual: e.to_string() }
         })?;
-
         Ok((header, array))
     }
 }
 
-// ---------------------------------------------------------------------------
-// HDF5 attribute helpers
-// ---------------------------------------------------------------------------
-
+#[cfg(feature = "hdf5-support")]
 fn read_attr_f64(group: &hdf5::Group, name: &str) -> Result<f64, FilterbankError> {
-    let attr = group
-        .attr(name)
-        .map_err(|e| FilterbankError::Hdf5(format!("missing attribute '{}': {}", name, e)))?;
-    attr.read_scalar::<f64>()
-        .map_err(|e| FilterbankError::Hdf5(format!("cannot read '{}' as f64: {}", name, e)))
+    let attr = group.attr(name).map_err(|e| FilterbankError::Hdf5(format!("missing attribute '{}': {}", name, e)))?;
+    attr.read_scalar::<f64>().map_err(|e| FilterbankError::Hdf5(format!("cannot read '{}' as f64: {}", name, e)))
 }
 
+#[cfg(feature = "hdf5-support")]
 fn read_attr_usize(group: &hdf5::Group, name: &str) -> Result<usize, FilterbankError> {
     read_attr_f64(group, name).map(|v| v as usize)
 }
 
+#[cfg(feature = "hdf5-support")]
 fn read_attr_u32(group: &hdf5::Group, name: &str) -> Result<u32, FilterbankError> {
     read_attr_f64(group, name).map(|v| v as u32)
 }
 
+#[cfg(feature = "hdf5-support")]
 fn read_attr_string(group: &hdf5::Group, name: &str) -> Result<String, FilterbankError> {
-    let attr = group
-        .attr(name)
-        .map_err(|e| FilterbankError::Hdf5(format!("missing attribute '{}': {}", name, e)))?;
+    let attr = group.attr(name).map_err(|e| FilterbankError::Hdf5(format!("missing attribute '{}': {}", name, e)))?;
     attr.read_scalar::<hdf5::types::VarLenUnicode>()
         .map(|s| s.to_string())
-        .or_else(|_| {
-            // Fall back: try reading as a fixed-length string.
-            attr.read_scalar::<hdf5::types::FixedUnicode<256>>()
-                .map(|s| s.to_string())
-        })
+        .or_else(|_| attr.read_scalar::<hdf5::types::FixedUnicode<256>>().map(|s| s.to_string()))
         .map_err(|e| FilterbankError::Hdf5(format!("cannot read '{}' as string: {}", name, e)))
 }
 
@@ -371,7 +329,12 @@ impl FilterbankReader {
 
         match ext {
             "fil" => SigprocReader.read(path),
+            #[cfg(feature = "hdf5-support")]
             "h5" | "hdf5" => Hdf5Reader.read(path),
+            #[cfg(not(feature = "hdf5-support"))]
+            "h5" | "hdf5" => Err(FilterbankError::UnsupportedFormat(
+                "HDF5 support not compiled in; use Python h5py instead".to_string(),
+            )),
             other => Err(FilterbankError::UnsupportedFormat(other.to_string())),
         }
     }

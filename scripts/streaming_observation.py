@@ -36,7 +36,7 @@ import shutil
 import sys
 import time
 import traceback
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -75,15 +75,14 @@ DAILY_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE = DATA_DIR / "streaming_observation.log"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(LOG_FILE),
-    ],
-)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("astroseti.streaming")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    _fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    _sh = logging.StreamHandler()
+    _sh.setFormatter(_fmt)
+    logger.addHandler(_sh)
+    logger.propagate = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -126,7 +125,7 @@ class DailySnapshot:
 class StreamingState:
     """Persistent state for multi-day streaming observation."""
     started_at: str = ""
-    target_days: int = 7
+    target_days: float = 7
     current_day: int = 0
     total_runtime_hours: float = 0.0
     daily_snapshots: List[dict] = field(default_factory=list)
@@ -189,7 +188,7 @@ class StreamingObserver:
 
     def __init__(
         self,
-        target_days: int = 7,
+        target_days: float = 7,
         mode: str = "normal",
         daily_report_hour: int = 0,
     ):
@@ -215,11 +214,8 @@ class StreamingObserver:
         self._day_start_metrics: Dict = {}
         self._last_report_date: Optional[datetime] = None
 
-        # Lazy-loaded pipeline components
-        self._classifier = None
-        self._ood_detector = None
-        self._feature_extractor = None
-        self._catalog_query = None
+        # Unified pipeline
+        self._pipeline = None
 
         # File source tracking
         self._processed_files: set = set()
@@ -229,35 +225,19 @@ class StreamingObserver:
         signal.signal(signal.SIGTERM, self._handle_shutdown)
         atexit.register(self._save_state)
 
-    # ── Pipeline components (lazy-loaded) ─────────────────────────────────
+    # ── Pipeline (lazy-loaded) ───────────────────────────────────────────
 
     @property
-    def classifier(self):
-        if self._classifier is None:
-            from inference.signal_classifier import SignalClassifier
-            self._classifier = SignalClassifier()
-        return self._classifier
-
-    @property
-    def ood_detector(self):
-        if self._ood_detector is None:
-            from inference.ood_detector import RadioOODDetector
-            self._ood_detector = RadioOODDetector()
-        return self._ood_detector
-
-    @property
-    def feature_extractor(self):
-        if self._feature_extractor is None:
-            from inference.feature_extractor import FeatureExtractor
-            self._feature_extractor = FeatureExtractor()
-        return self._feature_extractor
-
-    @property
-    def catalog_query(self):
-        if self._catalog_query is None:
-            from catalog.radio_catalogs import RadioCatalogQuery
-            self._catalog_query = RadioCatalogQuery()
-        return self._catalog_query
+    def pipeline(self):
+        if self._pipeline is None:
+            from pipeline import AstroSETIPipeline
+            model_path = MODELS_DIR / "signal_classifier_v1.pt"
+            ood_cal_path = MODELS_DIR / "ood_calibration.json"
+            self._pipeline = AstroSETIPipeline(
+                model_path=str(model_path) if model_path.exists() else None,
+                ood_calibration_path=str(ood_cal_path) if ood_cal_path.exists() else None,
+            )
+        return self._pipeline
 
     # ── State persistence ─────────────────────────────────────────────────
 
@@ -266,15 +246,32 @@ class StreamingObserver:
             try:
                 with open(STREAMING_STATE) as f:
                     data = json.load(f)
-                return StreamingState(**data)
+                valid_fields = {f.name for f in fields(StreamingState)}
+                filtered = {k: v for k, v in data.items() if k in valid_fields}
+                return StreamingState(**filtered)
             except Exception as e:
                 logger.warning(f"Failed to load streaming state: {e}")
         return StreamingState()
 
     def _save_state(self):
         try:
+            data = self._to_native(asdict(self.state))
+            # Write runtime fields for UI consumption
+            if self.state.started_at:
+                try:
+                    started = datetime.fromisoformat(self.state.started_at)
+                    delta = datetime.now() - started
+                    hours, remainder = divmod(int(delta.total_seconds()), 3600)
+                    mins, secs = divmod(remainder, 60)
+                    data["elapsed"] = f"{hours}:{mins:02d}:{secs:02d}"
+                except Exception:
+                    pass
+            fps = self.state.total_files_processed
+            rt = self.state.total_runtime_hours or 0.001
+            data["processing_rate"] = f"{fps / max(rt, 0.001):.1f}/hr"
+            data["current_file"] = getattr(self, "_current_file_name", "—")
             with open(STREAMING_STATE, "w") as f:
-                json.dump(self._to_native(asdict(self.state)), f, indent=2)
+                json.dump(data, f, indent=2)
         except Exception as e:
             logger.warning(f"Failed to save streaming state: {e}")
 
@@ -309,12 +306,15 @@ class StreamingObserver:
         Searches the configured FILTERBANK_DIR for .fil and .h5 files
         that haven't been processed yet in this session.
         """
-        patterns = ["*.fil", "*.h5"]
+        patterns = ["**/*.fil", "**/*.h5"]
+        seen: set = set()
         files: List[Path] = []
         for pattern in patterns:
-            files.extend(FILTERBANK_DIR.glob(pattern))
-            # Also search subdirectories
-            files.extend(FILTERBANK_DIR.glob(f"**/{pattern}"))
+            for f in FILTERBANK_DIR.glob(pattern):
+                resolved = f.resolve()
+                if resolved not in seen:
+                    seen.add(resolved)
+                    files.append(f)
 
         # Remove already-processed files
         new_files = [
@@ -331,177 +331,50 @@ class StreamingObserver:
 
         return sorted(new_files, key=lambda f: f.stat().st_mtime)
 
-    def _load_spectrogram(self, filepath: Path) -> Optional[np.ndarray]:
-        """
-        Load a filterbank / HDF5 file and return as a 2D spectrogram.
-
-        Returns:
-            2D numpy array (frequency x time) or None on failure.
-        """
-        try:
-            suffix = filepath.suffix.lower()
-
-            if suffix == ".h5":
-                try:
-                    import h5py
-                    with h5py.File(str(filepath), "r") as f:
-                        # Breakthrough Listen HDF5 format
-                        if "data" in f:
-                            data = f["data"][:]
-                        elif "filterbank" in f:
-                            data = f["filterbank"]["data"][:]
-                        else:
-                            # Try first dataset
-                            key = list(f.keys())[0]
-                            data = f[key][:]
-                    # Squeeze to 2D if needed
-                    data = np.squeeze(data)
-                    if data.ndim == 3:
-                        data = data[0]  # Take first polarisation
-                    return data.astype(np.float32)
-                except ImportError:
-                    logger.warning("h5py not installed; cannot read .h5 files")
-                    return None
-
-            elif suffix == ".fil":
-                try:
-                    import blimpy
-                    wf = blimpy.Waterfall(str(filepath), load_data=True)
-                    data = np.squeeze(wf.data)
-                    if data.ndim == 3:
-                        data = data[0]
-                    return data.astype(np.float32)
-                except ImportError:
-                    # Fallback: read raw filterbank header + data
-                    return self._read_raw_filterbank(filepath)
-
-            logger.warning(f"Unsupported file format: {suffix}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Failed to load {filepath.name}: {e}")
-            return None
-
-    @staticmethod
-    def _read_raw_filterbank(filepath: Path) -> Optional[np.ndarray]:
-        """Minimal raw filterbank reader (no blimpy dependency)."""
-        try:
-            with open(filepath, "rb") as f:
-                raw = f.read()
-
-            # Find header end marker
-            header_end = raw.find(b"HEADER_END")
-            if header_end < 0:
-                return None
-            data_start = header_end + len(b"HEADER_END")
-
-            # Parse nchans and nbits from header
-            nchans = 256  # default
-            nbits = 32
-            header = raw[:data_start]
-
-            idx = header.find(b"nchans")
-            if idx >= 0:
-                import struct
-                nchans = struct.unpack("i", header[idx + 10 : idx + 14])[0]
-
-            idx = header.find(b"nbits")
-            if idx >= 0:
-                import struct
-                nbits = struct.unpack("i", header[idx + 9 : idx + 13])[0]
-
-            # Read data
-            dtype = np.float32 if nbits == 32 else np.uint8
-            data = np.frombuffer(raw[data_start:], dtype=dtype)
-
-            if len(data) < nchans:
-                return None
-
-            ntime = len(data) // nchans
-            data = data[: ntime * nchans].reshape(ntime, nchans).T
-            return data.astype(np.float32)
-
-        except Exception as e:
-            logger.debug(f"Raw filterbank read failed: {e}")
-            return None
-
-    # ── Single file processing pipeline ───────────────────────────────────
+    # ── Single file processing via unified pipeline ─────────────────────
 
     def _process_file(self, filepath: Path) -> Optional[dict]:
         """
-        Process a single filterbank file through the full pipeline:
-        1. Load spectrogram
-        2. Extract features (SNR, drift rate, etc.)
-        3. Classify signal type
-        4. Run OOD anomaly detection
-        5. Catalog cross-reference (if candidate)
-        6. Return result dict
+        Process a single filterbank file through AstroSETIPipeline.
 
         Returns:
             Result dictionary or None on failure.
         """
         start_time = time.time()
-
-        # Step 1: Load
-        spectrogram = self._load_spectrogram(filepath)
-        if spectrogram is None:
-            return None
-
         file_size_mb = filepath.stat().st_size / (1024 * 1024)
 
-        # Step 2: Extract features
         try:
-            features = self.feature_extractor.extract(spectrogram)
+            pipe_result = self.pipeline.process_file(str(filepath))
         except Exception as e:
-            logger.warning(f"Feature extraction failed for {filepath.name}: {e}")
+            logger.error(f"Pipeline failed for {filepath.name}: {e}")
             return None
 
-        # SNR filter
-        if features.snr < self.state.current_min_snr:
+        summary = pipe_result.get("summary", {})
+        if summary.get("status") == "error":
+            logger.warning(f"Pipeline error for {filepath.name}: {summary.get('error')}")
+            return None
+
+        candidates = pipe_result.get("candidates", [])
+        timing = pipe_result.get("timing", {})
+
+        n_rfi = summary.get("rfi_count", 0)
+        n_candidates = summary.get("candidate_count", 0)
+        n_anomalies = summary.get("anomaly_count", 0)
+        total_hits = summary.get("total_hits_filtered", len(candidates))
+
+        best_snr = max((c.get("snr", 0) for c in candidates), default=0.0)
+        best_ood = max((c.get("ood_score", 0) for c in candidates), default=0.0)
+        best_drift = max((abs(c.get("drift_rate", 0)) for c in candidates), default=0.0)
+
+        if total_hits == 0 or best_snr < self.state.current_min_snr:
             return {
                 "file": str(filepath),
+                "file_name": filepath.name,
                 "status": "below_snr_threshold",
-                "snr": features.snr,
+                "snr": best_snr,
                 "min_snr": self.state.current_min_snr,
                 "elapsed_s": time.time() - start_time,
             }
-
-        # Step 3: Classify
-        try:
-            classification = self.classifier.classify(spectrogram)
-        except Exception as e:
-            logger.warning(f"Classification failed for {filepath.name}: {e}")
-            return None
-
-        # Step 4: OOD detection
-        try:
-            ood_result = self.ood_detector.detect(
-                spectrogram, classification.feature_vector
-            )
-        except Exception as e:
-            logger.warning(f"OOD detection failed for {filepath.name}: {e}")
-            ood_result = None
-
-        # Step 5: Determine if candidate
-        from inference.signal_classifier import SignalClassifier, RFI_CLASSES
-
-        is_rfi = SignalClassifier.is_rfi(classification)
-        is_candidate = SignalClassifier.is_candidate(classification)
-        is_ood_anomaly = ood_result.is_anomaly if ood_result else False
-
-        # Step 6: Catalog cross-reference for candidates
-        catalog_matches = []
-        if is_candidate or is_ood_anomaly:
-            try:
-                from catalog.sky_position import astrolens_crossref
-                xref = astrolens_crossref(
-                    ra=features.central_freq,  # placeholder
-                    dec=0.0,
-                )
-                if xref:
-                    catalog_matches = [asdict(m) if hasattr(m, '__dataclass_fields__') else m for m in xref]
-            except Exception:
-                pass
 
         elapsed = time.time() - start_time
 
@@ -510,19 +383,21 @@ class StreamingObserver:
             "file_name": filepath.name,
             "file_size_mb": round(file_size_mb, 2),
             "status": "processed",
-            "signal_type": classification.signal_type.name.lower(),
-            "confidence": round(classification.confidence, 4),
-            "rfi_probability": round(classification.rfi_probability, 4),
-            "is_rfi": is_rfi,
-            "is_candidate": is_candidate,
-            "snr": round(features.snr, 2),
-            "drift_rate": round(features.drift_rate, 4),
-            "bandwidth": round(features.bandwidth, 2),
-            "central_freq": round(features.central_freq, 2),
-            "all_scores": classification.all_scores,
-            "ood_score": round(ood_result.ood_score, 4) if ood_result else 0.0,
-            "is_ood_anomaly": is_ood_anomaly,
-            "catalog_matches": catalog_matches,
+            "signal_type": candidates[0].get("classification", "unknown") if candidates else "unknown",
+            "confidence": candidates[0].get("confidence", 0.0) if candidates else 0.0,
+            "rfi_probability": candidates[0].get("rfi_probability", 0.0) if candidates else 0.0,
+            "is_rfi": n_rfi > 0 and n_candidates == 0,
+            "is_candidate": n_candidates > 0,
+            "snr": round(best_snr, 2),
+            "drift_rate": round(best_drift, 4),
+            "ood_score": round(best_ood, 4),
+            "is_ood_anomaly": n_anomalies > 0,
+            "total_hits": total_hits,
+            "rfi_count": n_rfi,
+            "candidate_count": n_candidates,
+            "anomaly_count": n_anomalies,
+            "candidates": candidates,
+            "timing": timing,
             "elapsed_s": round(elapsed, 3),
             "processed_at": datetime.now().isoformat(),
         }
@@ -559,6 +434,7 @@ class StreamingObserver:
         batch = files[:batch_size]
 
         for filepath in batch:
+            self._current_file_name = filepath.name
             result = self._process_file(filepath)
             self._processed_files.add(str(filepath))
 
@@ -570,39 +446,41 @@ class StreamingObserver:
             if result.get("status") == "below_snr_threshold":
                 continue
 
-            cycle_summary["signals_found"] += 1
+            total_hits = result.get("total_hits", 1)
+            cycle_summary["signals_found"] += total_hits
 
-            # Track classification distribution
             sig_type = result.get("signal_type", "unknown")
             cycle_summary["classification_counts"][sig_type] = (
                 cycle_summary["classification_counts"].get(sig_type, 0) + 1
             )
 
-            if result.get("is_rfi"):
-                cycle_summary["rfi_rejected"] += 1
+            rfi_count = result.get("rfi_count", 1 if result.get("is_rfi") else 0)
+            cycle_summary["rfi_rejected"] += rfi_count
+            if rfi_count > 0:
                 logger.debug(
                     f"  RFI rejected: {filepath.name} "
-                    f"({result['signal_type']}, "
-                    f"rfi_prob={result['rfi_probability']:.2f})"
+                    f"({sig_type}, count={rfi_count})"
                 )
 
-            if result.get("is_candidate"):
-                cycle_summary["candidates"] += 1
+            cand_count = result.get("candidate_count", 1 if result.get("is_candidate") else 0)
+            cycle_summary["candidates"] += cand_count
+            if cand_count > 0:
                 self._record_candidate(result)
                 logger.info(
                     f"  CANDIDATE: {filepath.name} | "
-                    f"type={result['signal_type']} | "
-                    f"SNR={result['snr']:.1f} | "
-                    f"drift={result['drift_rate']:.4f} Hz/s | "
-                    f"conf={result['confidence']:.2f}"
+                    f"type={sig_type} | "
+                    f"SNR={result.get('snr', 0):.1f} | "
+                    f"drift={result.get('drift_rate', 0):.4f} Hz/s | "
+                    f"conf={result.get('confidence', 0):.2f}"
                 )
 
-            if result.get("is_ood_anomaly"):
-                cycle_summary["ood_anomalies"] += 1
+            anom_count = result.get("anomaly_count", 1 if result.get("is_ood_anomaly") else 0)
+            cycle_summary["ood_anomalies"] += anom_count
+            if anom_count > 0:
                 logger.info(
                     f"  OOD ANOMALY: {filepath.name} | "
-                    f"ood_score={result['ood_score']:.4f} | "
-                    f"type={result['signal_type']}"
+                    f"ood_score={result.get('ood_score', 0):.4f} | "
+                    f"type={sig_type}"
                 )
 
         return cycle_summary
@@ -808,11 +686,11 @@ class StreamingObserver:
         # 1. Check API
         try:
             import httpx
-            resp = httpx.get("http://localhost:8000/health", timeout=5)
+            resp = httpx.get("http://localhost:9000/health", timeout=5)
             if resp.status_code != 200:
                 issues.append(f"API returned status {resp.status_code}")
         except Exception:
-            issues.append("API not responding on port 8000")
+            issues.append("API not responding on port 9000")
 
         # 2. Disk space
         try:
@@ -932,8 +810,32 @@ class StreamingObserver:
         logger.info(f"  Target end: {target_end.strftime('%Y-%m-%d %H:%M')}")
         logger.info("")
 
+        # Auto-download real Breakthrough Listen data if no filterbank files exist
+        fil_count = len(list(FILTERBANK_DIR.glob("*.fil")))
+        h5_count = len(list(FILTERBANK_DIR.glob("*.h5")))
+        if fil_count == 0 and h5_count == 0:
+            logger.info("\n  No filterbank files found. Downloading real Breakthrough Listen data...")
+            try:
+                from scripts.download_bl_data import BLDataDownloader
+                downloader = BLDataDownloader(count=5)
+                downloaded = downloader.run()
+                logger.info(f"  Downloaded {len(downloaded)} BL files to {FILTERBANK_DIR}")
+            except Exception as e:
+                logger.warning(f"  BL download failed: {e}")
+                logger.info("  Falling back to synthetic data generation...")
+                try:
+                    from scripts.generate_training_data import main as gen_main
+                    gen_main()
+                    logger.info("  Synthetic filterbank files generated")
+                except Exception as e2:
+                    logger.error(f"  Synthetic generation also failed: {e2}")
+                    logger.error("  No data available. Add .fil or .h5 files to:")
+                    logger.error(f"    {FILTERBANK_DIR}")
+        else:
+            logger.info(f"  Found {fil_count} .fil and {h5_count} .h5 files in {FILTERBANK_DIR}")
+
         # Initial health check
-        logger.info("  Running initial health check...")
+        logger.info("\n  Running initial health check...")
         initial_issues = self._health_check()
         if initial_issues:
             for issue in initial_issues:
@@ -941,15 +843,16 @@ class StreamingObserver:
         else:
             logger.info("  All health checks passed")
 
-        # Initialize models
-        logger.info("\n  Initializing ML models...")
+        # Initialize pipeline
+        logger.info("\n  Initializing pipeline...")
         try:
-            _ = self.classifier
-            _ = self.ood_detector
-            _ = self.feature_extractor
-            logger.info("  Models initialized successfully")
+            _ = self.pipeline
+            logger.info(
+                f"  Pipeline initialized (Rust: {self.pipeline._rust_available}, "
+                f"Model: {self.pipeline._model_loaded})"
+            )
         except Exception as e:
-            logger.warning(f"  Model initialization warning: {e}")
+            logger.warning(f"  Pipeline initialization warning: {e}")
 
         # Main streaming loop
         cycle_count = 0
@@ -1007,13 +910,12 @@ class StreamingObserver:
                         for c in snapshot.corrections_applied:
                             logger.info(f"    - {c}")
 
-                # Save state every 5 cycles
-                if cycle_count % 5 == 0:
-                    self.state.total_runtime_hours = (
-                        (now - datetime.fromisoformat(self.state.started_at))
-                        .total_seconds() / 3600
-                    )
-                    self._save_state()
+                # Save state every cycle so UI stays responsive
+                self.state.total_runtime_hours = (
+                    (now - datetime.fromisoformat(self.state.started_at))
+                    .total_seconds() / 3600
+                )
+                self._save_state()
 
                 # Progress update every 10 cycles
                 if cycle_count % 10 == 0:
@@ -1116,8 +1018,14 @@ Examples:
     parser.add_argument(
         "--days",
         type=int,
-        default=7,
+        default=None,
         help="Number of days to run (default: 7)",
+    )
+    parser.add_argument(
+        "--hours",
+        type=float,
+        default=None,
+        help="Number of hours to run (alternative to --days)",
     )
     parser.add_argument(
         "--mode",
@@ -1165,6 +1073,14 @@ Examples:
                 json.dump([], f)
             logger.info(f"Candidates archived to {archive.name}")
 
+    # Resolve duration: --hours takes precedence, then --days, then default 7 days
+    if args.hours is not None:
+        target_days = args.hours / 24.0
+    elif args.days is not None:
+        target_days = args.days
+    else:
+        target_days = 7
+
     if args.report_only:
         engine = StreamingObserver(target_days=0)
         engine._take_daily_snapshot()
@@ -1175,7 +1091,7 @@ Examples:
         return
 
     engine = StreamingObserver(
-        target_days=args.days,
+        target_days=target_days,
         mode=args.mode,
     )
     engine.run()

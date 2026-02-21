@@ -156,19 +156,19 @@ class SignalCard(QFrame):
         badge.setAlignment(Qt.AlignCenter)
         if "candidate" in cls:
             badge.setStyleSheet(
-                "background: rgba(0,255,136,0.12); color: #00ff88; "
+                "background: rgba(0,255,136,0.12); color: #34d399; "
                 "font-size: 10px; font-weight: 600; padding: 3px 8px; "
                 "border-radius: 8px; border: 1px solid rgba(0,255,136,0.2);"
             )
         elif "rfi" in cls:
             badge.setStyleSheet(
-                "background: rgba(255,51,102,0.12); color: #ff3366; "
+                "background: rgba(255,51,102,0.12); color: #f87171; "
                 "font-size: 10px; font-weight: 600; padding: 3px 8px; "
                 "border-radius: 8px; border: 1px solid rgba(255,51,102,0.2);"
             )
         else:
             badge.setStyleSheet(
-                "background: rgba(255,170,0,0.12); color: #ffaa00; "
+                "background: rgba(255,170,0,0.12); color: #fbbf24; "
                 "font-size: 10px; font-weight: 600; padding: 3px 8px; "
                 "border-radius: 8px; border: 1px solid rgba(255,170,0,0.2);"
             )
@@ -179,7 +179,7 @@ class SignalCard(QFrame):
         stats.setSpacing(8)
 
         snr_lbl = QLabel(f"SNR {signal_data.get('snr', 0):.1f}")
-        snr_lbl.setStyleSheet("font-size: 11px; color: #00d4ff; font-weight: 600;")
+        snr_lbl.setStyleSheet("font-size: 11px; color: #4da6ff; font-weight: 600;")
         stats.addWidget(snr_lbl)
 
         stats.addStretch()
@@ -208,7 +208,7 @@ class SignalCard(QFrame):
         fill_width = max(2, int(rfi * 100))
         bar_fill.setFixedSize(fill_width, 4)
         bar_fill.move(0, 0)
-        fill_color = "#ff3366" if rfi > 0.7 else "#ffaa00" if rfi > 0.3 else "#00ff88"
+        fill_color = "#f87171" if rfi > 0.7 else "#fbbf24" if rfi > 0.3 else "#34d399"
         bar_fill.setStyleSheet(
             f"background: {fill_color}; border-radius: 2px;"
         )
@@ -340,17 +340,17 @@ class SignalGallery(QWidget):
 
         # Batch actions
         self._verify_btn = QPushButton("✓ Verify All Candidates")
-        self._verify_btn.setStyleSheet(self._batch_btn_style("#00ff88"))
+        self._verify_btn.setStyleSheet(self._batch_btn_style("#34d399"))
         self._verify_btn.clicked.connect(self._verify_all_candidates)
         filter_row.addWidget(self._verify_btn)
 
         self._reject_btn = QPushButton("✕ Reject All RFI")
-        self._reject_btn.setStyleSheet(self._batch_btn_style("#ff3366"))
+        self._reject_btn.setStyleSheet(self._batch_btn_style("#f87171"))
         self._reject_btn.clicked.connect(self._reject_all_rfi)
         filter_row.addWidget(self._reject_btn)
 
         self._export_btn = QPushButton("Export Selected")
-        self._export_btn.setStyleSheet(self._batch_btn_style("#00d4ff"))
+        self._export_btn.setStyleSheet(self._batch_btn_style("#4da6ff"))
         filter_row.addWidget(self._export_btn)
 
         root.addLayout(filter_row)
@@ -419,7 +419,7 @@ class SignalGallery(QWidget):
                         border: 1px solid rgba(0, 212, 255, 0.3);
                         border-radius: 8px;
                         padding: 7px 16px;
-                        color: #00d4ff;
+                        color: #4da6ff;
                         font-size: 12px;
                         font-weight: 600;
                     }

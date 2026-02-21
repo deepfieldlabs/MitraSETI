@@ -10,7 +10,7 @@ services:
       dockerfile: Dockerfile
     container_name: astroseti-api
     ports:
-      - "8000:8000"
+      - "9000:9000"
     volumes:
       - ./data:/app/data
       - ./models:/app/models
@@ -21,9 +21,9 @@ services:
       - ASTROSETI_DATA_DIR=/app/data
       - ASTROSETI_MODEL_DIR=/app/models
       - ASTROSETI_OUTPUT_DIR=/app/output
-    command: uvicorn api.server:app --host 0.0.0.0 --port 8000 --workers 4
+    command: uvicorn api.server:app --host 0.0.0.0 --port 9000 --workers 4
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -39,7 +39,7 @@ services:
       dockerfile: Dockerfile
     container_name: astroseti-web
     ports:
-      - "8080:8080"
+      - "9090:9090"
     volumes:
       - ./data:/app/data
       - ./models:/app/models
@@ -47,8 +47,8 @@ services:
     environment:
       - ASTROSETI_ENV=production
       - ASTROSETI_LOG_LEVEL=info
-      - ASTROSETI_API_URL=http://api:8000
-    command: uvicorn web.app:app --host 0.0.0.0 --port 8080 --workers 2
+      - ASTROSETI_API_URL=http://api:9000
+    command: uvicorn web.app:app --host 0.0.0.0 --port 9090 --workers 2
     depends_on:
       api:
         condition: service_healthy
@@ -69,7 +69,7 @@ services:
     environment:
       - ASTROSETI_ENV=production
       - ASTROSETI_LOG_LEVEL=info
-      - ASTROSETI_API_URL=http://api:8000
+      - ASTROSETI_API_URL=http://api:9000
       - ASTROSETI_DATA_DIR=/app/data
       - ASTROSETI_MODEL_DIR=/app/models
       - ASTROSETI_OUTPUT_DIR=/app/output

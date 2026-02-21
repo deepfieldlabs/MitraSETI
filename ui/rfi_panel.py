@@ -124,11 +124,11 @@ class RFIPanel(QWidget):
         stats_grid = QGridLayout()
         stats_grid.setSpacing(12)
 
-        self._stat_total = make_stat_card("Total Signals", str(self._total_signals), "#00d4ff")
+        self._stat_total = make_stat_card("Total Signals", str(self._total_signals), "#4da6ff")
         pct = f"{self._rfi_rejected} ({self._rfi_rejected / max(self._total_signals, 1) * 100:.1f}%)"
-        self._stat_rejected = make_stat_card("RFI Rejected", pct, "#ff3366")
-        self._stat_fp = make_stat_card("False Positives", str(self._false_positives), "#ffaa00")
-        self._stat_candidates = make_stat_card("True Candidates", str(self._true_candidates), "#00ff88")
+        self._stat_rejected = make_stat_card("RFI Rejected", pct, "#f87171")
+        self._stat_fp = make_stat_card("False Positives", str(self._false_positives), "#fbbf24")
+        self._stat_candidates = make_stat_card("True Candidates", str(self._true_candidates), "#34d399")
 
         stats_grid.addWidget(self._stat_total, 0, 0)
         stats_grid.addWidget(self._stat_rejected, 0, 1)
@@ -309,7 +309,7 @@ class RFIPanel(QWidget):
 
         labels = list(self._classification_dist.keys())
         sizes = list(self._classification_dist.values())
-        colors = ["#00ff88", "#ff3366", "#ff6644", "#ffaa00", "#cc6600", "#7c3aed"]
+        colors = ["#34d399", "#f87171", "#ff6644", "#fbbf24", "#cc6600", "#7c3aed"]
 
         wedges, texts, autotexts = ax.pie(
             sizes, labels=labels, colors=colors[:len(labels)],
@@ -335,7 +335,7 @@ class RFIPanel(QWidget):
 
         types = list(self._rfi_by_type.keys())
         counts = list(self._rfi_by_type.values())
-        colors = ["#ff3366", "#ff6644", "#ffaa00", "#cc6600"]
+        colors = ["#f87171", "#ff6644", "#fbbf24", "#cc6600"]
 
         bars = ax.barh(types, counts, color=colors[:len(types)], height=0.6, edgecolor="#080c14")
 
@@ -350,8 +350,8 @@ class RFIPanel(QWidget):
         ax.tick_params(colors="#8ca5c8", labelsize=9)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["bottom"].set_color("rgba(100,180,255,0.15)")
-        ax.spines["left"].set_color("rgba(100,180,255,0.15)")
+        ax.spines["bottom"].set_color((0.39, 0.71, 1.0, 0.15))
+        ax.spines["left"].set_color((0.39, 0.71, 1.0, 0.15))
         ax.set_xlabel("Count", color="#8ca5c8", fontsize=9)
 
         self._bar_fig.set_facecolor("#080c14")
@@ -364,7 +364,7 @@ class RFIPanel(QWidget):
 
         categories = ["Total\nDetections", "After ML\nFiltering", "Final\nCandidates"]
         before_vals = [self._total_signals, self._total_signals - self._rfi_rejected, self._true_candidates]
-        colors = ["#00d4ff", "#7c3aed", "#00ff88"]
+        colors = ["#4da6ff", "#7c3aed", "#34d399"]
 
         bars = ax.bar(categories, before_vals, color=colors, width=0.5, edgecolor="#080c14")
 
@@ -379,14 +379,14 @@ class RFIPanel(QWidget):
         ax.tick_params(colors="#8ca5c8", labelsize=9)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["bottom"].set_color("rgba(100,180,255,0.15)")
-        ax.spines["left"].set_color("rgba(100,180,255,0.15)")
+        ax.spines["bottom"].set_color((0.39, 0.71, 1.0, 0.15))
+        ax.spines["left"].set_color((0.39, 0.71, 1.0, 0.15))
         ax.set_ylabel("Signal Count", color="#8ca5c8", fontsize=9)
 
         # Reduction arrows
         ax.annotate(
             f"−{self._rfi_rejected}", xy=(1, before_vals[1] + 5),
-            fontsize=10, color="#ff3366", fontweight="bold", ha="center",
+            fontsize=10, color="#f87171", fontweight="bold", ha="center",
         )
 
         self._ba_fig.set_facecolor("#080c14")
@@ -409,7 +409,7 @@ class RFIPanel(QWidget):
                 for col in range(4):
                     item = self._rfi_table.item(row, col)
                     if item:
-                        item.setForeground(QColor("#ff3366"))
+                        item.setForeground(QColor("#f87171"))
 
     def _populate_fp_table(self):
         self._fp_table.setRowCount(len(self._false_positive_log))
@@ -420,9 +420,9 @@ class RFIPanel(QWidget):
 
             status_item = QTableWidgetItem(fp["status"])
             if fp["status"] == "Resolved":
-                status_item.setForeground(QColor("#00ff88"))
+                status_item.setForeground(QColor("#34d399"))
             else:
-                status_item.setForeground(QColor("#ffaa00"))
+                status_item.setForeground(QColor("#fbbf24"))
             self._fp_table.setItem(row, 3, status_item)
 
     # ── Refresh ───────────────────────────────────────────────────────────

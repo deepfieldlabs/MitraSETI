@@ -9,31 +9,18 @@ license = "MIT"
 name = "astroseti_core"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+hdf5-support = ["hdf5"]
+
 [dependencies]
-# Parallel processing — data-parallel iteration over drift rates and frequency channels
 rayon = "1.10"
-
-# N-dimensional arrays — spectrogram matrices (time × frequency)
 ndarray = "0.16"
-
-# HDF5 / filterbank file reading
-hdf5 = "0.8"
-
-# Complex numbers required by FFT routines
+hdf5 = { version = "0.8", optional = true }
 num-complex = "0.4"
-
-# Fast Fourier Transform — spectral analysis of time-series data
 rustfft = "6.2"
-
-# Python bindings so the Rust core can be called from the astroSETI Python pipeline
 pyo3 = { version = "0.22", features = ["extension-module"] }
-
-# Serialisation of search results and configuration
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Logging
 log = "0.4"
-
-# Ergonomic, typed error handling
 thiserror = "2"

@@ -7,7 +7,7 @@
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70%2B-orange?style=flat-square&logo=rust&logoColor=white" alt="Rust"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-    <a href="https://github.com/SamanTabworlds/astroSETI/stargazers"><img src="https://img.shields.io/github/stars/SamanTabworlds/astroSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
+    <a href="https://github.com/deepfieldlabs/astroSETI/stargazers"><img src="https://img.shields.io/github/stars/deepfieldlabs/astroSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
     <a href="https://pypi.org/project/astroseti/"><img src="https://img.shields.io/badge/version-0.1.0-purple?style=flat-square" alt="Version"></a>
   </p>
 </p>
@@ -26,7 +26,7 @@ SETI researchers using [turboSETI](https://github.com/UCBerkeleySETI/turbo_seti)
 
 - **10–100x faster processing** via parallel Rust de-Doppler search engine
 - **95%+ automatic RFI rejection** using CNN + Transformer ML classification
-- **Optical cross-reference** with [AstroLens](https://github.com/SamanTabworlds/AstroLens) for multi-modal discovery
+- **Optical cross-reference** with [AstroLens](https://github.com/deepfieldlabs/astroLens) for multi-modal discovery
 - **Streaming mode** for continuous real-time observation campaigns
 - **Beautiful interfaces** — desktop (PyQt5) and web (FastAPI) with interactive visualizations
 
@@ -74,7 +74,7 @@ SETI researchers using [turboSETI](https://github.com/UCBerkeleySETI/turbo_seti)
 
 ```bash
 # Clone the repository
-git clone https://github.com/SamanTabworlds/astroSETI.git
+git clone https://github.com/deepfieldlabs/astroSETI.git
 cd astroSETI
 
 # Create virtual environment
@@ -186,7 +186,7 @@ astroSETI is **not** a fork of turboSETI — it's a ground-up reimagination of t
 
 ## AstroLens Integration
 
-astroSETI includes first-class integration with [AstroLens](https://github.com/SamanTabworlds/AstroLens), enabling a unique **optical + radio cross-reference** workflow:
+astroSETI includes first-class integration with [AstroLens](https://github.com/deepfieldlabs/astroLens), enabling a unique **optical + radio cross-reference** workflow:
 
 1. **Detect** narrowband signals in radio filterbank data
 2. **Cross-reference** signal coordinates with AstroLens optical catalog

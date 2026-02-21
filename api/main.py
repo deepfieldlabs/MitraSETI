@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 _db: Optional[SignalDB] = None
 _catalog_query = None
+_pipeline = None
 _live_connections: Set[WebSocket] = set()
 
 
@@ -63,6 +64,20 @@ def get_catalog_query():
         from catalog.radio_catalogs import RadioCatalogQuery
         _catalog_query = RadioCatalogQuery()
     return _catalog_query
+
+
+def get_pipeline():
+    """Lazy-load the AstroSETIPipeline."""
+    global _pipeline
+    if _pipeline is None:
+        from pipeline import AstroSETIPipeline
+        model_path = MODELS_DIR / "signal_classifier_v1.pt"
+        ood_cal_path = MODELS_DIR / "ood_calibration.json"
+        _pipeline = AstroSETIPipeline(
+            model_path=str(model_path) if model_path.exists() else None,
+            ood_calibration_path=str(ood_cal_path) if ood_cal_path.exists() else None,
+        )
+    return _pipeline
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -269,14 +284,33 @@ async def process_filterbank(
         "status": "processing",
     })
 
-    # ── Run pipeline (placeholder – real pipeline plugs in here) ─────
+    # ── Run pipeline ────────────────────────────────────────────────
     total_signals = 0
     candidates_found = 0
 
     try:
-        # In a real deployment the inference layer would produce hits:
-        #   from inference import SignalClassifier, FeatureExtractor, RadioOODDetector
-        # For now we record the observation and return.
+        pipe = get_pipeline()
+        result = pipe.process_file(str(file_path))
+
+        summary = result.get("summary", {})
+        total_signals = summary.get("total_hits_filtered", 0)
+        candidates_found = summary.get("candidate_count", 0)
+
+        for cand in result.get("candidates", []):
+            signal_data = {
+                "frequency_hz": cand.get("frequency_hz", 0),
+                "drift_rate": cand.get("drift_rate", 0),
+                "snr": cand.get("snr", 0),
+                "rfi_score": cand.get("rfi_probability", 0),
+                "classification": cand.get("classification", "unknown"),
+                "confidence": cand.get("confidence", 0),
+                "is_candidate": cand.get("is_candidate", False),
+                "observation_id": obs_id,
+                "ra": ra,
+                "dec": dec,
+            }
+            await db.add_signal(signal_data)
+
         await db.update_observation(obs_id, {
             "total_signals": total_signals,
             "candidates_found": candidates_found,

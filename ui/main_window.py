@@ -116,7 +116,7 @@ class MainWindow(QMainWindow):
         title.setStyleSheet("""
             font-size: 22px;
             font-weight: 700;
-            color: #00d4ff;
+            color: #4da6ff;
             letter-spacing: 1px;
             padding: 8px 4px 2px 4px;
         """)
@@ -192,11 +192,11 @@ class MainWindow(QMainWindow):
                     QPushButton {
                         background: rgba(0, 212, 255, 0.1);
                         border: 1px solid rgba(0, 212, 255, 0.2);
-                        border-left: 3px solid #00d4ff;
+                        border-left: 3px solid #4da6ff;
                         border-radius: 8px;
                         padding: 11px 14px;
                         text-align: left;
-                        color: #00d4ff;
+                        color: #4da6ff;
                         font-size: 13px;
                         font-weight: 600;
                     }
@@ -235,44 +235,24 @@ class MainWindow(QMainWindow):
         from .signal_gallery import SignalGallery
         from .rfi_panel import RFIPanel
         from .streaming_panel import StreamingPanel
+        from .sky_map_panel import SkyMapPanel
+        from .settings_panel import SettingsPanel
 
         self.dashboard = DashboardPanel()
         self.waterfall_viewer = WaterfallViewer()
         self.signal_gallery = SignalGallery()
         self.rfi_panel = RFIPanel()
-
-        # Sky Map placeholder
-        sky_placeholder = QWidget()
-        sky_layout = QVBoxLayout(sky_placeholder)
-        sky_layout.setAlignment(Qt.AlignCenter)
-        sky_lbl = QLabel("🌌  Sky Map\n\nComing Soon")
-        sky_lbl.setAlignment(Qt.AlignCenter)
-        sky_lbl.setStyleSheet(
-            "font-size: 18px; color: rgba(200,215,235,0.4); font-weight: 300;"
-        )
-        sky_layout.addWidget(sky_lbl)
-
+        self.sky_map = SkyMapPanel()
         self.streaming_panel = StreamingPanel()
+        self.settings_panel = SettingsPanel()
 
-        # Settings placeholder
-        settings_placeholder = QWidget()
-        settings_layout = QVBoxLayout(settings_placeholder)
-        settings_layout.setAlignment(Qt.AlignCenter)
-        settings_lbl = QLabel("⚙️  Settings\n\nComing Soon")
-        settings_lbl.setAlignment(Qt.AlignCenter)
-        settings_lbl.setStyleSheet(
-            "font-size: 18px; color: rgba(200,215,235,0.4); font-weight: 300;"
-        )
-        settings_layout.addWidget(settings_lbl)
-
-        # Index 0-6 matching NAV_ITEMS
         self.content_stack.addWidget(self.dashboard)        # 0
         self.content_stack.addWidget(self.waterfall_viewer)  # 1
         self.content_stack.addWidget(self.signal_gallery)    # 2
         self.content_stack.addWidget(self.rfi_panel)         # 3
-        self.content_stack.addWidget(sky_placeholder)        # 4
+        self.content_stack.addWidget(self.sky_map)           # 4
         self.content_stack.addWidget(self.streaming_panel)   # 5
-        self.content_stack.addWidget(settings_placeholder)   # 6
+        self.content_stack.addWidget(self.settings_panel)    # 6
 
         # Wire cross-panel signals
         self.dashboard.navigate_to.connect(self._on_nav_clicked)
@@ -316,7 +296,7 @@ class MainWindow(QMainWindow):
         """Simulate status check (replace with real API check)."""
         self._conn_dot.set_color(COLORS["success"])
         self._conn_label.setText("Connected")
-        self._conn_label.setStyleSheet("color: #00ff88; font-size: 12px;")
+        self._conn_label.setStyleSheet("color: #34d399; font-size: 12px;")
         self._gpu_label.setText("GPU: available")
         self._proc_label.setText("Idle")
 
@@ -331,10 +311,10 @@ class MainWindow(QMainWindow):
         if active:
             self._processing_label.setText(f"⚡ {text or 'Processing…'}")
             self._processing_label.setStyleSheet(
-                "font-size: 11px; color: #00d4ff; padding: 4px;"
+                "font-size: 11px; color: #4da6ff; padding: 4px;"
             )
             self._proc_label.setText(text or "Processing…")
-            self._proc_label.setStyleSheet("color: #00d4ff; font-size: 12px;")
+            self._proc_label.setStyleSheet("color: #4da6ff; font-size: 12px;")
         else:
             self._processing_label.setText("No active processing")
             self._processing_label.setStyleSheet(

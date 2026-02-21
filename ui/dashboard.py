@@ -12,10 +12,13 @@ import numpy as np
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGridLayout, QScrollArea, QSizePolicy,
+    QFrame, QGridLayout, QScrollArea, QSizePolicy, QMessageBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QLinearGradient
+
+import subprocess, sys, webbrowser
+from pathlib import Path
 
 import matplotlib
 matplotlib.use("Qt5Agg")
@@ -83,7 +86,7 @@ class DashboardPanel(QWidget):
                     stop:0 rgba(0, 50, 100, 0.4),
                     stop:0.5 rgba(0, 80, 140, 0.25),
                     stop:1 rgba(124, 58, 237, 0.15));
-                border: 1px solid rgba(0, 212, 255, 0.12);
+                border: 1px solid rgba(77, 166, 255, 0.12);
                 border-radius: 18px;
             }
         """)
@@ -96,7 +99,7 @@ class DashboardPanel(QWidget):
         hero_title.setStyleSheet("""
             font-size: 42px;
             font-weight: 800;
-            color: #00d4ff;
+            color: #4da6ff;
             letter-spacing: 2px;
         """)
         hero_layout.addWidget(hero_title)
@@ -139,12 +142,12 @@ class DashboardPanel(QWidget):
 
         self._stat_cards = {}
         stat_defs = [
-            ("observations", "Total Observations", "1,247", "#00d4ff"),
+            ("observations", "Total Observations", "1,247", "#4da6ff"),
             ("signals", "Signals Detected", "8,392", "#7c3aed"),
-            ("candidates", "Candidates Found", "51", "#00ff88"),
-            ("rfi_rate", "RFI Rejection Rate", "76.5%", "#ff3366"),
-            ("speed", "Processing Speed", "2.3 fil/min", "#ffaa00"),
-            ("yolo", "YOLO Transients", "12", "#00d4ff"),
+            ("candidates", "Candidates Found", "51", "#34d399"),
+            ("rfi_rate", "RFI Rejection Rate", "76.5%", "#f87171"),
+            ("speed", "Processing Speed", "2.3 fil/min", "#fbbf24"),
+            ("yolo", "YOLO Transients", "12", "#4da6ff"),
         ]
 
         for i, (key, label, default, color) in enumerate(stat_defs):
@@ -169,14 +172,14 @@ class DashboardPanel(QWidget):
         actions_row.setSpacing(12)
 
         load_btn = self._make_action_btn(
-            "📂  Load File", "#00d4ff",
+            "📂  Load File", "#4da6ff",
             "Open a filterbank (.fil) or HDF5 (.h5) file"
         )
         load_btn.clicked.connect(lambda: self.navigate_to.emit(1))
         actions_row.addWidget(load_btn)
 
         stream_btn = self._make_action_btn(
-            "📶  Start Streaming", "#00ff88",
+            "📶  Start Streaming", "#34d399",
             "Begin continuous observation processing"
         )
         stream_btn.clicked.connect(lambda: self.navigate_to.emit(5))
@@ -190,12 +193,33 @@ class DashboardPanel(QWidget):
         actions_row.addWidget(candidates_btn)
 
         report_btn = self._make_action_btn(
-            "📊  Generate Report", "#ffaa00",
+            "📊  Generate Report", "#fbbf24",
             "Export analysis summary"
         )
         actions_row.addWidget(report_btn)
 
         layout.addLayout(actions_row)
+
+        # Second row: benchmark + download
+        actions_row2 = QHBoxLayout()
+        actions_row2.setSpacing(12)
+
+        bench_btn = self._make_action_btn(
+            "⚡  Run Benchmark", "#f87171",
+            "Compare astroSETI vs turboSETI performance"
+        )
+        bench_btn.clicked.connect(self._run_benchmark)
+        actions_row2.addWidget(bench_btn)
+
+        download_btn = self._make_action_btn(
+            "📥  Download BL Data", "#7c3aed",
+            "Download real Breakthrough Listen observation files"
+        )
+        download_btn.clicked.connect(self._download_bl_data)
+        actions_row2.addWidget(download_btn)
+
+        actions_row2.addStretch()
+        layout.addLayout(actions_row2)
 
         # ══════════════════════════════════════════════════════════════════
         # BOTTOM ROW: Recent Activity + Health + Mini Waterfall
@@ -224,16 +248,16 @@ class DashboardPanel(QWidget):
 
         # Demo activity items
         demo_activities = [
-            ("✦", "Candidate signal detected", "SNR 24.7 @ 1420.405 MHz", "#00ff88", "2 min ago"),
-            ("✕", "RFI rejected", "GPS L1 sidelobe @ 1575.42 MHz", "#ff3366", "5 min ago"),
-            ("✦", "Candidate signal detected", "SNR 18.2 @ 1667.3 MHz", "#00ff88", "12 min ago"),
-            ("⚡", "Pipeline completed", "observation_2024_0312.fil", "#00d4ff", "15 min ago"),
-            ("✕", "RFI rejected", "Broadband transient, terrestrial", "#ff3366", "18 min ago"),
-            ("✦", "Candidate signal detected", "SNR 31.4 @ 1420.8 MHz", "#00ff88", "22 min ago"),
-            ("⚡", "Pipeline completed", "observation_2024_0311.fil", "#00d4ff", "28 min ago"),
+            ("✦", "Candidate signal detected", "SNR 24.7 @ 1420.405 MHz", "#34d399", "2 min ago"),
+            ("✕", "RFI rejected", "GPS L1 sidelobe @ 1575.42 MHz", "#f87171", "5 min ago"),
+            ("✦", "Candidate signal detected", "SNR 18.2 @ 1667.3 MHz", "#34d399", "12 min ago"),
+            ("⚡", "Pipeline completed", "observation_2024_0312.fil", "#4da6ff", "15 min ago"),
+            ("✕", "RFI rejected", "Broadband transient, terrestrial", "#f87171", "18 min ago"),
+            ("✦", "Candidate signal detected", "SNR 31.4 @ 1420.8 MHz", "#34d399", "22 min ago"),
+            ("⚡", "Pipeline completed", "observation_2024_0311.fil", "#4da6ff", "28 min ago"),
             ("🔗", "AstroLens cross-ref", "YOLO transient match #12", "#7c3aed", "35 min ago"),
-            ("✕", "RFI rejected", "WiFi 2.4G spillover", "#ff3366", "42 min ago"),
-            ("✦", "Candidate signal detected", "SNR 15.8 @ 408.0 MHz", "#00ff88", "50 min ago"),
+            ("✕", "RFI rejected", "WiFi 2.4G spillover", "#f87171", "42 min ago"),
+            ("✦", "Candidate signal detected", "SNR 15.8 @ 408.0 MHz", "#34d399", "50 min ago"),
         ]
 
         for icon, title_text, detail, color, time_ago in demo_activities:
@@ -356,14 +380,14 @@ class DashboardPanel(QWidget):
             QPushButton {
                 background: transparent;
                 border: none;
-                color: rgba(0, 212, 255, 0.7);
+                color: rgba(77, 166, 255, 0.7);
                 font-size: 12px;
                 font-weight: 500;
                 text-align: left;
                 padding: 4px 0;
             }
             QPushButton:hover {
-                color: #00d4ff;
+                color: #4da6ff;
             }
         """)
         view_btn.clicked.connect(lambda: self.navigate_to.emit(1))
@@ -413,6 +437,59 @@ class DashboardPanel(QWidget):
             }}
         """)
         return btn
+
+    # ── Benchmark & Download ─────────────────────────────────────────────
+
+    def _run_benchmark(self):
+        """Launch the benchmark suite in a subprocess."""
+        script = Path(__file__).parent.parent / "scripts" / "benchmark.py"
+        artifacts = Path(__file__).parent.parent.parent / "astroseti_artifacts" / "benchmarks"
+        artifacts.mkdir(parents=True, exist_ok=True)
+        try:
+            self._bench_proc = subprocess.Popen(
+                [sys.executable, str(script), "--sizes", "tiny", "small", "medium",
+                 "--output-dir", str(artifacts)],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            )
+            QMessageBox.information(
+                self, "Benchmark Started",
+                "Benchmark is running in the background.\n"
+                "An HTML report will be generated in:\n"
+                f"{artifacts}\n\n"
+                "This may take 1-3 minutes depending on your system."
+            )
+            QTimer.singleShot(3000, self._check_benchmark_done)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to launch benchmark:\n{e}")
+
+    def _check_benchmark_done(self):
+        if hasattr(self, "_bench_proc") and self._bench_proc:
+            if self._bench_proc.poll() is not None:
+                artifacts = Path(__file__).parent.parent.parent / "astroseti_artifacts" / "benchmarks"
+                reports = sorted(artifacts.glob("benchmark_report_*.html"), reverse=True)
+                if reports:
+                    webbrowser.open(f"file://{reports[0]}")
+                self._bench_proc = None
+            else:
+                QTimer.singleShot(3000, self._check_benchmark_done)
+
+    def _download_bl_data(self):
+        """Download Breakthrough Listen sample data."""
+        script = Path(__file__).parent.parent / "scripts" / "download_bl_data.py"
+        try:
+            self._dl_proc = subprocess.Popen(
+                [sys.executable, str(script), "--count", "5"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            )
+            QMessageBox.information(
+                self, "Download Started",
+                "Downloading Breakthrough Listen sample data (5 files).\n"
+                "Files include: Voyager-1, TRAPPIST-1, Proxima Centauri, etc.\n\n"
+                "This may take a few minutes depending on your connection.\n"
+                "Files will appear in the Waterfall Viewer when complete."
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to start download:\n{e}")
 
     # ── Mini waterfall rendering ──────────────────────────────────────────
 

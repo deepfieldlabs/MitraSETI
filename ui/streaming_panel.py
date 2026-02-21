@@ -37,7 +37,7 @@ from .theme import COLORS, make_stat_card, create_glow_button
 _ARTIFACTS_DIR = Path(__file__).parent.parent.parent / "astroseti_artifacts"
 _DATA_DIR = _ARTIFACTS_DIR / "data"
 _STREAMING_STATE = _DATA_DIR / "streaming_state.json"
-_STREAMING_LOG = _DATA_DIR / "streaming_seti.log"
+_STREAMING_LOG = _DATA_DIR / "streaming_observation.log"
 _REPORTS_DIR = _ARTIFACTS_DIR / "streaming_reports" / "daily"
 
 
@@ -265,9 +265,9 @@ class StreamingPanel(QWidget):
 
         self._stat_cards = {}
         stat_defs = [
-            ("signals", "Signals Processed", "0", "#00d4ff"),
-            ("candidates", "Candidates Found", "0", "#00ff88"),
-            ("rfi", "RFI Rejected", "0", "#ff3366"),
+            ("signals", "Signals Processed", "0", "#4da6ff"),
+            ("candidates", "Candidates Found", "0", "#34d399"),
+            ("rfi", "RFI Rejected", "0", "#f87171"),
             ("rate", "Processing Rate", "0/min", "#7c3aed"),
         ]
 
@@ -334,7 +334,7 @@ class StreamingPanel(QWidget):
                 border: 1px solid rgba(0, 212, 255, 0.2);
                 border-radius: 8px;
                 padding: 8px 16px;
-                color: #00d4ff;
+                color: #4da6ff;
                 font-size: 12px;
                 font-weight: 500;
             }
@@ -359,11 +359,27 @@ class StreamingPanel(QWidget):
 
     def _start_streaming(self):
         days = self._days_spin.value()
+        hours = days * 24
         mode = self._mode_combo.currentText().lower()
 
-        # In production: launch the actual SETI streaming pipeline
-        # For now, we'll just update the UI state
         self._log_file_pos = 0
+        self._log_text.setPlainText(
+            f"[{datetime.now().strftime('%H:%M:%S')}] Launching streaming observation…\n"
+        )
+
+        try:
+            script = str(Path(__file__).parent.parent / "scripts" / "streaming_observation.py")
+            _DATA_DIR.mkdir(parents=True, exist_ok=True)
+            log_handle = open(_STREAMING_LOG, "a")
+            self._log_handle = log_handle
+            self._process = subprocess.Popen(
+                [sys.executable, "-u", script, "--hours", str(hours), "--mode", mode],
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+            )
+        except Exception as exc:
+            self._log_text.append(f"[ERROR] Failed to launch: {exc}")
+            return
 
         self._start_btn.setText("⏹  Stop Streaming")
         self._start_btn.setStyleSheet("""
@@ -382,30 +398,32 @@ class StreamingPanel(QWidget):
             }
         """)
         self._status_dot.set_active(True)
-        self._status_label.setText(f"Running — {mode} mode, {days} days")
+        self._status_label.setText(f"Running — {mode} mode, {days} days (PID {self._process.pid})")
         self._status_label.setStyleSheet(
             f"font-size: 12px; color: {COLORS['success']}; margin-left: 22px;"
         )
         self._days_spin.setEnabled(False)
         self._mode_combo.setEnabled(False)
 
-        # Add demo log lines
-        self._log_text.setPlainText(
-            f"[{datetime.now().strftime('%H:%M:%S')}] Streaming started — {mode} mode, {days} days\n"
-            f"[{datetime.now().strftime('%H:%M:%S')}] Initializing signal detection pipeline…\n"
-            f"[{datetime.now().strftime('%H:%M:%S')}] Loading ML models (RFI classifier, drift detector)…\n"
-            f"[{datetime.now().strftime('%H:%M:%S')}] Models loaded. Waiting for data…\n"
-        )
-
     def _stop_streaming(self):
         if self._process and self._process.poll() is None:
-            self._process.terminate()
+            import signal as _sig
+            try:
+                self._process.send_signal(_sig.SIGTERM)
+            except OSError:
+                self._process.terminate()
             try:
                 self._process.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 self._process.kill()
 
         self._process = None
+        if hasattr(self, "_log_handle") and self._log_handle:
+            try:
+                self._log_handle.close()
+            except Exception:
+                pass
+            self._log_handle = None
         self._start_btn.setText("▶  Start Streaming")
         self._start_btn.setStyleSheet("""
             QPushButton {
@@ -444,25 +462,36 @@ class StreamingPanel(QWidget):
 
         current_day = state.get("current_day", 0)
         target_days = state.get("target_days", 0) or self._days_spin.value()
-        self._progress_bar.setMaximum(max(target_days, 1))
-        self._progress_bar.setValue(current_day)
-        self._progress_bar.setFormat(f"Day {current_day} of {target_days}")
+        self._progress_bar.setMaximum(int(max(target_days, 1)))
+        self._progress_bar.setValue(min(current_day, int(max(target_days, 1))))
+        self._progress_bar.setFormat(f"Day {current_day} of {int(target_days)}")
 
-        # Update stat cards
+        # Map state field names (script writes total_candidates, total_rfi_rejected, etc.)
         signals = state.get("total_signals", 0)
-        candidates = state.get("candidates_found", 0)
-        rfi = state.get("rfi_rejected", 0)
+        candidates = state.get("total_candidates", state.get("candidates_found", 0))
+        rfi = state.get("total_rfi_rejected", state.get("rfi_rejected", 0))
         rate = state.get("processing_rate", "0/min")
 
         self._update_stat("signals", f"{signals:,}" if signals else "0")
-        self._update_stat("candidates", str(candidates), "#00ff88" if candidates > 0 else "#00d4ff")
-        self._update_stat("rfi", str(rfi), "#ff3366" if rfi > 0 else "#00d4ff")
+        self._update_stat("candidates", str(candidates), "#34d399" if candidates > 0 else "#4da6ff")
+        self._update_stat("rfi", str(rfi), "#f87171" if rfi > 0 else "#4da6ff")
         self._update_stat("rate", str(rate))
 
-        # Elapsed
-        elapsed = state.get("elapsed", "0:00:00")
-        self._elapsed_label.setText(f"Elapsed: {elapsed}")
-        files_done = state.get("files_processed", 0)
+        # Elapsed -- compute from started_at if not explicitly stored
+        elapsed_str = state.get("elapsed", "")
+        if not elapsed_str and state.get("started_at"):
+            try:
+                from datetime import datetime as _dt
+                started = _dt.fromisoformat(state["started_at"])
+                delta = _dt.now() - started
+                hours, remainder = divmod(int(delta.total_seconds()), 3600)
+                mins, secs = divmod(remainder, 60)
+                elapsed_str = f"{hours}:{mins:02d}:{secs:02d}"
+            except Exception:
+                elapsed_str = "0:00:00"
+        self._elapsed_label.setText(f"Elapsed: {elapsed_str or '0:00:00'}")
+
+        files_done = state.get("total_files_processed", state.get("files_processed", 0))
         self._files_label.setText(f"Files: {files_done} processed")
         current_file = state.get("current_file", "—")
         self._current_file_label.setText(f"Current: {current_file}")

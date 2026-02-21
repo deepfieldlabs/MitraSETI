@@ -15,3 +15,8 @@ PyQt5>=5.15.0
 astroquery>=0.4.6
 websockets>=11.0
 maturin>=1.0.0
+h5py>=3.0.0
+setigen>=2.0.0
+turbo_seti>=2.3.0
+blimpy>=2.0.0
+setuptools<71

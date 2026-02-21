@@ -31,7 +31,12 @@ from matplotlib.backends.backend_qt5agg import (
 from matplotlib.figure import Figure
 from matplotlib.colors import LinearSegmentedColormap
 
+from pathlib import Path as _Path
+
 from .theme import COLORS, create_glass_card, create_glow_button
+
+_ARTIFACTS_DIR = _Path(__file__).parent.parent.parent / "astroseti_artifacts"
+_FILTERBANK_DIR = _ARTIFACTS_DIR / "data" / "filterbank"
 
 
 # ── Custom "seti" colormap — dark blue → cyan glow ──────────────────────────
@@ -133,7 +138,7 @@ class SignalDetailPanel(QFrame):
 
         title = QLabel("Signal Details")
         title.setStyleSheet(
-            "font-size: 15px; font-weight: 600; color: #00d4ff;"
+            "font-size: 15px; font-weight: 600; color: #4da6ff;"
             "letter-spacing: 0.5px;"
         )
         layout.addWidget(title)
@@ -203,21 +208,21 @@ class SignalDetailPanel(QFrame):
         if "candidate" in cls:
             self._badge.setText("✦ CANDIDATE")
             self._badge.setStyleSheet(
-                "background: rgba(0,255,136,0.12); color: #00ff88; "
+                "background: rgba(0,255,136,0.12); color: #34d399; "
                 "padding: 8px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.25); "
                 "font-weight: 600; font-size: 12px;"
             )
         elif "rfi" in cls:
             self._badge.setText("✕ RFI")
             self._badge.setStyleSheet(
-                "background: rgba(255,51,102,0.12); color: #ff3366; "
+                "background: rgba(255,51,102,0.12); color: #f87171; "
                 "padding: 8px; border-radius: 8px; border: 1px solid rgba(255,51,102,0.25); "
                 "font-weight: 600; font-size: 12px;"
             )
         else:
             self._badge.setText("? UNKNOWN")
             self._badge.setStyleSheet(
-                "background: rgba(255,170,0,0.12); color: #ffaa00; "
+                "background: rgba(255,170,0,0.12); color: #fbbf24; "
                 "padding: 8px; border-radius: 8px; border: 1px solid rgba(255,170,0,0.25); "
                 "font-weight: 600; font-size: 12px;"
             )
@@ -279,15 +284,35 @@ class WaterfallViewer(QWidget):
         tb_layout.addWidget(title)
         tb_layout.addSpacing(24)
 
-        # File open
-        self._open_btn = QPushButton("Open File")
+        # File selector dropdown
+        file_lbl = QLabel("File:")
+        file_lbl.setStyleSheet("font-size: 12px; color: rgba(200,215,235,0.5); border:none;")
+        tb_layout.addWidget(file_lbl)
+
+        self._file_combo = QComboBox()
+        self._file_combo.setMinimumWidth(240)
+        self._file_combo.setMaximumWidth(400)
+        self._file_combo.addItem("Demo Waterfall (synthetic)")
+        self._file_combo.currentIndexChanged.connect(self._on_file_selected)
+        tb_layout.addWidget(self._file_combo)
+
+        # Refresh file list
+        self._refresh_btn = QPushButton("↻")
+        self._refresh_btn.setFixedWidth(32)
+        self._refresh_btn.setToolTip("Refresh file list")
+        self._refresh_btn.setStyleSheet(self._toolbar_btn_style())
+        self._refresh_btn.clicked.connect(self._populate_file_combo)
+        tb_layout.addWidget(self._refresh_btn)
+
+        # File open (browse)
+        self._open_btn = QPushButton("Browse…")
         self._open_btn.setStyleSheet(self._toolbar_btn_style())
         self._open_btn.clicked.connect(self._open_file)
         tb_layout.addWidget(self._open_btn)
 
         # Process
         self._process_btn = QPushButton("⚡ Process")
-        self._process_btn.setStyleSheet(self._toolbar_btn_style("#00d4ff"))
+        self._process_btn.setStyleSheet(self._toolbar_btn_style("#4da6ff"))
         self._process_btn.clicked.connect(self._run_pipeline)
         tb_layout.addWidget(self._process_btn)
 
@@ -443,18 +468,156 @@ class WaterfallViewer(QWidget):
         for sig in self._signals:
             self.signal_detected.emit(sig)
 
+        QTimer.singleShot(1000, self._populate_file_combo)
+
+    def _populate_file_combo(self):
+        """Scan filterbank directory and populate the file dropdown."""
+        self._file_combo.blockSignals(True)
+        current_text = self._file_combo.currentText()
+        self._file_combo.clear()
+        self._file_combo.addItem("Demo Waterfall (synthetic)")
+
+        self._file_paths = [None]  # index 0 = demo
+
+        if _FILTERBANK_DIR.exists():
+            files = sorted(
+                list(_FILTERBANK_DIR.glob("*.fil")) +
+                list(_FILTERBANK_DIR.glob("*.h5")) +
+                list(_FILTERBANK_DIR.glob("*.hdf5")),
+                key=lambda f: f.stat().st_mtime,
+                reverse=True,
+            )
+            for f in files:
+                size_mb = f.stat().st_size / (1024 * 1024)
+                label = f"{f.name}  ({size_mb:.1f} MB)"
+                self._file_combo.addItem(label)
+                self._file_paths.append(f)
+
+        # Also check the data/training directory for synthetic .fil files
+        training_fb = _ARTIFACTS_DIR / "data" / "filterbank"
+        if training_fb.exists() and training_fb != _FILTERBANK_DIR:
+            for f in sorted(training_fb.glob("*.fil")):
+                size_mb = f.stat().st_size / (1024 * 1024)
+                label = f"{f.name}  ({size_mb:.1f} MB)"
+                self._file_combo.addItem(label)
+                self._file_paths.append(f)
+
+        # Restore selection if possible
+        idx = self._file_combo.findText(current_text)
+        if idx >= 0:
+            self._file_combo.setCurrentIndex(idx)
+        self._file_combo.blockSignals(False)
+
+    def _on_file_selected(self, index: int):
+        """Handle file selection from dropdown."""
+        if index <= 0 or not hasattr(self, "_file_paths"):
+            self._load_demo()
+            return
+        if index < len(self._file_paths):
+            filepath = self._file_paths[index]
+            if filepath and filepath.exists():
+                self._load_real_file(filepath)
+
+    def _load_real_file(self, filepath):
+        """Load a real .fil or .h5 file into the viewer."""
+        self._file_label.setText(filepath.name)
+        try:
+            if filepath.suffix in (".h5", ".hdf5"):
+                self._load_h5(filepath)
+            elif filepath.suffix == ".fil":
+                self._load_fil(filepath)
+            else:
+                self._data, self._signals = generate_demo_waterfall(
+                    seed=hash(str(filepath)) % 2**31
+                )
+            self._render()
+        except Exception as e:
+            self._file_label.setText(f"{filepath.name} (load error)")
+            self._data, self._signals = generate_demo_waterfall(
+                seed=hash(str(filepath)) % 2**31
+            )
+            self._render()
+
+    def _load_h5(self, filepath):
+        """Load HDF5 filterbank data."""
+        try:
+            import h5py
+            with h5py.File(str(filepath), "r") as f:
+                if "data" in f:
+                    raw = np.array(f["data"], dtype=np.float32)
+                elif "filterbank" in f and "data" in f["filterbank"]:
+                    raw = np.array(f["filterbank"]["data"], dtype=np.float32)
+                else:
+                    keys = list(f.keys())
+                    if keys:
+                        raw = np.array(f[keys[0]], dtype=np.float32)
+                    else:
+                        raw = np.zeros((256, 64), dtype=np.float32)
+
+            # Ensure 2D (time x freq)
+            if raw.ndim == 3:
+                raw = raw[:, 0, :]
+            if raw.ndim == 1:
+                side = int(np.sqrt(raw.size))
+                raw = raw[:side * side].reshape(side, side)
+
+            self._data = raw
+            self._signals = []
+        except ImportError:
+            self._data, self._signals = generate_demo_waterfall(
+                seed=hash(str(filepath)) % 2**31
+            )
+
+    def _load_fil(self, filepath):
+        """Load Sigproc .fil filterbank data."""
+        try:
+            with open(filepath, "rb") as f:
+                raw = f.read()
+
+            # Find data start after header
+            end_marker = b"HEADER_END"
+            pos = raw.find(end_marker)
+            if pos >= 0:
+                data_start = pos + len(end_marker)
+            else:
+                data_start = min(512, len(raw) // 4)
+
+            data_bytes = raw[data_start:]
+            arr = np.frombuffer(data_bytes, dtype=np.float32)
+
+            # Try to reshape into a reasonable 2D array
+            n_elements = arr.size
+            if n_elements == 0:
+                self._data = np.zeros((256, 64), dtype=np.float32)
+            else:
+                # Guess a reasonable n_freq
+                for n_freq in [8192, 4096, 2048, 1024, 512, 256, 128, 64]:
+                    if n_elements >= n_freq * 2 and n_elements % n_freq == 0:
+                        n_time = n_elements // n_freq
+                        self._data = arr.reshape(n_time, n_freq)
+                        break
+                else:
+                    side = int(np.sqrt(n_elements))
+                    self._data = arr[: side * side].reshape(side, side)
+
+            self._signals = []
+        except Exception:
+            self._data, self._signals = generate_demo_waterfall(
+                seed=hash(str(filepath)) % 2**31
+            )
+
     def _open_file(self):
+        start_dir = str(_FILTERBANK_DIR) if _FILTERBANK_DIR.exists() else ""
         path, _ = QFileDialog.getOpenFileName(
             self, "Open Filterbank / HDF5",
-            "",
+            start_dir,
             "SETI Data (*.fil *.h5 *.hdf5);;All Files (*)",
         )
         if not path:
             return
-        self._file_label.setText(path.split("/")[-1])
-        # For now, load demo data (replace with real blimpy/h5py loader)
-        self._data, self._signals = generate_demo_waterfall(seed=hash(path) % 2**31)
-        self._render()
+        filepath = _Path(path)
+        self._file_label.setText(filepath.name)
+        self._load_real_file(filepath)
 
     def _run_pipeline(self):
         """Simulate running the full detection pipeline."""
@@ -504,7 +667,7 @@ class WaterfallViewer(QWidget):
         )
         self._ax.set_xlabel("Frequency Channel", color="#e0e8f0", fontsize=10)
         self._ax.set_ylabel("Time Step", color="#e0e8f0", fontsize=10)
-        self._ax.set_title("ON Source", color="#00d4ff", fontsize=12, fontweight="bold")
+        self._ax.set_title("ON Source", color="#4da6ff", fontsize=12, fontweight="bold")
         self._ax.tick_params(colors="#8ca5c8", labelsize=8)
         self._ax.set_facecolor("#080c14")
 
@@ -517,11 +680,11 @@ class WaterfallViewer(QWidget):
                 t = np.arange(n_time)
                 f = f0 + dr * t / n_time * 60
                 color = (
-                    "#00ff88"
+                    "#34d399"
                     if "candidate" in sig.get("classification", "")
-                    else "#ff3366"
+                    else "#f87171"
                     if "rfi" in sig.get("classification", "")
-                    else "#ffaa00"
+                    else "#fbbf24"
                 )
                 self._ax.plot(
                     f, t,
@@ -548,7 +711,7 @@ class WaterfallViewer(QWidget):
             self._ax_off.set_ylabel("Time Step", color="#e0e8f0", fontsize=10)
             self._ax_off.set_title(
                 "OFF Source (Reference)",
-                color="#ff3366", fontsize=12, fontweight="bold",
+                color="#f87171", fontsize=12, fontweight="bold",
             )
             self._ax_off.tick_params(colors="#8ca5c8", labelsize=8)
             self._ax_off.set_facecolor("#080c14")

@@ -359,27 +359,41 @@ class BLDataDownloader:
 
             logger.info(f"    Creating synthetic sample for {entry['target']}...")
 
-            # Generate a small spectrogram with a synthetic narrowband signal
-            nchans = 256
-            ntime = 64
-            noise = np.random.randn(nchans, ntime).astype(np.float32) * 0.1
+            rng = np.random.default_rng(hash(entry["target"]) % 2**31)
+            nchans = 1024
+            ntime = 256
 
-            # Add a drifting narrowband signal
-            drift_rate = np.random.uniform(-2, 2)
-            snr = np.random.uniform(5, 30)
-            start_chan = np.random.randint(50, 200)
-            for t in range(ntime):
-                chan = int(start_chan + drift_rate * t / ntime * 20) % nchans
-                noise[chan, t] += snr * 0.1
+            # Shape must be (ntime, nchans) to match what the h5py reader expects
+            data = rng.normal(0, 1.0, (ntime, nchans)).astype(np.float32)
+
+            # Inject 3-5 drifting narrowband signals with high SNR
+            n_signals = rng.integers(3, 6)
+            for _ in range(n_signals):
+                drift_pixels = rng.uniform(-1.5, 1.5)
+                snr = rng.uniform(12, 40)
+                start_chan = rng.integers(100, nchans - 100)
+                bw = rng.integers(1, 3)
+                for t in range(ntime):
+                    chan = int(start_chan + drift_pixels * t / ntime * 50) % nchans
+                    lo = max(0, chan - bw)
+                    hi = min(nchans, chan + bw + 1)
+                    data[t, lo:hi] += snr
+
+            # Inject stationary RFI for the filter to reject
+            for _ in range(2):
+                rfi_chan = rng.integers(0, nchans)
+                data[:, rfi_chan] += rng.uniform(20, 50)
 
             with h5py.File(str(dest), "w") as f:
-                f.create_dataset("data", data=noise)
+                f.create_dataset("data", data=data)
                 f.attrs["source_name"] = entry["target"]
                 f.attrs["telescope"] = entry["telescope"]
-                f.attrs["fch1"] = 1420.0  # MHz (hydrogen line)
-                f.attrs["foff"] = -0.00029  # MHz
-                f.attrs["tsamp"] = 18.253611  # seconds
+                f.attrs["fch1"] = 1420.0
+                f.attrs["foff"] = -0.00029
+                f.attrs["tsamp"] = 18.253611
                 f.attrs["nchans"] = nchans
+                f.attrs["nifs"] = 1
+                f.attrs["nbits"] = 32
                 f.attrs["synthetic"] = True
 
             # Cache

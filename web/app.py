@@ -5,8 +5,8 @@ Browser-based UI for SETI signal analysis, waterfall viewing, RFI monitoring,
 and sky mapping. Proxies requests to the main API backend.
 
 Usage:
-    python -m web.app          # Start web UI on port 8080
-    python -m web.app --port 9000
+    python -m web.app          # Start web UI on port 9090
+    python -m web.app --port 9090
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ from paths import (
 logger = logging.getLogger(__name__)
 
 # API backend URL
-API_BASE = os.environ.get("ASTROSETI_API", "http://localhost:8000")
+API_BASE = os.environ.get("ASTROSETI_API", "http://localhost:9000")
 
 # Setup app
 app = FastAPI(title="astroSETI Web", version="1.0.0")
@@ -363,7 +363,7 @@ async def device_info():
 
 def main():
     parser = argparse.ArgumentParser(description="astroSETI Web Interface")
-    parser.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
+    parser.add_argument("--port", type=int, default=9090, help="Port (default: 9090)")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host (default: 0.0.0.0)")
     args = parser.parse_args()
 
