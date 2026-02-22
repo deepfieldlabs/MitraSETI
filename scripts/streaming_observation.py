@@ -969,29 +969,23 @@ class StreamingObserver:
         logger.info(f"  Target end: {target_end.strftime('%Y-%m-%d %H:%M')}")
         logger.info("")
 
-        # Auto-download real Breakthrough Listen data if no filterbank files exist
+        # Check for manually downloaded filterbank files
         fil_count = len(list(FILTERBANK_DIR.glob("*.fil")))
         h5_count = len(list(FILTERBANK_DIR.glob("*.h5")))
-        if fil_count == 0 and h5_count == 0:
-            logger.info("\n  No filterbank files found. Downloading real Breakthrough Listen data...")
-            try:
-                from scripts.download_bl_data import BLDataDownloader
-                downloader = BLDataDownloader(count=5)
-                downloaded = downloader.run()
-                logger.info(f"  Downloaded {len(downloaded)} BL files to {FILTERBANK_DIR}")
-            except Exception as e:
-                logger.warning(f"  BL download failed: {e}")
-                logger.info("  Falling back to synthetic data generation...")
-                try:
-                    from scripts.generate_training_data import main as gen_main
-                    gen_main()
-                    logger.info("  Synthetic filterbank files generated")
-                except Exception as e2:
-                    logger.error(f"  Synthetic generation also failed: {e2}")
-                    logger.error("  No data available. Add .fil or .h5 files to:")
-                    logger.error(f"    {FILTERBANK_DIR}")
-        else:
-            logger.info(f"  Found {fil_count} .fil and {h5_count} .h5 files in {FILTERBANK_DIR}")
+        raw_count = len(list(FILTERBANK_DIR.glob("*.raw")))
+        total_files = fil_count + h5_count + raw_count
+        if total_files == 0:
+            logger.error(
+                f"\n  No filterbank files found in {FILTERBANK_DIR}\n"
+                f"  Download files manually from https://breakthroughinitiatives.org/opendatasearch\n"
+                f"  Supported formats: .fil, .h5, .raw\n"
+                f"  Place them in: {FILTERBANK_DIR}"
+            )
+            raise FileNotFoundError(
+                f"No filterbank data in {FILTERBANK_DIR}. "
+                "Download real BL data manually before starting streaming."
+            )
+        logger.info(f"  Found {fil_count} .fil, {h5_count} .h5, {raw_count} .raw files in {FILTERBANK_DIR}")
 
         # Initial health check
         logger.info("\n  Running initial health check...")
