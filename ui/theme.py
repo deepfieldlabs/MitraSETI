@@ -74,7 +74,7 @@ def get_stylesheet() -> str:
    ════════════════════════════════════════════════════════════════ */
 
 * {
-    font-family: 'Helvetica Neue', 'Segoe UI', sans-serif;
+    font-family: 'Helvetica Neue', sans-serif;
 }
 
 QWidget {

@@ -224,8 +224,9 @@ class SkyMapPanel(QWidget):
                 cand_sizes.append(max(40, n_candidates * 25))
 
         if obs_ra:
+            import numpy as _np
             ax.scatter(
-                obs_ra, obs_dec, s=obs_sizes, c=obs_colors,
+                obs_ra, obs_dec, s=obs_sizes, c=_np.array(obs_colors),
                 marker="o", edgecolors="none", zorder=2,
             )
 

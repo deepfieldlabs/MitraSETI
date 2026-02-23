@@ -81,7 +81,7 @@ class StreamingPanel(QWidget):
         # Refresh timer
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh)
-        self._timer.start(5000)
+        self._timer.start(3000)
 
         QTimer.singleShot(500, self._refresh)
 
@@ -265,10 +265,10 @@ class StreamingPanel(QWidget):
 
         self._stat_cards = {}
         stat_defs = [
-            ("signals", "Signals Processed", "0", "#4da6ff"),
-            ("candidates", "Candidates Found", "0", "#34d399"),
+            ("signals", "Files with Signals", "0", "#4da6ff"),
+            ("candidates", "Verified Candidates", "0", "#34d399"),
             ("rfi", "RFI Rejected", "0", "#f87171"),
-            ("rate", "Processing Rate", "0/min", "#7c3aed"),
+            ("rate", "Processing Rate", "—", "#7c3aed"),
         ]
 
         for i, (key, label, default, color) in enumerate(stat_defs):

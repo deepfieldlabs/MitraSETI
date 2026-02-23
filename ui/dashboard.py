@@ -57,12 +57,20 @@ class DashboardPanel(QWidget):
 
     navigate_to = pyqtSignal(int)  # Emit panel index to switch to
 
+    _STATE_FILE = Path(__file__).parent.parent.parent / "astroseti_artifacts" / "data" / "streaming_state.json"
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._setup_ui()
 
         # Render mini waterfall preview after a short delay
         QTimer.singleShot(500, self._render_mini_waterfall)
+
+        # Auto-refresh stats from streaming state
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.timeout.connect(self._refresh_stats)
+        self._refresh_timer.start(5000)
+        QTimer.singleShot(800, self._refresh_stats)
 
     def _setup_ui(self):
         scroll = QScrollArea()
@@ -142,12 +150,12 @@ class DashboardPanel(QWidget):
 
         self._stat_cards = {}
         stat_defs = [
-            ("observations", "Total Observations", "1,247", "#4da6ff"),
-            ("signals", "Signals Detected", "8,392", "#7c3aed"),
-            ("candidates", "Candidates Found", "51", "#34d399"),
-            ("rfi_rate", "RFI Rejection Rate", "76.5%", "#f87171"),
-            ("speed", "Processing Speed", "2.3 fil/min", "#fbbf24"),
-            ("yolo", "YOLO Transients", "12", "#4da6ff"),
+            ("observations", "Total Observations", "0", "#4da6ff"),
+            ("signals", "Signals Detected", "0", "#7c3aed"),
+            ("candidates", "Candidates Found", "0", "#34d399"),
+            ("rfi_rate", "RFI Rejection Rate", "0%", "#f87171"),
+            ("speed", "Processing Speed", "—", "#fbbf24"),
+            ("yolo", "YOLO Transients", "0", "#4da6ff"),
         ]
 
         for i, (key, label, default, color) in enumerate(stat_defs):
@@ -533,6 +541,38 @@ class DashboardPanel(QWidget):
             self._mini_waterfall.setStyleSheet(
                 "background: rgba(8,12,20,0.8); border-radius: 10px;"
             )
+
+    # ── Auto-refresh from streaming state ───────────────────────────────
+
+    def _refresh_stats(self):
+        """Read streaming state and update dashboard stat cards."""
+        import json
+        if not self._STATE_FILE.exists():
+            return
+        try:
+            with open(self._STATE_FILE) as f:
+                state = json.load(f)
+        except Exception:
+            return
+
+        files = state.get("total_files_processed", 0)
+        signals = state.get("total_signals", 0)
+        candidates = state.get("total_candidates", 0)
+        rfi = state.get("total_rfi_rejected", 0)
+        rate = state.get("processing_rate", "—")
+
+        total_raw = 0
+        cats = state.get("category_stats", {})
+        for cat_data in cats.values():
+            total_raw += cat_data.get("signals", 0)
+
+        rfi_pct = f"{rfi / max(total_raw, 1) * 100:.0f}%" if total_raw > 0 else "0%"
+
+        self.update_stat("observations", str(files))
+        self.update_stat("signals", f"{signals:,}" if signals else "0")
+        self.update_stat("candidates", str(candidates))
+        self.update_stat("rfi_rate", rfi_pct)
+        self.update_stat("speed", str(rate))
 
     # ── Public API ────────────────────────────────────────────────────────
 

@@ -56,7 +56,17 @@ DB_PATH = DATA_DIR / "astroseti.db"
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite+aiosqlite:///{DB_PATH}")
 
 # Filterbank / HDF5 input files
-FILTERBANK_DIR = Path(os.environ.get("FILTERBANK_DIR", DATA_DIR / "filterbank"))
+# Primary: real Breakthrough Listen data (manually downloaded)
+BL_DATA_DIR = DATA_DIR / "breakthrough_listen_data_files"
+# Fallback: synthetic filterbank directory
+_SYNTHETIC_DIR = DATA_DIR / "filterbank"
+
+FILTERBANK_DIR = Path(
+    os.environ.get(
+        "FILTERBANK_DIR",
+        str(BL_DATA_DIR) if BL_DATA_DIR.exists() else str(_SYNTHETIC_DIR),
+    )
+)
 FILTERBANK_DIR.mkdir(parents=True, exist_ok=True)
 
 # Waterfall plot images

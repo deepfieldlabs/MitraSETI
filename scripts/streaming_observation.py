@@ -41,6 +41,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import re
+
+# Fix HDF5 plugin path before any HDF5 library is imported
+if "HDF5_PLUGIN_PATH" not in os.environ:
+    os.environ["HDF5_PLUGIN_PATH"] = ""
+
 import numpy as np
 
 # Add project root to path
@@ -154,11 +160,57 @@ class StreamingState:
     last_health_check: str = ""
     # AstroLens cross-reference
     astrolens_crossref_total: int = 0
+    # Per-category stats: {category: {files, signals, candidates, rfi}}
+    category_stats: Dict[str, dict] = field(default_factory=dict)
+    # Pipeline efficiency metrics (cumulative averages)
+    pipeline_metrics: Dict[str, dict] = field(default_factory=dict)
+    # Track when we last trained/fine-tuned the model
+    last_trained_at_file: int = 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Streaming Observer
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Target categorization — maps filenames to scientific categories
+# ─────────────────────────────────────────────────────────────────────────────
+
+_TARGET_CATEGORIES = [
+    # (regex pattern on filename, category, description)
+    (re.compile(r"(?i)voyager"),                     "Voyager",       "Known spacecraft signal (benchmark)"),
+    (re.compile(r"(?i)kepler[\-_]?\d+"),             "Kepler",        "Kepler exoplanet host star"),
+    (re.compile(r"(?i)trappist"),                    "TRAPPIST",      "TRAPPIST-1 system (7 Earth-sized planets)"),
+    (re.compile(r"(?i)hip\d+"),                      "HIP",           "Nearby star from BL primary target list"),
+    (re.compile(r"(?i)gj[\-_]?\d+"),                 "GJ",            "Nearby red dwarf (Gliese catalog)"),
+    (re.compile(r"(?i)(?:3c|diag_3c)\d+"),           "Calibrator",    "Radio calibrator source"),
+    (re.compile(r"(?i)ross"),                        "Ross",          "Nearby star (Ross catalog)"),
+    (re.compile(r"(?i)teegarden"),                   "Teegarden",     "Teegarden's Star"),
+    (re.compile(r"(?i)yz[\-_]?cet"),                 "YZ_Cet",        "YZ Ceti (active M-dwarf)"),
+    (re.compile(r"(?i)synthetic"),                   "Synthetic",     "Synthetic training data"),
+]
+
+
+def categorize_target(filename: str) -> dict:
+    """Derive scientific category from a BL data filename.
+
+    Returns dict with 'category', 'target_name', and 'description'.
+    """
+    for pattern, category, description in _TARGET_CATEGORIES:
+        match = pattern.search(filename)
+        if match:
+            target_name = match.group(0).upper().replace("_", "-")
+            return {
+                "category": category,
+                "target_name": target_name,
+                "description": description,
+            }
+    return {
+        "category": "Other",
+        "target_name": Path(filename).stem,
+        "description": "Unclassified BL observation",
+    }
+
 
 class StreamingObserver:
     """
@@ -200,16 +252,24 @@ class StreamingObserver:
         # Load or create streaming state
         self.state = self._load_state()
 
-        # If the previous session ended (completed_at set), start a fresh session
-        # but preserve cumulative totals for continuity
+        # If the previous session ended or state is empty, start fully fresh
         if self.state.completed_at or not self.state.started_at:
             self.state.started_at = datetime.now().isoformat()
             self.state.completed = False
             self.state.completed_at = ""
             self.state.current_day = 0
+            self.state.total_files_processed = 0
+            self.state.total_signals = 0
+            self.state.total_candidates = 0
+            self.state.total_rfi_rejected = 0
+            self.state.total_ood_anomalies = 0
+            self.state.total_corrections = 0
             self.state.consecutive_errors = 0
             self.state.error_log = []
             self.state.daily_snapshots = []
+            self.state.best_candidates = []
+            self.state.category_stats = {}
+            self.state.total_runtime_hours = 0.0
 
         # Always update from CLI args
         if target_days > 0:
@@ -339,7 +399,7 @@ class StreamingObserver:
             self._processed_files.clear()
             new_files = list(files)
 
-        return sorted(new_files, key=lambda f: f.stat().st_mtime)
+        return sorted(new_files, key=lambda f: f.stat().st_size)
 
     # ── Single file processing via unified pipeline ─────────────────────
 
@@ -352,6 +412,13 @@ class StreamingObserver:
         """
         start_time = time.time()
         file_size_mb = filepath.stat().st_size / (1024 * 1024)
+        target_info = categorize_target(filepath.name)
+
+        logger.info(
+            f"  >> Reading {filepath.name} "
+            f"[{target_info['category']}:{target_info['target_name']}] "
+            f"({file_size_mb:.0f} MB)…"
+        )
 
         try:
             pipe_result = self.pipeline.process_file(str(filepath))
@@ -366,6 +433,19 @@ class StreamingObserver:
 
         candidates = pipe_result.get("candidates", [])
         timing = pipe_result.get("timing", {})
+
+        # Log per-stage timing so the user sees progress
+        read_t = timing.get("read_file", 0)
+        dd_t = timing.get("dedoppler_search", 0)
+        ml_t = timing.get("ml_inference", 0)
+        total_t = timing.get("total", 0)
+        logger.info(
+            f"  << Done {filepath.name}: "
+            f"{summary.get('total_hits_raw', 0)} raw → "
+            f"{summary.get('total_hits_filtered', 0)} filtered → "
+            f"{summary.get('candidate_count', 0)} verified "
+            f"({total_t:.0f}s: read={read_t:.0f}s de-Doppler={dd_t:.0f}s ML={ml_t:.0f}s)"
+        )
 
         n_rfi = summary.get("rfi_count", 0)
         n_candidates = summary.get("candidate_count", 0)
@@ -384,9 +464,12 @@ class StreamingObserver:
                 "snr": best_snr,
                 "min_snr": self.state.current_min_snr,
                 "elapsed_s": time.time() - start_time,
+                **target_info,
             }
 
         elapsed = time.time() - start_time
+
+        metrics = pipe_result.get("metrics", {})
 
         result = {
             "file": str(filepath),
@@ -408,9 +491,14 @@ class StreamingObserver:
             "anomaly_count": n_anomalies,
             "candidates": candidates,
             "timing": timing,
+            "metrics": metrics,
             "elapsed_s": round(elapsed, 3),
             "processed_at": datetime.now().isoformat(),
+            **target_info,
         }
+
+        # Accumulate pipeline efficiency metrics
+        self._accumulate_metrics(metrics, filepath.name)
 
         return result
 
@@ -453,39 +541,64 @@ class StreamingObserver:
 
             cycle_summary["files_processed"] += 1
 
+            # Track per-category stats
+            cat = result.get("category", "Other")
+            if cat not in self.state.category_stats:
+                self.state.category_stats[cat] = {
+                    "files": 0, "signals": 0, "candidates": 0, "rfi": 0,
+                    "anomalies": 0, "target_name": result.get("target_name", ""),
+                    "description": result.get("description", ""),
+                }
+            self.state.category_stats[cat]["files"] += 1
+
             if result.get("status") == "below_snr_threshold":
+                logger.debug(
+                    f"  Below threshold: {filepath.name} "
+                    f"(best SNR={result.get('snr', 0):.1f}, min={result.get('min_snr', 0):.1f})"
+                )
                 continue
 
             total_hits = result.get("total_hits", 1)
-            cycle_summary["signals_found"] += total_hits
+            # "Signals" = total spectral features found by de-Doppler
+            cycle_summary["signals_found"] += 1  # count per-file, not per-hit
 
             sig_type = result.get("signal_type", "unknown")
             cycle_summary["classification_counts"][sig_type] = (
                 cycle_summary["classification_counts"].get(sig_type, 0) + 1
             )
 
+            self.state.category_stats[cat]["signals"] += total_hits
+
             rfi_count = result.get("rfi_count", 1 if result.get("is_rfi") else 0)
             cycle_summary["rfi_rejected"] += rfi_count
-            if rfi_count > 0:
-                logger.debug(
-                    f"  RFI rejected: {filepath.name} "
-                    f"({sig_type}, count={rfi_count})"
-                )
+            self.state.category_stats[cat]["rfi"] += rfi_count
 
+            # "Candidates" = files with at least one verified candidate signal
             cand_count = result.get("candidate_count", 1 if result.get("is_candidate") else 0)
-            cycle_summary["candidates"] += cand_count
-            if cand_count > 0:
+            file_is_candidate = cand_count > 0
+            if file_is_candidate:
+                cycle_summary["candidates"] += 1  # count per-file, not per-hit
+                self.state.category_stats[cat]["candidates"] += 1
                 self._record_candidate(result)
                 logger.info(
                     f"  CANDIDATE: {filepath.name} | "
+                    f"[{result.get('category', '?')}:{result.get('target_name', '?')}] | "
                     f"type={sig_type} | "
                     f"SNR={result.get('snr', 0):.1f} | "
                     f"drift={result.get('drift_rate', 0):.4f} Hz/s | "
-                    f"conf={result.get('confidence', 0):.2f}"
+                    f"conf={result.get('confidence', 0):.2f} | "
+                    f"hits={total_hits} verified={cand_count}"
+                )
+            else:
+                logger.info(
+                    f"  PROCESSED: {filepath.name} | "
+                    f"[{result.get('category', '?')}:{result.get('target_name', '?')}] | "
+                    f"hits={total_hits} (no verified candidates)"
                 )
 
             anom_count = result.get("anomaly_count", 1 if result.get("is_ood_anomaly") else 0)
             cycle_summary["ood_anomalies"] += anom_count
+            self.state.category_stats[cat]["anomalies"] += anom_count
             if anom_count > 0:
                 logger.info(
                     f"  OOD ANOMALY: {filepath.name} | "
@@ -496,6 +609,90 @@ class StreamingObserver:
         return cycle_summary
 
     _MAX_STORED_CANDIDATES = 500
+
+    # ── Pipeline efficiency metrics ────────────────────────────────────
+
+    def _accumulate_metrics(self, metrics: dict, filename: str):
+        """Accumulate per-file pipeline metrics into running averages."""
+        pm = self.state.pipeline_metrics
+        if not pm:
+            pm.update({
+                "files_measured": 0,
+                "dd_throughput_sum": 0.0,
+                "dd_raw_crossings_sum": 0,
+                "dd_clustering_reduction_sum": 0.0,
+                "ml_throughput_sum": 0.0,
+                "ml_candidate_rate_sum": 0.0,
+                "snr_max_overall": 0.0,
+                "snr_above_25_sum": 0,
+                "snr_above_50_sum": 0,
+                "drift_in_range_sum": 0,
+                "total_data_points": 0,
+            })
+
+        dd = metrics.get("dedoppler", {})
+        ml = metrics.get("ml_classifier", {})
+        snr = metrics.get("snr_stats", {})
+        drift = metrics.get("drift_stats", {})
+
+        pm["files_measured"] = pm.get("files_measured", 0) + 1
+        pm["dd_throughput_sum"] = pm.get("dd_throughput_sum", 0) + dd.get("throughput_mpts_per_s", 0)
+        pm["dd_raw_crossings_sum"] = pm.get("dd_raw_crossings_sum", 0) + dd.get("raw_crossings", 0)
+        pm["dd_clustering_reduction_sum"] = pm.get("dd_clustering_reduction_sum", 0) + dd.get("clustering_reduction", 0)
+        pm["ml_throughput_sum"] = pm.get("ml_throughput_sum", 0) + ml.get("throughput_sig_per_s", 0)
+        pm["ml_candidate_rate_sum"] = pm.get("ml_candidate_rate_sum", 0) + ml.get("candidate_rate", 0)
+        pm["snr_max_overall"] = max(pm.get("snr_max_overall", 0), snr.get("max", 0))
+        pm["snr_above_25_sum"] = pm.get("snr_above_25_sum", 0) + snr.get("above_25", 0)
+        pm["snr_above_50_sum"] = pm.get("snr_above_50_sum", 0) + snr.get("above_50", 0)
+        pm["drift_in_range_sum"] = pm.get("drift_in_range_sum", 0) + drift.get("in_candidate_range", 0)
+        pm["total_data_points"] = pm.get("total_data_points", 0) + dd.get("data_points", 0)
+        pm["model_trained"] = ml.get("model_trained", False)
+        pm["ood_calibrated"] = metrics.get("ood_detector", {}).get("calibrated", False)
+
+        self.state.pipeline_metrics = pm
+
+    def _log_efficiency_report(self):
+        """Log a summary of pipeline efficiency metrics."""
+        pm = self.state.pipeline_metrics
+        n = pm.get("files_measured", 0)
+        if n == 0:
+            return
+
+        avg_dd = pm.get("dd_throughput_sum", 0) / n
+        avg_ml = pm.get("ml_throughput_sum", 0) / n
+        avg_cand_rate = pm.get("ml_candidate_rate_sum", 0) / n
+        avg_cluster = pm.get("dd_clustering_reduction_sum", 0) / n
+        total_pts = pm.get("total_data_points", 0)
+
+        logger.info(
+            "\n"
+            "  ╔══════════════════════════════════════════════════════════╗\n"
+            "  ║            PIPELINE EFFICIENCY REPORT                   ║\n"
+            "  ╠══════════════════════════════════════════════════════════╣\n"
+            f"  ║  Files analyzed:        {n:>8}                         ║\n"
+            f"  ║  Total data points:     {total_pts:>12,}               ║\n"
+            "  ╠══════════════════════════════════════════════════════════╣\n"
+            "  ║  DE-DOPPLER SEARCH (Rust, brute-force)                  ║\n"
+            f"  ║    Throughput:           {avg_dd:>8.1f} Mpts/s              ║\n"
+            f"  ║    Avg raw crossings:    {pm.get('dd_raw_crossings_sum',0)/n:>8.0f}/file             ║\n"
+            f"  ║    Clustering reduction: {avg_cluster*100:>7.1f}%                  ║\n"
+            f"  ║    Algorithm:            brute-force (Taylor tree TODO) ║\n"
+            "  ╠══════════════════════════════════════════════════════════╣\n"
+            "  ║  ML CLASSIFIER (CNN+Transformer, 729K params)           ║\n"
+            f"  ║    Model trained:        {'YES' if pm.get('model_trained') else 'NO — using rules':>30}  ║\n"
+            f"  ║    Throughput:           {avg_ml:>8.1f} signals/s           ║\n"
+            f"  ║    Candidate rate:       {avg_cand_rate*100:>7.2f}%                  ║\n"
+            "  ╠══════════════════════════════════════════════════════════╣\n"
+            "  ║  OOD ANOMALY DETECTOR (3-method ensemble)               ║\n"
+            f"  ║    Calibrated:           {'YES' if pm.get('ood_calibrated') else 'NO — default thresholds':>30}  ║\n"
+            "  ╠══════════════════════════════════════════════════════════╣\n"
+            "  ║  SIGNAL QUALITY                                         ║\n"
+            f"  ║    Best SNR overall:     {pm.get('snr_max_overall',0):>8.1f}                    ║\n"
+            f"  ║    Signals SNR > 25:     {pm.get('snr_above_25_sum',0):>8}                    ║\n"
+            f"  ║    Signals SNR > 50:     {pm.get('snr_above_50_sum',0):>8}                    ║\n"
+            f"  ║    In candidate drift:   {pm.get('drift_in_range_sum',0):>8}                    ║\n"
+            "  ╚══════════════════════════════════════════════════════════╝"
+        )
 
     def _record_candidate(self, result: dict):
         """Append a candidate to the persistent candidates file.
@@ -515,6 +712,8 @@ class StreamingObserver:
             entry = {
                 "file_name": result.get("file_name", ""),
                 "signal_type": result.get("signal_type", "unknown"),
+                "category": result.get("category", "Other"),
+                "target_name": result.get("target_name", ""),
                 "snr": result.get("snr", 0),
                 "drift_rate": result.get("drift_rate", 0),
                 "ood_score": result.get("ood_score", 0),
@@ -624,74 +823,109 @@ class StreamingObserver:
                 pass
         return []
 
-    # ── Auto-training ─────────────────────────────────────────────────────
+    # ── Auto-training & Fine-tuning ──────────────────────────────────────
 
     _TRAIN_DATA_DIR = DATA_DIR / "training"
-    _MIN_FILES_FOR_TRAIN = 50
+    _SPEC_CACHE_DIR = DATA_DIR / "spectrogram_cache"
+    _MIN_FILES_FOR_TRAIN = 5
+    _RETRAIN_INTERVAL = 10  # retrain every N additional files
 
     def _maybe_auto_train(self):
-        """Generate training data and train the model if not yet trained.
+        """Train or fine-tune the model using cached real BL spectrograms.
 
-        Triggered once after enough files have been processed to build a
-        useful training set.  Subsequent fine-tuning can happen at each
-        daily snapshot.
+        Phase 1 (initial): After _MIN_FILES_FOR_TRAIN files, generate
+                 synthetic training data + merge any cached real spectrograms,
+                 then train from scratch.
+        Phase 2 (periodic): Every _RETRAIN_INTERVAL additional files,
+                 fine-tune the existing model with newly cached real data.
         """
         model_path = MODELS_DIR / "signal_classifier_v1.pt"
-        if model_path.exists():
+        files_done = self.state.total_files_processed
+        last_trained_at = getattr(self.state, "last_trained_at_file", 0)
+
+        needs_initial = not model_path.exists() and files_done >= self._MIN_FILES_FOR_TRAIN
+        needs_finetune = (
+            model_path.exists()
+            and files_done >= last_trained_at + self._RETRAIN_INTERVAL
+            and self._count_cached_spectrograms() >= 20
+        )
+
+        if not needs_initial and not needs_finetune:
             return
 
-        if self.state.total_files_processed < self._MIN_FILES_FOR_TRAIN:
-            return
-
+        phase = "INITIAL TRAINING" if needs_initial else "FINE-TUNING"
         logger.info("\n" + "=" * 60)
-        logger.info("  AUTO-TRAINING — generating synthetic training data")
+        logger.info(f"  AUTO {phase} — using real BL data + synthetic")
         logger.info("=" * 60)
 
         try:
-            from scripts.generate_training_data import main as gen_main
-            sys.argv = [
-                "generate_training_data",
-                "--output-dir", str(self._TRAIN_DATA_DIR),
-                "--count", "600",
-            ]
-            gen_main()
-            logger.info("  Training data generated")
+            specs, labels = self._build_training_set(needs_initial)
+            if len(specs) < 20:
+                logger.warning(
+                    f"  Only {len(specs)} training samples — skipping "
+                    f"(need at least 20)"
+                )
+                return
+            logger.info(f"  Training set: {len(specs)} samples, "
+                        f"{len(set(labels.tolist()))} classes")
         except Exception as e:
-            logger.warning(f"  Training data generation failed: {e}")
+            logger.warning(f"  Building training set failed: {e}")
             return
 
-        logger.info("  Starting model training (20 epochs)...")
+        n_epochs = 20 if needs_initial else 10
+
+        logger.info(f"  Starting model training ({n_epochs} epochs)...")
         try:
             from scripts.train_model import (
-                get_device, load_data, _build_model, train_one_epoch,
+                get_device, _build_model, train_one_epoch,
                 evaluate, extract_embeddings, compute_ood_calibration,
                 N_CLASSES,
             )
             import torch
+            from torch.utils.data import DataLoader, TensorDataset
 
             device = get_device()
-            train_ds, val_ds, full_specs, full_labels = load_data(
-                self._TRAIN_DATA_DIR, seed=42,
-            )
-            from torch.utils.data import DataLoader
+
+            specs_t = torch.tensor(specs, dtype=torch.float32).unsqueeze(1)
+            labels_t = torch.tensor(labels, dtype=torch.long)
+
+            n_val = max(1, len(specs_t) // 5)
+            perm = torch.randperm(len(specs_t))
+            val_idx = perm[:n_val]
+            train_idx = perm[n_val:]
+            train_ds = TensorDataset(specs_t[train_idx], labels_t[train_idx])
+            val_ds = TensorDataset(specs_t[val_idx], labels_t[val_idx])
 
             train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
             val_loader = DataLoader(val_ds, batch_size=64, shuffle=False)
 
             model = _build_model(
                 num_classes=N_CLASSES,
-                freq_bins=full_specs.shape[1],
-                time_steps=full_specs.shape[2],
+                freq_bins=specs.shape[1],
+                time_steps=specs.shape[2],
             ).to(device)
 
-            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
+            if needs_finetune and model_path.exists():
+                model.load_state_dict(
+                    torch.load(model_path, map_location=device, weights_only=True)
+                )
+                logger.info("  Loaded existing model for fine-tuning")
+                lr = 3e-4
+            else:
+                lr = 1e-3
+
+            optimizer = torch.optim.AdamW(
+                model.parameters(), lr=lr, weight_decay=0.01
+            )
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=n_epochs
+            )
             criterion = torch.nn.CrossEntropyLoss()
 
             best_acc = 0.0
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-            for epoch in range(1, 21):
+            for epoch in range(1, n_epochs + 1):
                 t_loss, t_acc = train_one_epoch(
                     model, train_loader, criterion, optimizer, device, None, False,
                 )
@@ -704,36 +938,109 @@ class StreamingObserver:
 
                 if epoch % 5 == 0:
                     logger.info(
-                        f"  Epoch {epoch}/20: "
+                        f"  Epoch {epoch}/{n_epochs}: "
                         f"train_acc={t_acc:.4f} val_acc={v_acc:.4f} "
                         f"{'*BEST*' if v_acc == best_acc else ''}"
                     )
 
             logger.info(f"  Training complete — best val accuracy: {best_acc:.4f}")
 
-            # OOD calibration
             model.load_state_dict(
                 torch.load(model_path, map_location=device, weights_only=True)
             )
             embeddings = extract_embeddings(
-                model, full_specs, full_labels, device, batch_size=64,
+                model, specs, labels, device, batch_size=64,
             )
-            calibration = compute_ood_calibration(embeddings, full_labels, N_CLASSES)
+            calibration = compute_ood_calibration(embeddings, labels, N_CLASSES)
             cal_path = MODELS_DIR / "ood_calibration.json"
             with open(cal_path, "w") as f:
                 json.dump(calibration, f, indent=2)
             logger.info(f"  OOD calibration saved → {cal_path}")
 
-            # Reload pipeline with trained model
+            self.state.last_trained_at_file = files_done
             self._pipeline = None
             _ = self.pipeline
-            logger.info("  Pipeline reloaded with trained model")
+            logger.info(f"  Pipeline reloaded with {'fine-tuned' if needs_finetune else 'trained'} model")
             logger.info("=" * 60)
 
         except Exception as e:
             logger.warning(f"  Auto-training failed: {e}")
             import traceback
             logger.debug(traceback.format_exc())
+
+    def _count_cached_spectrograms(self) -> int:
+        """Count .npz files in the spectrogram cache."""
+        if not self._SPEC_CACHE_DIR.exists():
+            return 0
+        return sum(1 for _ in self._SPEC_CACHE_DIR.glob("*.npz"))
+
+    def _build_training_set(self, include_synthetic: bool):
+        """Assemble training arrays from cached real spectrograms + synthetic.
+
+        Returns (spectrograms, labels) as numpy arrays.
+        """
+        import numpy as np
+
+        specs_list = []
+        labels_list = []
+
+        # Load cached real spectrograms from pipeline processing
+        n_real = 0
+        if self._SPEC_CACHE_DIR.exists():
+            for npz_path in sorted(self._SPEC_CACHE_DIR.glob("*.npz")):
+                try:
+                    d = np.load(npz_path)
+                    specs_list.append(d["spectrogram"])
+                    labels_list.append(int(d["label"]))
+                    n_real += 1
+                except Exception:
+                    continue
+
+        # Add synthetic data if doing initial training or if we have few real samples
+        n_synthetic = 0
+        if include_synthetic or n_real < 100:
+            synth_specs_path = self._TRAIN_DATA_DIR / "spectrograms.npy"
+            synth_labels_path = self._TRAIN_DATA_DIR / "labels.npy"
+
+            if not synth_specs_path.exists():
+                logger.info("  Generating synthetic training data...")
+                try:
+                    from scripts.generate_training_data import main as gen_main
+                    old_argv = sys.argv
+                    sys.argv = [
+                        "generate_training_data",
+                        "--output-dir", str(self._TRAIN_DATA_DIR),
+                        "--count", "600",
+                    ]
+                    gen_main()
+                    sys.argv = old_argv
+                except Exception as e:
+                    logger.warning(f"  Synthetic data generation failed: {e}")
+
+            if synth_specs_path.exists():
+                synth_specs = np.load(synth_specs_path)
+                synth_labels = np.load(synth_labels_path)
+                for s, l in zip(synth_specs, synth_labels):
+                    specs_list.append(s)
+                    labels_list.append(int(l))
+                    n_synthetic += 1
+
+        logger.info(
+            f"  Training data: {n_real} real BL spectrograms + "
+            f"{n_synthetic} synthetic = {n_real + n_synthetic} total"
+        )
+
+        if not specs_list:
+            return np.array([]), np.array([])
+
+        target_shape = specs_list[0].shape
+        specs_arr = np.stack([
+            s if s.shape == target_shape
+            else np.resize(s, target_shape)
+            for s in specs_list
+        ])
+        labels_arr = np.array(labels_list, dtype=np.int64)
+        return specs_arr, labels_arr
 
     def _self_correct(
         self,
@@ -867,14 +1174,16 @@ class StreamingObserver:
         if not any(model_dir.glob("*.pt")) and not any(model_dir.glob("*.pth")):
             issues.append("No model weights found (using untrained models)")
 
-        # 4. Filterbank directory has files
-        fil_count = len(list(FILTERBANK_DIR.glob("*.fil")))
-        h5_count = len(list(FILTERBANK_DIR.glob("*.h5")))
+        # 4. Filterbank directory has files (recursive search)
+        fil_count = len(list(FILTERBANK_DIR.glob("**/*.fil")))
+        h5_count = len(list(FILTERBANK_DIR.glob("**/*.h5")))
         if fil_count == 0 and h5_count == 0:
             issues.append(
                 f"No filterbank files in {FILTERBANK_DIR}. "
-                f"Run download_bl_data.py or add files manually."
+                f"Download BL data manually and place in the directory."
             )
+        else:
+            logger.debug(f"  Data: {fil_count} .fil + {h5_count} .h5 in {FILTERBANK_DIR}")
 
         # 5. Error rate
         if self.state.consecutive_errors > 5:
@@ -969,23 +1278,31 @@ class StreamingObserver:
         logger.info(f"  Target end: {target_end.strftime('%Y-%m-%d %H:%M')}")
         logger.info("")
 
-        # Check for manually downloaded filterbank files
-        fil_count = len(list(FILTERBANK_DIR.glob("*.fil")))
-        h5_count = len(list(FILTERBANK_DIR.glob("*.h5")))
-        raw_count = len(list(FILTERBANK_DIR.glob("*.raw")))
-        total_files = fil_count + h5_count + raw_count
+        # Check for filterbank/HDF5 files (recursive search)
+        fil_files = list(FILTERBANK_DIR.glob("**/*.fil"))
+        h5_files = list(FILTERBANK_DIR.glob("**/*.h5"))
+        total_files = len(fil_files) + len(h5_files)
         if total_files == 0:
             logger.error(
                 f"\n  No filterbank files found in {FILTERBANK_DIR}\n"
                 f"  Download files manually from https://breakthroughinitiatives.org/opendatasearch\n"
-                f"  Supported formats: .fil, .h5, .raw\n"
+                f"  Supported formats: .fil, .h5\n"
                 f"  Place them in: {FILTERBANK_DIR}"
             )
             raise FileNotFoundError(
                 f"No filterbank data in {FILTERBANK_DIR}. "
                 "Download real BL data manually before starting streaming."
             )
-        logger.info(f"  Found {fil_count} .fil, {h5_count} .h5, {raw_count} .raw files in {FILTERBANK_DIR}")
+
+        # Log per-category breakdown
+        all_files = fil_files + h5_files
+        cat_counts: Dict[str, int] = {}
+        for f in all_files:
+            cat = categorize_target(f.name).get("category", "Other")
+            cat_counts[cat] = cat_counts.get(cat, 0) + 1
+        logger.info(f"  Found {len(fil_files)} .fil + {len(h5_files)} .h5 = {total_files} files in {FILTERBANK_DIR}")
+        for cat, cnt in sorted(cat_counts.items()):
+            logger.info(f"    {cat}: {cnt} files")
 
         # Initial health check
         logger.info("\n  Running initial health check...")
@@ -1027,6 +1344,13 @@ class StreamingObserver:
                 self.state.total_rfi_rejected += cycle_result["rfi_rejected"]
                 self.state.total_ood_anomalies += cycle_result["ood_anomalies"]
 
+                # Log efficiency report every 5 files
+                if (
+                    self.state.total_files_processed > 0
+                    and self.state.total_files_processed % 5 == 0
+                ):
+                    self._log_efficiency_report()
+
                 now = datetime.now()
 
                 # Periodic health check
@@ -1063,11 +1387,9 @@ class StreamingObserver:
                         for c in snapshot.corrections_applied:
                             logger.info(f"    - {c}")
 
-                # Auto-train model after enough data collected
-                if cycle_count == self._MIN_FILES_FOR_TRAIN or (
-                    now.date() != self._last_report_date
-                    and not (MODELS_DIR / "signal_classifier_v1.pt").exists()
-                ):
+                # Auto-train or fine-tune model after enough data collected
+                if (cycle_count % self._RETRAIN_INTERVAL == 0
+                        or cycle_count == self._MIN_FILES_FOR_TRAIN):
                     self._maybe_auto_train()
 
                 # Save state every cycle so UI stays responsive
@@ -1128,7 +1450,7 @@ class StreamingObserver:
         self._print_star_reminder()
 
     def _print_final_summary(self):
-        """Print final summary to console."""
+        """Print final summary to console with per-category breakdown."""
         print("\n" + "=" * 60)
         print("  STREAMING OBSERVATION COMPLETE")
         print("=" * 60)
@@ -1143,11 +1465,25 @@ class StreamingObserver:
         print(f"  Mode: {self.state.current_mode}")
         print(f"  Final SNR threshold: {self.state.current_min_snr:.1f}")
 
+        if self.state.category_stats:
+            print(f"\n  Results by Target Category:")
+            print(f"  {'Category':<15} {'Files':>6} {'Signals':>8} {'Cand.':>6} {'RFI':>6} {'Anom.':>6}")
+            print(f"  {'-'*15} {'-'*6} {'-'*8} {'-'*6} {'-'*6} {'-'*6}")
+            for cat, stats in sorted(self.state.category_stats.items()):
+                print(
+                    f"  {cat:<15} {stats.get('files', 0):>6} "
+                    f"{stats.get('signals', 0):>8} "
+                    f"{stats.get('candidates', 0):>6} "
+                    f"{stats.get('rfi', 0):>6} "
+                    f"{stats.get('anomalies', 0):>6}"
+                )
+
         if self.state.best_candidates:
             print(f"\n  Top candidates:")
             for i, c in enumerate(self.state.best_candidates[:5], 1):
+                cat_label = f"[{c.get('category', '?')}]" if c.get('category') else ""
                 print(
-                    f"    {i}. OOD={c.get('ood_score', 0):.4f} | "
+                    f"    {i}. {cat_label} OOD={c.get('ood_score', 0):.4f} | "
                     f"SNR={c.get('snr', 0):.1f} | "
                     f"{c.get('signal_type', '?')} | "
                     f"drift={c.get('drift_rate', 0):.4f} Hz/s"
@@ -1155,6 +1491,9 @@ class StreamingObserver:
 
         print(f"\n  Reports: {STREAMING_DIR}")
         print("=" * 60)
+
+        # Print efficiency report
+        self._log_efficiency_report()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
