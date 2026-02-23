@@ -1033,6 +1033,25 @@ class StreamingObserver:
         if not specs_list:
             return np.array([]), np.array([])
 
+        # Data augmentation: create 2 augmented copies of each real sample
+        n_augmented = 0
+        if n_real > 0:
+            rng = np.random.default_rng(42)
+            real_specs = specs_list[:n_real]
+            real_labels = labels_list[:n_real]
+            for s, l in zip(real_specs, real_labels):
+                # Augmentation 1: Gaussian noise
+                noisy = s + rng.normal(0, 0.1 * s.std(), s.shape).astype(s.dtype)
+                specs_list.append(noisy)
+                labels_list.append(l)
+                # Augmentation 2: frequency shift (roll along axis 0)
+                shift = rng.integers(-8, 9)
+                shifted = np.roll(s, shift, axis=0)
+                specs_list.append(shifted)
+                labels_list.append(l)
+                n_augmented += 2
+            logger.info(f"  Augmentation: {n_augmented} samples added from {n_real} real")
+
         target_shape = specs_list[0].shape
         specs_arr = np.stack([
             s if s.shape == target_shape

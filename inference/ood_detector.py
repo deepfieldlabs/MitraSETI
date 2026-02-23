@@ -219,6 +219,58 @@ class RadioOODDetector:
             method_scores=method_scores,
         )
 
+    def detect_from_scores(
+        self,
+        spectrogram: np.ndarray,
+        all_scores: Dict[str, float],
+    ) -> OODResult:
+        """Detect OOD using pre-computed class scores (avoids duplicate forward pass).
+
+        Same logic as detect() but skips the classifier.classify() call.
+
+        Args:
+            spectrogram: 2D numpy array (frequency x time) -- used only for
+                         spectral distance computation.
+            all_scores: Per-class score dictionary from a prior classify() call.
+        """
+        logits = np.array(
+            [all_scores.get(st.name.lower(), 0.0) for st in _signal_types()],
+            dtype=np.float32,
+        )
+
+        msp_score = self.compute_msp(logits)
+        energy_score = self.compute_energy(logits)
+        spectral_score = self.compute_spectral_distance(spectrogram)
+
+        method_scores: Dict[str, float] = {
+            "msp": msp_score,
+            "energy": energy_score,
+            "spectral_distance": spectral_score,
+        }
+
+        votes = 0
+        if msp_score > (1.0 - self.msp_threshold):
+            votes += 1
+        if energy_score > self.energy_threshold:
+            votes += 1
+        if spectral_score > self.spectral_threshold:
+            votes += 1
+
+        is_anomaly = votes >= self.voting_threshold
+
+        combined = (
+            msp_score * 2.0
+            + energy_score * 0.5
+            + spectral_score * 0.5
+        ) / 3.0
+
+        return OODResult(
+            ood_score=combined,
+            is_anomaly=is_anomaly,
+            threshold=self.energy_threshold,
+            method_scores=method_scores,
+        )
+
     # ------------------------------------------------------------------
     # Calibration
     # ------------------------------------------------------------------

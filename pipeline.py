@@ -552,16 +552,18 @@ class AstroSETIPipeline:
             f"{n_rule_candidates} pass candidate criteria"
         )
 
-        # -- Stage 2: ML inference on rule-based survivors only ----
+        # -- Stage 2: Batch ML inference on rule-based survivors ----
         if self._model_loaded and ml_queue:
             logger.info(
-                f"  Stage 2 (ML): running inference on "
+                f"  Stage 2 (ML): batch inference on "
                 f"{len(ml_queue)} candidates…"
             )
             cache_dir = self._SPECTROGRAM_CACHE_DIR
             cache_dir.mkdir(parents=True, exist_ok=True)
 
-            for count, idx in enumerate(ml_queue, 1):
+            # 2a. Extract all spectrograms upfront
+            spectrograms = []
+            for idx in ml_queue:
                 cand = candidates[idx]
                 freq_hz = cand["frequency_hz"]
                 if foff > 0:
@@ -571,21 +573,33 @@ class AstroSETIPipeline:
                 else:
                     freq_idx = n_chans // 2
                 freq_idx = max(0, min(freq_idx, n_chans - 1))
+                spectrograms.append(self._extract_spectrogram(data, freq_idx))
 
-                spectrogram = self._extract_spectrogram(data, freq_idx)
+            # 2b. Feature extraction (per-signal, lightweight)
+            for i, idx in enumerate(ml_queue):
+                features = self._feature_extractor.extract(
+                    spectrograms[i], header
+                )
+                candidates[idx]["features"] = asdict(features)
 
-                features = self._feature_extractor.extract(spectrogram, header)
-                cand["features"] = asdict(features)
+            # 2c. Batch classification (single forward pass)
+            cls_results = self._classifier.classify_batch(spectrograms)
 
-                cls_result = self._classifier.classify(spectrogram)
+            # 2d. Apply results + OOD (reuses logits, no duplicate fwd pass)
+            for i, idx in enumerate(ml_queue):
+                cand = candidates[idx]
+                cls_result = cls_results[i]
+
                 cand["classification"] = cls_result.signal_type.name.lower()
                 cand["confidence"] = cls_result.confidence
                 cand["rfi_probability"] = cls_result.rfi_probability
                 cand["all_scores"] = cls_result.all_scores
-                cand["is_candidate"] = self._classifier.is_candidate(cls_result)
+                cand["is_candidate"] = self._classifier.is_candidate(
+                    cls_result
+                )
 
-                ood_result = self._ood_detector.detect(
-                    spectrogram, self._classifier
+                ood_result = self._ood_detector.detect_from_scores(
+                    spectrograms[i], cls_result.all_scores
                 )
                 cand["ood_score"] = ood_result.ood_score
                 cand["is_anomaly"] = ood_result.is_anomaly
@@ -594,11 +608,13 @@ class AstroSETIPipeline:
                 # Cache spectrogram + label for future retraining
                 try:
                     label = cls_result.signal_type.value
-                    cache_file = cache_dir / f"spec_{hash(freq_hz):016x}.npz"
+                    cache_file = (
+                        cache_dir / f"spec_{hash(cand['frequency_hz']):016x}.npz"
+                    )
                     if not cache_file.exists():
                         np.savez_compressed(
                             cache_file,
-                            spectrogram=spectrogram,
+                            spectrogram=spectrograms[i],
                             label=label,
                             snr=cand["snr"],
                             drift=cand["drift_rate"],
