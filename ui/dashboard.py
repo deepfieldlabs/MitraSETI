@@ -559,20 +559,27 @@ class DashboardPanel(QWidget):
         signals = state.get("total_signals", 0)
         candidates = state.get("total_candidates", 0)
         rfi = state.get("total_rfi_rejected", 0)
-        rate = state.get("processing_rate", "—")
+        runtime_hrs = state.get("total_runtime_hours", 0)
 
-        total_raw = 0
-        cats = state.get("category_stats", {})
-        for cat_data in cats.values():
-            total_raw += cat_data.get("signals", 0)
+        # RFI rejection rate as percentage
+        total_classified = rfi + signals
+        rfi_pct = (
+            f"{rfi / total_classified * 100:.1f}%"
+            if total_classified > 0 else "0%"
+        )
 
-        rfi_pct = f"{rfi / max(total_raw, 1) * 100:.0f}%" if total_raw > 0 else "0%"
+        # Processing speed as avg seconds per file
+        if files > 0 and runtime_hrs > 0:
+            secs = (runtime_hrs * 3600) / files
+            speed = f"{secs:.1f}s/file" if secs < 60 else f"{secs / 60:.1f}m/file"
+        else:
+            speed = "—"
 
         self.update_stat("observations", str(files))
         self.update_stat("signals", f"{signals:,}" if signals else "0")
         self.update_stat("candidates", str(candidates))
         self.update_stat("rfi_rate", rfi_pct)
-        self.update_stat("speed", str(rate))
+        self.update_stat("speed", speed)
 
     # ── Public API ────────────────────────────────────────────────────────
 

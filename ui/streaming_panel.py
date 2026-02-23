@@ -265,10 +265,10 @@ class StreamingPanel(QWidget):
 
         self._stat_cards = {}
         stat_defs = [
-            ("signals", "Files with Signals", "0", "#4da6ff"),
+            ("files", "Files Processed", "0", "#4da6ff"),
             ("candidates", "Verified Candidates", "0", "#34d399"),
-            ("rfi", "RFI Rejected", "0", "#f87171"),
-            ("rate", "Processing Rate", "—", "#7c3aed"),
+            ("rfi", "RFI Rejection Rate", "—", "#f87171"),
+            ("rate", "Avg Time / File", "—", "#7c3aed"),
         ]
 
         for i, (key, label, default, color) in enumerate(stat_defs):
@@ -490,16 +490,35 @@ class StreamingPanel(QWidget):
         self._progress_bar.setValue(min(current_day, int(max(target_days, 1))))
         self._progress_bar.setFormat(f"Day {current_day} of {int(target_days)}")
 
-        # Map state field names (script writes total_candidates, total_rfi_rejected, etc.)
-        signals = state.get("total_signals", 0)
+        files_done = state.get("total_files_processed", 0)
         candidates = state.get("total_candidates", state.get("candidates_found", 0))
-        rfi = state.get("total_rfi_rejected", state.get("rfi_rejected", 0))
-        rate = state.get("processing_rate", "0/min")
+        rfi_count = state.get("total_rfi_rejected", 0)
+        total_signals = state.get("total_signals", 0)
+        runtime_hrs = state.get("total_runtime_hours", 0)
 
-        self._update_stat("signals", f"{signals:,}" if signals else "0")
-        self._update_stat("candidates", str(candidates), "#34d399" if candidates > 0 else "#4da6ff")
-        self._update_stat("rfi", str(rfi), "#f87171" if rfi > 0 else "#4da6ff")
-        self._update_stat("rate", str(rate))
+        self._update_stat("files", str(files_done))
+        self._update_stat(
+            "candidates", str(candidates),
+            "#34d399" if candidates > 0 else "#4da6ff",
+        )
+
+        # RFI as percentage of all classified signals
+        total_classified = rfi_count + total_signals
+        if total_classified > 0:
+            rfi_pct = rfi_count / total_classified * 100
+            self._update_stat("rfi", f"{rfi_pct:.1f}%")
+        else:
+            self._update_stat("rfi", "—")
+
+        # Avg seconds per file (more meaningful than files/hr)
+        if files_done > 0 and runtime_hrs > 0:
+            secs_per_file = (runtime_hrs * 3600) / files_done
+            if secs_per_file < 60:
+                self._update_stat("rate", f"{secs_per_file:.1f}s")
+            else:
+                self._update_stat("rate", f"{secs_per_file / 60:.1f}min")
+        else:
+            self._update_stat("rate", "—")
 
         # Elapsed -- compute from started_at if not explicitly stored
         elapsed_str = state.get("elapsed", "")
@@ -515,7 +534,6 @@ class StreamingPanel(QWidget):
                 elapsed_str = "0:00:00"
         self._elapsed_label.setText(f"Elapsed: {elapsed_str or '0:00:00'}")
 
-        files_done = state.get("total_files_processed", state.get("files_processed", 0))
         self._files_label.setText(f"Files: {files_done} processed")
         current_file = state.get("current_file", "—")
         self._current_file_label.setText(f"Current: {current_file}")

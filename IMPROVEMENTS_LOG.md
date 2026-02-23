@@ -137,12 +137,46 @@ After a 9.5-hour overnight run, only 4 of 20 files were processed. Root causes:
 - **Impact**: 3x more training samples from real data. Expected better generalization and lower candidate false-positive rate.
 - **Files**: `scripts/streaming_observation.py` (`_build_training_set`)
 
+### 3.10 Training Tensor Shape Fix
+- **What**: Removed `.unsqueeze(1)` from training tensor creation that added an incorrect channel dimension.
+- **Why**: Model expects input `(batch, freq_bins, time_steps)` = `(N, 256, 64)`. The unsqueeze made it `(N, 1, 256, 64)`, causing `too many values to unpack (expected 3)` in the CNN backbone when trying to unpack 4D into 3 variables.
+- **Impact**: Auto-training now works. Model successfully trained at file 66 with val accuracy logged.
+- **Files**: `scripts/streaming_observation.py` (`_maybe_auto_train`)
+
+---
+
+## Session 4 — 8-Hour Run Analysis & OOM Fixes (Feb 23, 2026 evening)
+
+### Problem Diagnosed
+After 8 hours of streaming (88 files, ~4.4 cycles), two issues emerged:
+
+| Issue | Detail |
+|-------|--------|
+| OOM on batch ML | `classify_batch()` on 27,922 spectrograms tried to allocate 54 GB tensor |
+| De-Doppler slow on gpuspec | Files with 67M channels × 3 time ints took 165–976s for brute-force search |
+
+### 4.1 ML Candidate Cap + Sub-Batching
+- **What**: (a) Cap ML inference at top 500 candidates by SNR. (b) Split batch classification into sub-batches of 128. (c) Fallback to individual `classify()` if a sub-batch fails.
+- **Why**: The `.gpuspec` files produce 9,000–28,000 rule-based candidates. Stacking 28K spectrograms into one tensor requires 54 GB. Previous runs crashed with `Invalid buffer size`.
+- **Impact**: Memory usage capped at ~500 MB per sub-batch. No more OOM crashes. Processing time for large files drops from crash/timeout to ~60 seconds.
+- **Files**: `pipeline.py` (`_classify_candidates` Stage 2)
+
+### 4.2 Adaptive De-Doppler Limit for Low-Integration Files
+- **What**: Reduce `max_pts` from 16M to 4M for files with ≤8 time integrations. This forces 4–8x more channel downsampling on gpuspec files (67M channels × 3 ints).
+- **Why**: The brute-force de-Doppler scales poorly with channel count when time steps are few. A 67M-channel file downsampled 2x still has 33M channels → 8M points → 165–976 second searches.
+- **Impact**: Expected 4–8x speedup on gpuspec files. De-Doppler on 3C161 should drop from 165s to ~10–30s.
+- **Files**: `pipeline.py` (`_run_dedoppler`)
+
+### 4.3 UI Stat Display Improvements
+- **What**: Redesigned streaming panel stat cards: "Files Processed" instead of "Files with Signals", "RFI Rejection Rate" as percentage instead of raw count, "Avg Time / File" instead of inflated files/hr rate.
+- **Why**: Raw counts like "RFI Rejected: 3053" and "Processing Rate: 646/hr" were technically correct but meaningless to users. Percentages and per-file timing are immediately interpretable.
+- **Files**: `ui/streaming_panel.py`, `ui/dashboard.py`, `scripts/streaming_observation.py`
+
 ---
 
 ## Pending / Future Improvements
 
-- **Taylor Tree De-Doppler**: Replace brute-force with Taylor tree algorithm for ~5-10x faster de-Doppler search. Currently not a bottleneck (0.3-1.3s per file) but will matter for larger datasets.
-- **Batch ML Inference**: Process multiple spectrograms in a single forward pass instead of one-at-a-time. Would further reduce ML time.
+- **Taylor Tree De-Doppler**: Replace brute-force with Taylor tree algorithm for ~5-10x faster de-Doppler search. Would especially help gpuspec files with millions of channels.
 - **On-OFF Cadence Analysis**: Compare ON-source vs OFF-source observations to reject persistent RFI. Requires paired observation files.
 - **Cross-Category Correlation**: Compare signals across Voyager, Kepler, HIP, TRAPPIST categories to identify shared RFI patterns.
 - **GPU Acceleration**: Enable CUDA/MPS for CNN+Transformer inference on GPU-equipped machines.

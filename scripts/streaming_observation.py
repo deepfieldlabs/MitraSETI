@@ -336,7 +336,15 @@ class StreamingObserver:
                     pass
             fps = self.state.total_files_processed
             rt = self.state.total_runtime_hours or 0.001
-            data["processing_rate"] = f"{fps / max(rt, 0.001):.1f}/hr"
+            if fps > 0 and rt > 0:
+                secs_per_file = (rt * 3600) / fps
+                data["processing_rate"] = (
+                    f"{secs_per_file:.1f}s/file"
+                    if secs_per_file < 60
+                    else f"{secs_per_file / 60:.1f}min/file"
+                )
+            else:
+                data["processing_rate"] = "—"
             data["current_file"] = getattr(self, "_current_file_name", "—")
             tmp = STREAMING_STATE.with_suffix(".tmp")
             with open(tmp, "w") as f:
@@ -886,7 +894,7 @@ class StreamingObserver:
 
             device = get_device()
 
-            specs_t = torch.tensor(specs, dtype=torch.float32).unsqueeze(1)
+            specs_t = torch.tensor(specs, dtype=torch.float32)
             labels_t = torch.tensor(labels, dtype=torch.long)
 
             n_val = max(1, len(specs_t) // 5)

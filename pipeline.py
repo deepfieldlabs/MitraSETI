@@ -328,7 +328,11 @@ class AstroSETIPipeline:
             ra=h.get("ra", 0.0), dec=h.get("dec", 0.0),
         )
 
-        max_pts = 16_000_000
+        # Tighter limit for files with very few time integrations (e.g. gpuspec
+        # files with 3 ints × 67M channels) — the brute-force de-Doppler scales
+        # poorly with channel count when time steps are scarce.
+        n_times = data.shape[0] if data.ndim == 2 else 1
+        max_pts = 4_000_000 if n_times <= 8 else 16_000_000
         total_points = data.shape[0] * data.shape[1] if data.ndim == 2 else data.size
         if total_points > max_pts and data.ndim == 2:
             # Choose downsample factor to bring data under the limit
@@ -553,10 +557,25 @@ class AstroSETIPipeline:
         )
 
         # -- Stage 2: Batch ML inference on rule-based survivors ----
+        _MAX_ML_CANDIDATES = 500   # only classify the strongest by SNR
+        _ML_BATCH_SIZE = 128       # sub-batch to avoid OOM on large files
+
         if self._model_loaded and ml_queue:
+            # Sort ML queue by SNR descending and cap at _MAX_ML_CANDIDATES
+            ml_queue.sort(
+                key=lambda idx: candidates[idx].get("snr", 0), reverse=True
+            )
+            if len(ml_queue) > _MAX_ML_CANDIDATES:
+                logger.info(
+                    f"  Stage 2 (ML): capping {len(ml_queue)} → "
+                    f"{_MAX_ML_CANDIDATES} strongest candidates for inference"
+                )
+                ml_queue = ml_queue[:_MAX_ML_CANDIDATES]
+
             logger.info(
                 f"  Stage 2 (ML): batch inference on "
-                f"{len(ml_queue)} candidates…"
+                f"{len(ml_queue)} candidates "
+                f"(sub-batches of {_ML_BATCH_SIZE})…"
             )
             cache_dir = self._SPECTROGRAM_CACHE_DIR
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -582,13 +601,32 @@ class AstroSETIPipeline:
                 )
                 candidates[idx]["features"] = asdict(features)
 
-            # 2c. Batch classification (single forward pass)
-            cls_results = self._classifier.classify_batch(spectrograms)
+            # 2c. Batch classification in sub-batches to avoid OOM
+            cls_results = []
+            for batch_start in range(0, len(spectrograms), _ML_BATCH_SIZE):
+                batch_end = min(batch_start + _ML_BATCH_SIZE, len(spectrograms))
+                sub_batch = spectrograms[batch_start:batch_end]
+                try:
+                    sub_results = self._classifier.classify_batch(sub_batch)
+                    cls_results.extend(sub_results)
+                except Exception as e:
+                    logger.warning(
+                        f"  Batch inference failed ({batch_start}-{batch_end}): "
+                        f"{e}, falling back to individual classify"
+                    )
+                    for spec in sub_batch:
+                        try:
+                            cls_results.append(self._classifier.classify(spec))
+                        except Exception:
+                            cls_results.append(None)
 
             # 2d. Apply results + OOD (reuses logits, no duplicate fwd pass)
             for i, idx in enumerate(ml_queue):
                 cand = candidates[idx]
-                cls_result = cls_results[i]
+                cls_result = cls_results[i] if i < len(cls_results) else None
+
+                if cls_result is None:
+                    continue
 
                 cand["classification"] = cls_result.signal_type.name.lower()
                 cand["confidence"] = cls_result.confidence
