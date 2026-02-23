@@ -494,12 +494,9 @@ class AstroSETIPipeline:
         return result
 
     # Directory where spectrograms are cached for later retraining.
-    _SPECTROGRAM_CACHE_DIR = Path(
-        os.environ.get(
-            "ASTROSETI_ARTIFACTS_DIR",
-            str(Path(__file__).resolve().parent / "astroseti_artifacts"),
-        )
-    ) / "data" / "spectrogram_cache"
+    # Must match the path used by streaming_observation.py (from paths.py).
+    from paths import DATA_DIR as _DATA_DIR
+    _SPECTROGRAM_CACHE_DIR = _DATA_DIR / "spectrogram_cache"
 
     def _classify_candidates(
         self, candidates: List[Dict[str, Any]], data: np.ndarray, header: Dict[str, Any]

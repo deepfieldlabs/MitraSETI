@@ -463,6 +463,7 @@ class StreamingObserver:
         best_snr = max((c.get("snr", 0) for c in candidates), default=0.0)
         best_ood = max((c.get("ood_score", 0) for c in candidates), default=0.0)
         best_drift = max((abs(c.get("drift_rate", 0)) for c in candidates), default=0.0)
+        best_cand = max(candidates, key=lambda c: c.get("snr", 0)) if candidates else {}
 
         if total_hits == 0 or best_snr < self.state.current_min_snr:
             return {
@@ -484,9 +485,12 @@ class StreamingObserver:
             "file_name": filepath.name,
             "file_size_mb": round(file_size_mb, 2),
             "status": "processed",
-            "signal_type": candidates[0].get("classification", "unknown") if candidates else "unknown",
-            "confidence": candidates[0].get("confidence", 0.0) if candidates else 0.0,
-            "rfi_probability": candidates[0].get("rfi_probability", 0.0) if candidates else 0.0,
+            "signal_type": best_cand.get("classification", "unknown"),
+            "classification": best_cand.get("classification", "unknown"),
+            "confidence": best_cand.get("confidence", 0.0),
+            "rfi_probability": best_cand.get("rfi_probability", 0.0),
+            "frequency_hz": best_cand.get("frequency_hz", 0),
+            "is_anomaly": best_cand.get("is_anomaly", False),
             "is_rfi": n_rfi > 0 and n_candidates == 0,
             "is_candidate": n_candidates > 0,
             "snr": round(best_snr, 2),
@@ -705,8 +709,9 @@ class StreamingObserver:
     def _record_candidate(self, result: dict):
         """Append a candidate to the persistent candidates file.
 
-        Keeps only the top candidates by SNR to prevent unbounded growth
-        during multi-day streaming.
+        Deduplicates by (file_name, target_name) so the same signal from
+        repeated cycles doesn't create dozens of duplicate entries.
+        Keeps only the top candidates by SNR to prevent unbounded growth.
         """
         try:
             candidates = []
@@ -720,17 +725,36 @@ class StreamingObserver:
             entry = {
                 "file_name": result.get("file_name", ""),
                 "signal_type": result.get("signal_type", "unknown"),
+                "classification": result.get("classification", "unknown"),
                 "category": result.get("category", "Other"),
                 "target_name": result.get("target_name", ""),
+                "frequency_hz": result.get("frequency_hz", 0),
                 "snr": result.get("snr", 0),
                 "drift_rate": result.get("drift_rate", 0),
+                "rfi_probability": result.get("rfi_probability", 0),
                 "ood_score": result.get("ood_score", 0),
+                "is_anomaly": result.get("is_anomaly", False),
                 "confidence": result.get("confidence", 0),
                 "candidate_count": result.get("candidate_count", 0),
                 "anomaly_count": result.get("anomaly_count", 0),
                 "processed_at": result.get("processed_at", ""),
             }
-            candidates.append(entry)
+
+            # Deduplicate: replace existing entry for same file+target
+            # rather than appending a new duplicate each cycle
+            dedup_key = (entry["file_name"], entry["target_name"])
+            existing_idx = None
+            for i, c in enumerate(candidates):
+                if (c.get("file_name"), c.get("target_name")) == dedup_key:
+                    existing_idx = i
+                    break
+
+            if existing_idx is not None:
+                # Update existing entry if new SNR is higher
+                if entry["snr"] >= candidates[existing_idx].get("snr", 0):
+                    candidates[existing_idx] = entry
+            else:
+                candidates.append(entry)
 
             if len(candidates) > self._MAX_STORED_CANDIDATES:
                 candidates.sort(key=lambda c: c.get("snr", 0), reverse=True)
@@ -992,17 +1016,41 @@ class StreamingObserver:
         specs_list = []
         labels_list = []
 
-        # Load cached real spectrograms from pipeline processing
+        # Load cached real spectrograms from pipeline processing.
+        # Re-label using signal properties since the model's own predictions
+        # (stored as "label") may be wrong — avoids self-reinforcing bias.
         n_real = 0
+        label_corrections = 0
         if self._SPEC_CACHE_DIR.exists():
             for npz_path in sorted(self._SPEC_CACHE_DIR.glob("*.npz")):
                 try:
                     d = np.load(npz_path)
-                    specs_list.append(d["spectrogram"])
-                    labels_list.append(int(d["label"]))
+                    spec = d["spectrogram"]
+                    original_label = int(d["label"])
+                    snr = float(d.get("snr", 0))
+                    drift = abs(float(d.get("drift", 0)))
+
+                    # Heuristic relabeling based on physical properties:
+                    # 4=narrowband_drifting, 1=narrowband, 0=rfi, 5=noise
+                    if drift > 0.1 and snr > 25:
+                        label = 4  # narrowband_drifting
+                    elif snr > 5000 and drift < 0.1:
+                        label = 1  # narrowband (strong stationary)
+                    elif snr < 10 and drift < 0.05:
+                        label = 5  # noise
+                    else:
+                        label = original_label  # trust model's call
+
+                    if label != original_label:
+                        label_corrections += 1
+
+                    specs_list.append(spec)
+                    labels_list.append(label)
                     n_real += 1
                 except Exception:
                     continue
+            if label_corrections:
+                logger.info(f"  Relabeled {label_corrections}/{n_real} cached spectrograms using heuristics")
 
         # Add synthetic data if doing initial training or if we have few real samples
         n_synthetic = 0

@@ -174,6 +174,44 @@ After 8 hours of streaming (88 files, ~4.4 cycles), two issues emerged:
 
 ---
 
+## Session 5 — 23-Hour Run Analysis & Fine-Tuning Fixes (Feb 24, 2026)
+
+### Problem Diagnosed
+After 23 hours / 344 files / 17.2 cycles, four issues were identified:
+
+| Issue | Detail |
+|-------|--------|
+| Fine-tuning never triggered | 1,673 cached spectrograms existed but at wrong path |
+| Self-labeling bias | ALL cached spectrograms labeled as RFI (class 0) — model's own predictions used as ground truth |
+| Cross-cycle duplicates | 82 candidate entries for only 5 unique signals (same file detected every cycle) |
+| Missing candidate fields | `frequency_hz=0` and `classification=?` in all verified candidates |
+
+### 5.1 Spectrogram Cache Path Fix
+- **What**: Changed `pipeline.py` to import `DATA_DIR` from `paths.py` instead of computing its own path via `Path(__file__).parent`.
+- **Why**: Pipeline cached to `astroSETI/astroseti_artifacts/data/spectrogram_cache/` but streaming looked at `astroseti_artifacts/data/spectrogram_cache/` (the canonical path from `paths.py`). 1,673 spectrograms were invisible to the fine-tuning logic.
+- **Impact**: Fine-tuning now sees the cached spectrograms and will trigger on next cycle.
+- **Files**: `pipeline.py`
+
+### 5.2 Heuristic Relabeling for Training Data
+- **What**: In `_build_training_set`, relabel cached spectrograms using physical properties (SNR, drift rate) instead of trusting the model's own classification.
+- **Why**: All 1,673 cached spectrograms had `label=0` (RFI) because the initial synthetic-trained model classified everything as RFI. Fine-tuning on this would reinforce the bias. Heuristic rules: `drift>0.1 & SNR>25 → narrowband_drifting`, `SNR>5000 & drift<0.1 → narrowband`, `SNR<10 & drift<0.05 → noise`.
+- **Impact**: Training set now has diverse labels from real BL data. Model will learn to distinguish drifting signals from RFI.
+- **Files**: `scripts/streaming_observation.py` (`_build_training_set`)
+
+### 5.3 Cross-Cycle Candidate Deduplication
+- **What**: `_record_candidate` now deduplicates by `(file_name, target_name)`. If a candidate for the same file+target already exists, it updates the entry (if higher SNR) instead of appending a duplicate.
+- **Why**: 82 candidate entries existed for just 5 unique signals. The same file processed 17 times added 17 duplicate entries.
+- **Impact**: Clean candidate list. Current: 5 unique verified candidates.
+- **Files**: `scripts/streaming_observation.py` (`_record_candidate`)
+
+### 5.4 Candidate Field Completeness
+- **What**: Added `frequency_hz`, `classification`, `rfi_probability`, `is_anomaly` to the result dict and candidate entries.
+- **Why**: All candidates showed `freq=0.000 MHz` and `class=?` because these fields were never propagated from the pipeline's per-signal results to the per-file summary.
+- **Impact**: Candidates now carry full ML classification details for analysis and publishing.
+- **Files**: `scripts/streaming_observation.py` (`_process_file`, `_record_candidate`)
+
+---
+
 ## Pending / Future Improvements
 
 - **Taylor Tree De-Doppler**: Replace brute-force with Taylor tree algorithm for ~5-10x faster de-Doppler search. Would especially help gpuspec files with millions of channels.
