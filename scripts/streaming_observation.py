@@ -270,6 +270,8 @@ class StreamingObserver:
             self.state.best_candidates = []
             self.state.category_stats = {}
             self.state.total_runtime_hours = 0.0
+            self.state.last_trained_at_file = 0
+            self.state.pipeline_metrics = {}
 
         # Always update from CLI args
         if target_days > 0:
@@ -740,21 +742,14 @@ class StreamingObserver:
                 "processed_at": result.get("processed_at", ""),
             }
 
-            # Deduplicate: replace existing entry for same file+target
-            # rather than appending a new duplicate each cycle
+            # Deduplicate: remove ALL existing entries for same file+target,
+            # keep only the new entry (which has the latest ML classification)
             dedup_key = (entry["file_name"], entry["target_name"])
-            existing_idx = None
-            for i, c in enumerate(candidates):
-                if (c.get("file_name"), c.get("target_name")) == dedup_key:
-                    existing_idx = i
-                    break
-
-            if existing_idx is not None:
-                # Update existing entry if new SNR is higher
-                if entry["snr"] >= candidates[existing_idx].get("snr", 0):
-                    candidates[existing_idx] = entry
-            else:
-                candidates.append(entry)
+            candidates = [
+                c for c in candidates
+                if (c.get("file_name"), c.get("target_name")) != dedup_key
+            ]
+            candidates.append(entry)
 
             if len(candidates) > self._MAX_STORED_CANDIDATES:
                 candidates.sort(key=lambda c: c.get("snr", 0), reverse=True)
