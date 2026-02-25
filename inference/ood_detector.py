@@ -233,9 +233,12 @@ class RadioOODDetector:
                          spectral distance computation.
             all_scores: Per-class score dictionary from a prior classify() call.
         """
-        logits = np.array(
-            [all_scores.get(st.name.lower(), 0.0) for st in _signal_types()],
-            dtype=np.float32,
+        logits = np.nan_to_num(
+            np.array(
+                [all_scores.get(st.name.lower(), 0.0) for st in _signal_types()],
+                dtype=np.float32,
+            ),
+            nan=0.0,
         )
 
         msp_score = self.compute_msp(logits)

@@ -855,7 +855,7 @@ class StreamingObserver:
     _TRAIN_DATA_DIR = DATA_DIR / "training"
     _SPEC_CACHE_DIR = DATA_DIR / "spectrogram_cache"
     _MIN_FILES_FOR_TRAIN = 5
-    _RETRAIN_INTERVAL = 10  # retrain every N additional files
+    _RETRAIN_INTERVAL = 50  # retrain every N cycles (not files)
 
     def _maybe_auto_train(self):
         """Train or fine-tune the model using cached real BL spectrograms.
@@ -1025,16 +1025,21 @@ class StreamingObserver:
                     snr = float(d.get("snr", 0))
                     drift = abs(float(d.get("drift", 0)))
 
-                    # Heuristic relabeling based on physical properties:
-                    # 4=narrowband_drifting, 1=narrowband, 0=rfi, 5=noise
-                    if drift > 0.1 and snr > 25:
-                        label = 4  # narrowband_drifting
-                    elif snr > 5000 and drift < 0.1:
-                        label = 1  # narrowband (strong stationary)
-                    elif snr < 10 and drift < 0.05:
-                        label = 5  # noise
+                    # Heuristic relabeling with class diversity:
+                    # 0=rfi, 1=narrowband, 4=narrowband_drifting, 5=noise
+                    # Must produce MULTIPLE classes for training to work.
+                    if snr > 100_000:
+                        label = 1  # narrowband (calibrator / instrument artifact)
+                    elif drift > 0.5 and snr > 1000:
+                        label = 0  # rfi (strong + fast drift = terrestrial)
+                    elif drift > 0.1 and snr < 200:
+                        label = 4  # narrowband_drifting (weak + drifting = interesting)
+                    elif drift > 0.1 and 200 <= snr <= 1000:
+                        label = 4  # narrowband_drifting (moderate candidate)
+                    elif drift < 0.1:
+                        label = 1  # narrowband (stationary)
                     else:
-                        label = original_label  # trust model's call
+                        label = 0  # rfi (default for strong drifting)
 
                     if label != original_label:
                         label_corrections += 1
@@ -1047,9 +1052,11 @@ class StreamingObserver:
             if label_corrections:
                 logger.info(f"  Relabeled {label_corrections}/{n_real} cached spectrograms using heuristics")
 
-        # Add synthetic data if doing initial training or if we have few real samples
+        # Always include synthetic data to ensure class diversity.
+        # Real BL spectrograms are heavily skewed toward 1-2 classes;
+        # synthetic data provides all 9 signal types for balanced training.
         n_synthetic = 0
-        if include_synthetic or n_real < 100:
+        if True:
             synth_specs_path = self._TRAIN_DATA_DIR / "spectrograms.npy"
             synth_labels_path = self._TRAIN_DATA_DIR / "labels.npy"
 

@@ -419,10 +419,10 @@ class SignalClassifier:
         try:
             with torch.no_grad():
                 logits, features = self.model(tensor, return_features=True)
+                logits = torch.nan_to_num(logits, nan=0.0, posinf=1e6, neginf=-1e6)
                 probs = F.softmax(logits[0], dim=-1)
         except Exception as e:
             logger.error(f"Model inference failed: {e}")
-            # Return a safe fallback result
             return ClassificationResult(
                 signal_type=SignalType.NOISE,
                 confidence=0.0,
@@ -431,7 +431,7 @@ class SignalClassifier:
                 all_scores={st.name.lower(): 0.0 for st in SignalType},
             )
 
-        prob_np = probs.cpu().numpy()
+        prob_np = np.nan_to_num(probs.cpu().numpy(), nan=0.0)
         top_idx = int(prob_np.argmax())
         top_conf = float(prob_np[top_idx])
 
@@ -478,11 +478,12 @@ class SignalClassifier:
 
         with torch.no_grad():
             logits, features = self.model(batch, return_features=True)
+            logits = torch.nan_to_num(logits, nan=0.0, posinf=1e6, neginf=-1e6)
             probs = F.softmax(logits, dim=-1)
 
         results: List[ClassificationResult] = []
         for i in range(len(spectrograms)):
-            prob_np = probs[i].cpu().numpy()
+            prob_np = np.nan_to_num(probs[i].cpu().numpy(), nan=0.0)
             top_idx = int(prob_np.argmax())
 
             rfi_prob = float(

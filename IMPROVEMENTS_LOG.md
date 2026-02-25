@@ -212,9 +212,57 @@ After 23 hours / 344 files / 17.2 cycles, four issues were identified:
 
 ---
 
+## Session 6 — 27-Hour Run: Fix Broken Fine-Tuning (Feb 25, 2026)
+
+### Problem Diagnosed
+After 27 hours / 864 files / 43 cycles, fine-tuning ran 3 times but produced a degraded model:
+
+| Symptom | Root Cause |
+|---------|-----------|
+| `train_acc=0.000` | All 3,974 spectrograms relabeled to same class (narrowband_drifting) |
+| `11922 samples, 1 classes` | No synthetic data included; augmentation tripled the single class |
+| `conf=nan` | Single-class training corrupted model softmax → NaN logits |
+| `ood_score=0.0000` | NaN scores propagated to OOD → all scores become 0 |
+
+### 6.1 Multi-Class Heuristic Relabeling
+- **What**: Rewrote heuristic to produce 3 distinct classes based on SNR ranges: `SNR>100K → narrowband(1)`, `drift>0.5 & SNR>1000 → rfi(0)`, `SNR<1000 → narrowband_drifting(4)`.
+- **Why**: Previous rule `drift>0.1 & SNR>25 → class 4` matched ALL cached spectrograms (100%) because Stage 1 filtering guarantees drift>0.1 and SNR>25.
+- **Impact**: Real data now has 26% RFI, 10% narrowband, 64% drifting. Combined with 9-class synthetic data, model will learn meaningful discrimination.
+- **Files**: `scripts/streaming_observation.py` (`_build_training_set`)
+
+### 6.2 Always Include Synthetic Data
+- **What**: Changed `if include_synthetic or n_real < 100:` to always include synthetic training data.
+- **Why**: With n_real=3974, the condition was False during fine-tuning. Without synthetic data (which provides all 9 signal classes), the training set had only 1 class and training couldn't produce gradients.
+- **Impact**: Training set now mixes ~4K real spectrograms (3 classes) + ~5.4K synthetic (9 classes) = balanced multi-class training.
+- **Files**: `scripts/streaming_observation.py` (`_build_training_set`)
+
+### 6.3 NaN Guard in Classifier and OOD
+- **What**: Added `torch.nan_to_num()` on logits before softmax, and `np.nan_to_num()` on probability arrays in both `classify()` and `classify_batch()`. Also guarded OOD detector's logits array.
+- **Why**: Corrupted model weights from single-class training produced NaN logits → NaN softmax → NaN confidence → 0.0 OOD scores. Even after retraining, residual NaN values can propagate.
+- **Impact**: Inference never produces NaN. Worst case: unknown/noise classification with 0 confidence instead of crash or silent corruption.
+- **Files**: `inference/signal_classifier.py`, `inference/ood_detector.py`
+
+### 6.4 Reduced Fine-Tuning Frequency
+- **What**: Increased `_RETRAIN_INTERVAL` from 10 to 50 cycles.
+- **Why**: Fine-tuning ran every 200 files (~3.4 hours apart), each session taking 1.3 hours on MPS. At 50 cycles (1000 files), it runs every ~9.4 hours — once per overnight run.
+- **Impact**: Less CPU/GPU overhead during streaming. Model is stable enough that frequent retraining is unnecessary.
+- **Files**: `scripts/streaming_observation.py`
+
+### 6.5 State Reset Completeness
+- **What**: Added `last_trained_at_file = 0` and `pipeline_metrics = {}` to the session reset block.
+- **Why**: Previous run's `last_trained_at_file=468` persisted, preventing fine-tuning until file 478 in the new session.
+- **Files**: `scripts/streaming_observation.py` (`__init__`)
+
+### 6.6 Candidate Dedup Fix
+- **What**: Changed dedup to remove ALL existing entries with same `(file_name, target_name)` key, not just the first match.
+- **Why**: Old duplicates from pre-dedup runs (5-7 per signal) were never cleaned because only the first match was found and replaced.
+- **Files**: `scripts/streaming_observation.py` (`_record_candidate`)
+
+---
+
 ## Pending / Future Improvements
 
-- **Taylor Tree De-Doppler**: Replace brute-force with Taylor tree algorithm for ~5-10x faster de-Doppler search. Would especially help gpuspec files with millions of channels.
-- **On-OFF Cadence Analysis**: Compare ON-source vs OFF-source observations to reject persistent RFI. Requires paired observation files.
+- **Taylor Tree De-Doppler**: Replace brute-force with Taylor tree algorithm for ~5-10x faster de-Doppler search.
+- **On-OFF Cadence Analysis**: Compare ON-source vs OFF-source observations to reject persistent RFI.
 - **Cross-Category Correlation**: Compare signals across Voyager, Kepler, HIP, TRAPPIST categories to identify shared RFI patterns.
 - **GPU Acceleration**: Enable CUDA/MPS for CNN+Transformer inference on GPU-equipped machines.
