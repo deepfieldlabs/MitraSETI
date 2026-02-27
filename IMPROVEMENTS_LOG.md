@@ -366,22 +366,16 @@ After 12.2 hours / 230 files / 2.6 cycles with 88 files (40 GB dataset), five is
 - **Impact**: Cache files now use default 256×64 dimensions (~50 KB each). 1,036 oversized files deleted, 30.3 GB freed.
 - **Files**: `pipeline.py` (`_classify_candidates`)
 
-### 8.8 Disk Space Cleanup — Redundant Data Removal
-- **What**: Identified and removed redundant data across both astroLens and astroSETI projects.
+### 8.8 Disk Space Cleanup — astroSETI Redundant Data
+- **What**: Removed duplicate training data and oversized cache files.
 - **Deleted**:
-  - astroLens: 6 old timestamped weight checkpoints + 3 empty folders (11.2 GB)
-  - astroLens: 2 superseded weight variants — galaxy_zoo, anomalies (2.6 GB). Kept: `vit_astrolens` (base), `vit_astrolens_latest` (active), `vit_astrolens_galaxy10` (fine-tuned)
-  - astroLens: 992 old discovery download folders (2.5 GB processed intermediates)
-  - astroLens: Galaxy10 extracted train/test (2.5 GB). Kept: `Galaxy10_DECals.h5` raw file for re-extraction
-  - astroLens: project downloads/ folder (197 MB)
-  - astroSETI: `data/training/` (281 MB duplicate of `astroseti_artifacts/data/training/`)
+  - `data/training/` (281 MB) — duplicate of `astroseti_artifacts/data/training/`
+  - 1,036 oversized spectrogram cache files (30.3 GB) — from cache size bug (8.7)
 - **Preserved**:
   - All 88 BL data files (40 GB) — core observation data for streaming
   - Spectrogram cache (4,761 files, 259 MB) — training data for ML model
   - All model weights (signal_classifier_v1.pt, OOD calibration)
-  - All active astroLens weights (base + latest + galaxy10)
-  - Galaxy10_DECals.h5 raw dataset for future re-extraction
-- **Impact**: Freed ~20 GB. Disk went from 0.1 GB free to 51 GB free (228 GB total).
+- **Impact**: Freed ~30.6 GB from astroSETI artifacts.
 
 ---
 
