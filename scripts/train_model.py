@@ -173,6 +173,8 @@ def train_one_epoch(
         correct += (preds == batch_labels).sum().item()
         total += batch_specs.size(0)
 
+    if total == 0:
+        return 0.0, 0.0
     return total_loss / total, correct / total
 
 
@@ -194,11 +196,15 @@ def evaluate(
         batch_labels = batch_labels.to(device, non_blocking=True)
         logits = model(batch_specs)
         loss = criterion(logits, batch_labels)
+        if torch.isnan(loss):
+            continue
         total_loss += loss.item() * batch_specs.size(0)
         preds = logits.argmax(dim=1)
         correct += (preds == batch_labels).sum().item()
         total += batch_specs.size(0)
 
+    if total == 0:
+        return 0.0, 0.0
     return total_loss / total, correct / total
 
 

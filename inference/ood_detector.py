@@ -231,15 +231,19 @@ class RadioOODDetector:
         Args:
             spectrogram: 2D numpy array (frequency x time) -- used only for
                          spectral distance computation.
-            all_scores: Per-class score dictionary from a prior classify() call.
+            all_scores: Per-class probability dictionary from a prior classify()
+                        call.  Values are softmax probabilities, so we convert
+                        back to log-space (approximate logits) before applying
+                        MSP and energy scoring.
         """
-        logits = np.nan_to_num(
+        probs = np.nan_to_num(
             np.array(
                 [all_scores.get(st.name.lower(), 0.0) for st in _signal_types()],
                 dtype=np.float32,
             ),
             nan=0.0,
         )
+        logits = np.log(np.clip(probs, 1e-10, 1.0))
 
         msp_score = self.compute_msp(logits)
         energy_score = self.compute_energy(logits)

@@ -519,20 +519,22 @@ class AstroSETIPipeline:
         # -- Stage 1: Rule-based classification on ALL signals -----
         ml_queue: List[int] = []
 
+        max_drift_boundary = 4.0
         for idx, cand in enumerate(candidates):
             drift = abs(cand.get("drift_rate", 0))
             snr_val = cand.get("snr", 0)
-            has_meaningful_drift = 0.05 <= drift <= 10.0
+            at_drift_boundary = drift >= (max_drift_boundary * 0.98)
+            has_meaningful_drift = 0.05 <= drift <= 10.0 and not at_drift_boundary
             high_snr = snr_val >= 25.0
             exceptional_snr = snr_val >= 50.0
-            rfi_like = drift < 0.001 and snr_val > 50
+            rfi_like = (drift < 0.001 and snr_val > 50) or at_drift_boundary
 
             cand["classification"] = (
                 "rfi_stationary" if rfi_like
                 else "narrowband_drifting" if drift > 0.01
                 else "narrowband_stationary"
             )
-            cand["confidence"] = min(snr_val / 50.0, 1.0)
+            cand["confidence"] = 1.0 - 1.0 / (1.0 + snr_val / 50.0)
             cand["rfi_probability"] = (
                 0.9 if rfi_like else (0.3 if drift < 0.01 else 0.1)
             )
@@ -552,6 +554,40 @@ class AstroSETIPipeline:
             f"  Stage 1 (rule-based): {len(candidates)} signals → "
             f"{n_rule_candidates} pass candidate criteria"
         )
+
+        # -- Cache random rejected signals for training diversity --
+        import random as _rng
+        _CACHE_SAMPLE_PER_FILE = 5
+        cache_dir = self._SPECTROGRAM_CACHE_DIR
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        non_ml_indices = [i for i in range(len(candidates)) if i not in set(ml_queue)]
+        if non_ml_indices and len(non_ml_indices) >= _CACHE_SAMPLE_PER_FILE:
+            sample_indices = _rng.sample(non_ml_indices, _CACHE_SAMPLE_PER_FILE)
+        else:
+            sample_indices = non_ml_indices
+        for idx in sample_indices:
+            try:
+                cand = candidates[idx]
+                freq_mhz = cand.get("frequency_hz", 0) / 1e6
+                chan_idx = int((fch1 - freq_mhz) / foff) if foff > 0 else 0
+                chan_idx = max(0, min(chan_idx, n_chans - 1))
+                spec = self._extract_spectrogram(data, chan_idx)
+                if spec is None:
+                    continue
+                cls_name = cand.get("classification", "rfi_stationary")
+                label_map = {
+                    "rfi_stationary": 0, "narrowband_stationary": 3,
+                    "narrowband_drifting": 4,
+                }
+                label = label_map.get(cls_name, 0)
+                cache_file = cache_dir / f"spec_{hash((cand.get('frequency_hz', 0), idx)):016x}.npz"
+                if not cache_file.exists():
+                    np.savez_compressed(
+                        cache_file, spectrogram=spec, label=label,
+                        snr=cand.get("snr", 0), drift=cand.get("drift_rate", 0),
+                    )
+            except Exception:
+                pass
 
         # -- Stage 2: Batch ML inference on rule-based survivors ----
         _MAX_ML_CANDIDATES = 500   # only classify the strongest by SNR

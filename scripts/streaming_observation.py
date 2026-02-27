@@ -179,14 +179,19 @@ class StreamingState:
 _TARGET_CATEGORIES = [
     # (regex pattern on filename, category, description)
     (re.compile(r"(?i)voyager"),                     "Voyager",       "Known spacecraft signal (benchmark)"),
-    (re.compile(r"(?i)kepler[\-_]?\d+"),             "Kepler",        "Kepler exoplanet host star"),
+    (re.compile(r"(?i)KIC\d+"),                      "TabbyStar",     "Tabby's Star — anomalous dimming (KIC 8462852)"),
+    (re.compile(r"(?i)kepler[\-_]?\d+\w?"),           "Kepler",        "Kepler exoplanet host star"),
     (re.compile(r"(?i)trappist"),                    "TRAPPIST",      "TRAPPIST-1 system (7 Earth-sized planets)"),
     (re.compile(r"(?i)hip\d+"),                      "HIP",           "Nearby star from BL primary target list"),
     (re.compile(r"(?i)gj[\-_]?\d+"),                 "GJ",            "Nearby red dwarf (Gliese catalog)"),
+    (re.compile(r"(?i)lhs[\-_]?\d+"),                "LHS",           "Nearby M-dwarf (LHS catalog)"),
+    (re.compile(r"(?i)hd[\-_]?\d+"),                 "HD",            "Star from Henry Draper catalog"),
     (re.compile(r"(?i)(?:3c|diag_3c)\d+"),           "Calibrator",    "Radio calibrator source"),
     (re.compile(r"(?i)ross"),                        "Ross",          "Nearby star (Ross catalog)"),
     (re.compile(r"(?i)teegarden"),                   "Teegarden",     "Teegarden's Star"),
     (re.compile(r"(?i)yz[\-_]?cet"),                 "YZ_Cet",        "YZ Ceti (active M-dwarf)"),
+    (re.compile(r"(?i)2mass"),                       "2MASS",         "2MASS infrared survey target"),
+    (re.compile(r"(?i)wise"),                        "WISE",          "WISE infrared survey target"),
     (re.compile(r"(?i)synthetic"),                   "Synthetic",     "Synthetic training data"),
 ]
 
@@ -855,7 +860,7 @@ class StreamingObserver:
     _TRAIN_DATA_DIR = DATA_DIR / "training"
     _SPEC_CACHE_DIR = DATA_DIR / "spectrogram_cache"
     _MIN_FILES_FOR_TRAIN = 5
-    _RETRAIN_INTERVAL = 50  # retrain every N cycles (not files)
+    _RETRAIN_INTERVAL = 500  # retrain every N cycles (~4,400 files in aggressive mode)
 
     def _maybe_auto_train(self):
         """Train or fine-tune the model using cached real BL spectrograms.
@@ -932,12 +937,29 @@ class StreamingObserver:
                 time_steps=specs.shape[2],
             ).to(device)
 
+            loaded_existing = False
             if needs_finetune and model_path.exists():
-                model.load_state_dict(
-                    torch.load(model_path, map_location=device, weights_only=True)
+                state_dict = torch.load(
+                    model_path, map_location=device, weights_only=True
                 )
-                logger.info("  Loaded existing model for fine-tuning")
-                lr = 3e-4
+                has_nan = any(
+                    torch.isnan(v).any().item()
+                    for v in state_dict.values()
+                    if v.is_floating_point()
+                )
+                if has_nan:
+                    logger.warning(
+                        "  Existing model has NaN weights — discarding, "
+                        "training from scratch"
+                    )
+                    model_path.unlink(missing_ok=True)
+                    lr = 1e-3
+                    n_epochs = 20
+                else:
+                    model.load_state_dict(state_dict)
+                    loaded_existing = True
+                    logger.info("  Loaded existing model for fine-tuning")
+                    lr = 3e-4
             else:
                 lr = 1e-3
 
@@ -950,6 +972,8 @@ class StreamingObserver:
             criterion = torch.nn.CrossEntropyLoss()
 
             best_acc = 0.0
+            nan_epochs = 0
+            no_improve_epochs = 0
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
             for epoch in range(1, n_epochs + 1):
@@ -959,16 +983,56 @@ class StreamingObserver:
                 v_loss, v_acc = evaluate(model, val_loader, criterion, device)
                 scheduler.step()
 
+                if t_acc == 0.0 and v_acc == 0.0:
+                    nan_epochs += 1
+                    if nan_epochs >= 3:
+                        logger.warning(
+                            "  Model producing NaN for 3+ epochs — "
+                            "discarding and restarting from scratch"
+                        )
+                        model_path.unlink(missing_ok=True)
+                        model = _build_model(
+                            num_classes=N_CLASSES,
+                            freq_bins=specs.shape[1],
+                            time_steps=specs.shape[2],
+                        ).to(device)
+                        optimizer = torch.optim.AdamW(
+                            model.parameters(), lr=1e-3, weight_decay=0.01
+                        )
+                        remaining = n_epochs - epoch
+                        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                            optimizer, T_max=max(remaining, 10)
+                        )
+                        nan_epochs = 0
+                        continue
+
                 if v_acc > best_acc:
                     best_acc = v_acc
+                    no_improve_epochs = 0
                     torch.save(model.state_dict(), model_path)
+                else:
+                    no_improve_epochs += 1
 
-                if epoch % 5 == 0:
+                logger.info(
+                    f"  Epoch {epoch}/{n_epochs}: "
+                    f"train_acc={t_acc:.4f} val_acc={v_acc:.4f} "
+                    f"{'*BEST*' if v_acc == best_acc else ''}"
+                )
+
+                if no_improve_epochs >= 3 and best_acc > 0.90:
                     logger.info(
-                        f"  Epoch {epoch}/{n_epochs}: "
-                        f"train_acc={t_acc:.4f} val_acc={v_acc:.4f} "
-                        f"{'*BEST*' if v_acc == best_acc else ''}"
+                        f"  Early stopping: val_acc plateau at {best_acc:.4f} "
+                        f"for {no_improve_epochs} epochs"
                     )
+                    break
+
+            if best_acc < 0.15:
+                logger.warning(
+                    f"  Training finished but best_acc={best_acc:.4f} is too low — "
+                    "model not saved. Will retry next cycle."
+                )
+                model_path.unlink(missing_ok=True)
+                return
 
             logger.info(f"  Training complete — best val accuracy: {best_acc:.4f}")
 
@@ -993,7 +1057,7 @@ class StreamingObserver:
         except Exception as e:
             logger.warning(f"  Auto-training failed: {e}")
             import traceback
-            logger.debug(traceback.format_exc())
+            logger.warning(traceback.format_exc())
 
     def _count_cached_spectrograms(self) -> int:
         """Count .npz files in the spectrogram cache."""

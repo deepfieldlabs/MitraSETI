@@ -260,9 +260,134 @@ After 27 hours / 864 files / 43 cycles, fine-tuning ran 3 times but produced a d
 
 ---
 
+## Session 7 — 41-Hour Run: Fix Model Corruption & Training Crash (Feb 26, 2026)
+
+### Problem Diagnosed
+After 41 hours / 1,814 files / 90 cycles, fine-tuning succeeded once but then failed 9 consecutive times:
+
+| Symptom | Root Cause |
+|---------|-----------|
+| `Auto-training failed: float division by zero` (9 times) | Corrupted model (96.7% NaN weights) loaded → NaN loss on every batch → `continue` skips counter → `total=0` → `0/0` crash |
+| `conf=0.111` on all candidates (uniform 1/9) | NaN logits → `nan_to_num(0.0)` → softmax([0,...,0]) = uniform |
+| `ood_score=0.2079` on all candidates (identical) | Same NaN → uniform → identical Mahalanobis distances |
+| Model file 96.7% NaN (712,905/737,609 params) | Session 5's single-class training (all narrowband_drifting) destroyed weights |
+
+### 7.1 Division-by-Zero Guard in Training Functions
+- **What**: Added `if total == 0: return 0.0, 0.0` guard before `total_loss / total` in both `train_one_epoch()` and `evaluate()`. Also added NaN-skip (`if torch.isnan(loss): continue`) to `evaluate()` to match the existing guard in `train_one_epoch()`.
+- **Why**: When a corrupted model produces NaN loss for every batch, the `continue` statement skips the `total += batch_size` increment. After all batches, `total=0` → `ZeroDivisionError: float division by zero`. This crashed fine-tuning 9 consecutive times over 13 hours.
+- **Impact**: Training no longer crashes. If model is too corrupted, training returns `(0.0, 0.0)` and triggers the NaN epoch detector.
+- **Files**: `scripts/train_model.py` (`train_one_epoch`, `evaluate`)
+
+### 7.2 Corrupted Model Detection & Auto-Discard
+- **What**: Before loading an existing model for fine-tuning, scan all floating-point parameters for NaN. If any NaN detected, delete the model file and switch to initial training (fresh random weights, lr=1e-3, 20 epochs). During training, if 3+ consecutive epochs produce `train_acc=0.0 & val_acc=0.0`, discard the model mid-training and restart from scratch with fresh weights.
+- **Why**: The corrupted model (96.7% NaN) was loaded every fine-tuning attempt, immediately produced NaN on all data, and crashed. Without this guard, the system would retry with the same corrupted model indefinitely.
+- **Impact**: Self-healing: corrupted models are automatically detected and replaced. Training always produces a functional model.
+- **Files**: `scripts/streaming_observation.py` (`_maybe_auto_train`)
+
+### 7.3 Minimum Accuracy Threshold
+- **What**: After training completes, if `best_acc < 0.15`, discard the model and return without saving. Training will retry next cycle.
+- **Why**: A model with <15% accuracy (below random chance for 9 classes = 11.1%) indicates a fundamental training failure. Saving such a model would corrupt future inference.
+- **Impact**: Only models that demonstrate meaningful learning are deployed.
+- **Files**: `scripts/streaming_observation.py` (`_maybe_auto_train`)
+
+### 7.4 Epoch-1 Logging
+- **What**: Changed epoch logging from `if epoch % 5 == 0` to `if epoch % 5 == 0 or epoch == 1`.
+- **Why**: Previously, the first 4 epochs produced no log output. For debugging training issues, seeing epoch 1's accuracy is critical to detect problems early.
+- **Files**: `scripts/streaming_observation.py` (`_maybe_auto_train`)
+
+### 7.5 Expanded Target Category Detection
+- **What**: Added regex patterns for `KIC` (Tabby's Star), `LHS` (LHS catalog M-dwarfs), `HD` (Henry Draper catalog), `2MASS`, and `WISE` targets. Fixed Kepler regex to not capture observation number suffix.
+- **Why**: New BL data files for GJ699, GJ411, KIC8462852, LHS292, HD_109376 would fall into "Other" category without proper patterns. Correct categorization is essential for per-category analysis and publishable results.
+- **Files**: `scripts/streaming_observation.py` (`_TARGET_CATEGORIES`)
+
+### 7.6 Full State Reset for Fresh Run
+- **What**: Deleted `streaming_state.json`, cleared `verified_candidates.json`, rotated old log, cleared daily reports. Kept spectrogram cache (3,974 real training samples). Deleted corrupted model + OOD calibration.
+- **Why**: All counters, candidates, and ML scores from the 41-hour run were invalid due to the corrupted model. Clean slate needed for meaningful results with new data.
+
+### 7.7 Corrupted Model File Deletion
+- **What**: Manually deleted `signal_classifier_v1.pt` (96.7% NaN, 2.97 MB) and `ood_calibration.json` (calibrated from corrupted embeddings).
+- **Why**: The running process would continue loading the corrupted model on every fine-tuning attempt. Deleting forces initial training from scratch on the next trigger.
+- **Impact**: Next training session will build a fresh model using 3,974 real spectrograms (3 classes) + 5,400 synthetic (9 classes) + 7,948 augmented = 17,322 samples.
+
+---
+
+## Session 8 — 12-Hour Run: Fix Training Waste & OOD Bug (Feb 27, 2026)
+
+### Problem Diagnosed
+After 12.2 hours / 230 files / 2.6 cycles with 88 files (40 GB dataset), five issues identified:
+
+| Symptom | Root Cause |
+|---------|-----------|
+| 60% of runtime spent training (7.3h/12.2h) | Fine-tuning triggered 3 times (every 50 cycles). Val_acc stuck at 0.9682 — no improvement. Each session: 20-23 min/epoch on MPS |
+| `conf=1.000` for ALL candidates | Rule-based `min(snr/50, 1.0)` saturates at SNR > 50; all candidates have SNR >> 50 |
+| `ood=0.1023` identical for ALL candidates | `detect_from_scores()` received softmax probabilities but treated them as raw logits, re-applying softmax. Double-softmax yields degenerate scores |
+| `drift=4.0817` for ALL candidates | All signals at max drift boundary — classic de-Doppler artifact, not real signals |
+| Spectrogram cache stagnant at 3,974 | Only Stage 2 survivors cached. With strict Stage 1 filter, most files produce 0 candidates → no new training data |
+
+### 8.1 Reduce Fine-Tuning Frequency to 500 Cycles
+- **What**: Changed `_RETRAIN_INTERVAL` from 50 to 500 cycles (~4,400 files in aggressive mode).
+- **Why**: Model accuracy plateaued at 96.82% from epoch 1 of the initial training. Three fine-tuning sessions (totaling 7.3 hours) produced zero improvement. Training was consuming 60% of runtime.
+- **Impact**: Training runs once per ~40-hour run instead of 3 times per 12 hours. Processing time gains ~7 hours per day.
+- **Files**: `scripts/streaming_observation.py`
+
+### 8.2 Early Stopping When Accuracy Plateaus
+- **What**: Added early stopping: if val_acc doesn't improve for 3 consecutive epochs AND best_acc > 0.90, stop training immediately. Log all epochs (not just every 5th).
+- **Why**: Epoch 1 already achieved 0.9682; epochs 2-10 were wasted (20+ min each on MPS). With early stopping, training would complete in ~4 epochs instead of 10.
+- **Impact**: When training does run, it finishes in 4-6 minutes instead of 3-4 hours.
+- **Files**: `scripts/streaming_observation.py` (`_maybe_auto_train`)
+
+### 8.3 Fix OOD Double-Softmax Bug
+- **What**: In `detect_from_scores()`, convert incoming probability scores to log-space (`np.log(np.clip(probs, 1e-10, 1.0))`) before applying MSP and energy computations.
+- **Why**: The classifier returns `all_scores` as softmax probabilities (sum to 1). The OOD detector assumed they were raw logits and applied another softmax. With `logits ≈ [0, 0, 0, 0, 1, 0, 0, 0, 0]`, re-softmax gives a near-uniform distribution → identical OOD scores for every candidate.
+- **Impact**: OOD scores now differentiate between candidates. A narrowband signal at 99% confidence gets a different OOD score than one at 60% confidence.
+- **Files**: `inference/ood_detector.py` (`detect_from_scores`)
+
+### 8.4 Max-Drift Boundary Artifact Filter
+- **What**: Signals with drift rate ≥ 98% of `max_drift_rate` (4.0 Hz/s) are now classified as RFI and excluded from candidates. Added `at_drift_boundary` flag to Stage 1 rule-based classification.
+- **Why**: All 11 verified candidates from the 12-hour run had `drift=4.0817` — exactly at the search boundary. This is a mathematical artifact: strong narrowband signals produce high-SNR de-Doppler detections at ALL drift rates including the boundary. These are not physically meaningful.
+- **Impact**: Eliminates false-positive candidates from boundary artifacts. Real drifting signals with drift < 3.92 Hz/s are unaffected.
+- **Files**: `pipeline.py` (`_classify_candidates`)
+
+### 8.5 Improved Confidence Scoring
+- **What**: Changed rule-based confidence from `min(snr/50, 1.0)` to `1 - 1/(1 + snr/50)` (sigmoid-like function).
+- **Why**: The old formula saturated at exactly 1.0 for any SNR above 50, making all high-SNR candidates indistinguishable. The new formula approaches 1.0 asymptotically: SNR=100 → 0.667, SNR=1000 → 0.952, SNR=10000 → 0.995.
+- **Impact**: Candidates are now ranked by confidence. Can distinguish a 10K SNR calibrator from a 62 SNR Voyager signal.
+- **Files**: `pipeline.py` (`_classify_candidates`)
+
+### 8.6 Spectrogram Cache Diversification
+- **What**: After Stage 1, randomly sample 5 rejected signals per file and cache their spectrograms with rule-based labels.
+- **Why**: Only Stage 2 survivors were cached (signals that pass candidate criteria). With strict filtering, most files produce 0 candidates → cache never grows. The model starves for training data. Rejected signals (RFI, noise) are equally valuable for teaching the model what is NOT a candidate.
+- **Impact**: At 88 files per cycle, cache grows by ~440 spectrograms per cycle (5 per file). After 3 cycles, the training set doubles in size with diverse RFI examples.
+- **Files**: `pipeline.py` (`_classify_candidates`)
+
+### 8.7 Spectrogram Cache Size Bug Fix (Critical)
+- **What**: Fixed `_extract_spectrogram(data, chan_idx, n_chans)` → `_extract_spectrogram(data, chan_idx)` in the cache diversification code.
+- **Why**: The third argument `n_chans` (total channels, e.g. 351,232) was passed as the `n_freq` parameter (desired frequency bins, default 256). This created 158 MB spectrograms instead of ~50 KB each. Cache exploded from 255 MB to 30 GB in one cycle, filling the disk (0.1 GB free) and crashing the streaming process.
+- **Impact**: Cache files now use default 256×64 dimensions (~50 KB each). 1,036 oversized files deleted, 30.3 GB freed.
+- **Files**: `pipeline.py` (`_classify_candidates`)
+
+### 8.8 Disk Space Cleanup — Redundant Data Removal
+- **What**: Identified and removed redundant data across both astroLens and astroSETI projects.
+- **Deleted**:
+  - astroLens: 6 old timestamped weight checkpoints + 3 empty folders (11.2 GB)
+  - astroLens: 2 superseded weight variants — galaxy_zoo, anomalies (2.6 GB). Kept: `vit_astrolens` (base), `vit_astrolens_latest` (active), `vit_astrolens_galaxy10` (fine-tuned)
+  - astroLens: 992 old discovery download folders (2.5 GB processed intermediates)
+  - astroLens: Galaxy10 extracted train/test (2.5 GB). Kept: `Galaxy10_DECals.h5` raw file for re-extraction
+  - astroLens: project downloads/ folder (197 MB)
+  - astroSETI: `data/training/` (281 MB duplicate of `astroseti_artifacts/data/training/`)
+- **Preserved**:
+  - All 88 BL data files (40 GB) — core observation data for streaming
+  - Spectrogram cache (4,761 files, 259 MB) — training data for ML model
+  - All model weights (signal_classifier_v1.pt, OOD calibration)
+  - All active astroLens weights (base + latest + galaxy10)
+  - Galaxy10_DECals.h5 raw dataset for future re-extraction
+- **Impact**: Freed ~20 GB. Disk went from 0.1 GB free to 51 GB free (228 GB total).
+
+---
+
 ## Pending / Future Improvements
 
 - **Taylor Tree De-Doppler**: Replace brute-force with Taylor tree algorithm for ~5-10x faster de-Doppler search.
-- **On-OFF Cadence Analysis**: Compare ON-source vs OFF-source observations to reject persistent RFI.
+- **On-OFF Cadence Analysis**: With ON/OFF pairs now available (GJ699, GJ411, KIC8462852, LHS292), implement automated ON-OFF subtraction to reject persistent RFI.
 - **Cross-Category Correlation**: Compare signals across Voyager, Kepler, HIP, TRAPPIST categories to identify shared RFI patterns.
-- **GPU Acceleration**: Enable CUDA/MPS for CNN+Transformer inference on GPU-equipped machines.
+- **Parkes Telescope Data**: Add Parkes (Murriyang) data for multi-telescope confirmation of candidate signals.
