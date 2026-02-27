@@ -1,5 +1,5 @@
 """
-astroSETI Main Window
+MitraSETI Main Window
 
 Crystalline glass interface with sidebar navigation,
 stacked content panels, and glowing status indicators.
@@ -42,7 +42,7 @@ class _StatusDot(QFrame):
 # ── Main Window ──────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
-    """astroSETI main application window — crystalline glass design."""
+    """MitraSETI main application window — crystalline glass design."""
 
     NAV_ITEMS = [
         ("🏠", "Dashboard", 0),
@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("astroSETI — Intelligent SETI Signal Analysis")
+        self.setWindowTitle("MitraSETI — Intelligent SETI Signal Analysis")
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)
 
@@ -112,7 +112,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(6)
 
         # ── Title with glow ──────────────────────────────────────────────
-        title = QLabel("astroSETI")
+        title = QLabel("MitraSETI")
         title.setStyleSheet("""
             font-size: 22px;
             font-weight: 700;

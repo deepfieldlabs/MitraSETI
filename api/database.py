@@ -1,5 +1,5 @@
 """
-Async SQLite database layer for astroSETI.
+Async SQLite database layer for MitraSETI.
 
 Uses aiosqlite for non-blocking I/O so the FastAPI event-loop is never
 blocked during DB operations.  Three tables:
@@ -95,7 +95,7 @@ _INDEXES = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 class SignalDB:
-    """Async SQLite database manager for astroSETI signals."""
+    """Async SQLite database manager for MitraSETI signals."""
 
     def __init__(self, db_path: Optional[Path] = None) -> None:
         self.db_path = str(db_path or DB_PATH)

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-astroSETI Batch Processor
+MitraSETI Batch Processor
 
 Process a directory of filterbank (.fil / .h5) files through the full
-astroSETI pipeline with parallel processing and detailed reporting.
+MitraSETI pipeline with parallel processing and detailed reporting.
 
 Features:
 - Parallel processing via multiprocessing (one file per core)
@@ -183,7 +183,7 @@ def process_single_file(
     max_drift: float = 4.0,
 ) -> dict:
     """
-    Process a single file through the astroSETI pipeline.
+    Process a single file through the MitraSETI pipeline.
 
     Designed to be called via multiprocessing.Pool.map().
     Must import everything inside to work across process boundaries.
@@ -272,7 +272,7 @@ def process_single_file(
 
 class BatchProcessor:
     """
-    Process a directory of filterbank files through the astroSETI pipeline.
+    Process a directory of filterbank files through the MitraSETI pipeline.
 
     Supports parallel processing, progress tracking, and detailed output.
     """
@@ -519,7 +519,7 @@ class BatchProcessor:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="astroSETI Batch Processor – process filterbank files in parallel",
+        description="MitraSETI Batch Processor – process filterbank files in parallel",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

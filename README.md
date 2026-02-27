@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">astroSETI</h1>
+  <h1 align="center">MitraSETI</h1>
   <p align="center">
     <strong>Intelligent SETI Signal Analysis — Decode the Cosmos with Machine Intelligence</strong>
   </p>
@@ -7,8 +7,8 @@
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70%2B-orange?style=flat-square&logo=rust&logoColor=white" alt="Rust"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-    <a href="https://github.com/deepfieldlabs/astroSETI/stargazers"><img src="https://img.shields.io/github/stars/deepfieldlabs/astroSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
-    <a href="https://pypi.org/project/astroseti/"><img src="https://img.shields.io/badge/version-0.1.0-purple?style=flat-square" alt="Version"></a>
+    <a href="https://github.com/deepfieldlabs/MitraSETI/stargazers"><img src="https://img.shields.io/github/stars/deepfieldlabs/MitraSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
+    <a href="https://pypi.org/project/mitraseti/"><img src="https://img.shields.io/badge/version-0.1.0-purple?style=flat-square" alt="Version"></a>
   </p>
 </p>
 
@@ -22,7 +22,7 @@ SETI researchers using [turboSETI](https://github.com/UCBerkeleySETI/turbo_seti)
 
 ## The Solution
 
-**astroSETI** is a **Rust + Python hybrid** that replaces turboSETI's bottlenecks with an intelligent, end-to-end signal analysis pipeline:
+**MitraSETI** is a **Rust + Python hybrid** that replaces turboSETI's bottlenecks with an intelligent, end-to-end signal analysis pipeline:
 
 - **10–100x faster processing** via parallel Rust de-Doppler search engine
 - **95%+ automatic RFI rejection** using CNN + Transformer ML classification
@@ -34,7 +34,7 @@ SETI researchers using [turboSETI](https://github.com/UCBerkeleySETI/turbo_seti)
 
 ## Benchmark
 
-| Metric | turboSETI | astroSETI |
+| Metric | turboSETI | MitraSETI |
 |---|---|---|
 | Processing time (100 files) | ~3 hours | **~4 minutes** |
 | Manual review needed | 99%+ detections | **<5% after ML filter** |
@@ -74,8 +74,8 @@ SETI researchers using [turboSETI](https://github.com/UCBerkeleySETI/turbo_seti)
 
 ```bash
 # Clone the repository
-git clone https://github.com/deepfieldlabs/astroSETI.git
-cd astroSETI
+git clone https://github.com/deepfieldlabs/MitraSETI.git
+cd MitraSETI
 
 # Create virtual environment
 python -m venv .venv
@@ -88,7 +88,7 @@ pip install -r requirements.txt
 # Install Rust: https://rustup.rs/
 maturin develop --release
 
-# Install astroSETI
+# Install MitraSETI
 pip install -e .
 ```
 
@@ -116,7 +116,7 @@ docker-compose up
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     astroSETI Pipeline                   │
+│                     MitraSETI Pipeline                   │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │  Filterbank (.fil/.h5)                                  │
@@ -124,7 +124,7 @@ docker-compose up
 │         ▼                                               │
 │  ┌─────────────────┐    ┌──────────────────────┐        │
 │  │   Rust Core      │───▶│  De-Doppler Engine   │        │
-│  │   (astroseti-rs) │    │  SIMD + Multi-thread │        │
+│  │   (mitraseti-rs) │    │  SIMD + Multi-thread │        │
 │  └─────────────────┘    └──────────┬───────────┘        │
 │                                    │                    │
 │                                    ▼                    │
@@ -165,9 +165,9 @@ docker-compose up
 
 ## Comparison with turboSETI
 
-astroSETI is **not** a fork of turboSETI — it's a ground-up reimagination of the SETI signal analysis pipeline, built for the era of machine learning and massive data volumes.
+MitraSETI is **not** a fork of turboSETI — it's a ground-up reimagination of the SETI signal analysis pipeline, built for the era of machine learning and massive data volumes.
 
-| Capability | turboSETI | astroSETI |
+| Capability | turboSETI | MitraSETI |
 |---|---|---|
 | Language | Pure Python | **Rust core + Python ML** |
 | Parallelism | Limited | **Full multi-core + SIMD** |
@@ -180,13 +180,13 @@ astroSETI is **not** a fork of turboSETI — it's a ground-up reimagination of t
 | Catalog Matching | Basic | **SIMBAD, NVSS, FIRST, Pulsars** |
 | Format Support | .fil, .h5 | **.fil, .h5 + export to turboSETI** |
 
-**The intelligence layer is the key difference.** While turboSETI finds signals, astroSETI *understands* them — automatically classifying, cross-referencing, and prioritizing so researchers focus on what matters.
+**The intelligence layer is the key difference.** While turboSETI finds signals, MitraSETI *understands* them — automatically classifying, cross-referencing, and prioritizing so researchers focus on what matters.
 
 ---
 
 ## AstroLens Integration
 
-astroSETI includes first-class integration with [AstroLens](https://github.com/deepfieldlabs/astroLens), enabling a unique **optical + radio cross-reference** workflow:
+MitraSETI includes first-class integration with [AstroLens](https://github.com/deepfieldlabs/astroLens), enabling a unique **optical + radio cross-reference** workflow:
 
 1. **Detect** narrowband signals in radio filterbank data
 2. **Cross-reference** signal coordinates with AstroLens optical catalog

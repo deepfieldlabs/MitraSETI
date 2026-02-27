@@ -1,4 +1,4 @@
-//! Common types shared across the astroSETI signal-processing pipeline.
+//! Common types shared across the MitraSETI signal-processing pipeline.
 //!
 //! These structures represent the fundamental data objects in a SETI
 //! narrowband search: observation metadata (filterbank headers), search

@@ -1,5 +1,5 @@
 """
-Radio Signal Feature Extractor for astroSETI
+Radio Signal Feature Extractor for MitraSETI
 
 Extracts physical and statistical features from radio spectrograms.
 These features feed into both the signal classifier and the OOD anomaly

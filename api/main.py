@@ -1,5 +1,5 @@
 """
-FastAPI application for astroSETI.
+FastAPI application for MitraSETI.
 
 Local-first API for radio-signal processing, ML classification, catalog
 cross-referencing, and live WebSocket streaming during observation runs.
@@ -67,13 +67,13 @@ def get_catalog_query():
 
 
 def get_pipeline():
-    """Lazy-load the AstroSETIPipeline."""
+    """Lazy-load the MitraSETIPipeline."""
     global _pipeline
     if _pipeline is None:
-        from pipeline import AstroSETIPipeline
+        from pipeline import MitraSETIPipeline
         model_path = MODELS_DIR / "signal_classifier_v1.pt"
         ood_cal_path = MODELS_DIR / "ood_calibration.json"
-        _pipeline = AstroSETIPipeline(
+        _pipeline = MitraSETIPipeline(
             model_path=str(model_path) if model_path.exists() else None,
             ood_calibration_path=str(ood_cal_path) if ood_cal_path.exists() else None,
         )
@@ -176,9 +176,9 @@ async def lifespan(app: FastAPI):
     ensure_dirs()
     db = get_db()
     await db.init_db()
-    logger.info("astroSETI API started – database at %s", DB_PATH)
+    logger.info("MitraSETI API started – database at %s", DB_PATH)
     yield
-    logger.info("astroSETI API shutting down")
+    logger.info("MitraSETI API shutting down")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ async def lifespan(app: FastAPI):
 # ─────────────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="astroSETI API",
+    title="MitraSETI API",
     description=(
         "Radio-signal processing pipeline for SETI. "
         "Detect, classify, and cross-reference narrowband signals."

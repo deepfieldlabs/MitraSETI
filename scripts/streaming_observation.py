@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-astroSETI Streaming Observation Engine
+MitraSETI Streaming Observation Engine
 
 Multi-day continuous observation runner with self-correcting intelligence,
 daily reporting, and publishing-ready summaries.
 
 Adapted from AstroLens streaming_discovery.py for the radio SETI domain.
 
-This wraps the full astroSETI pipeline with:
+This wraps the full MitraSETI pipeline with:
 - Continuous processing of filterbank (.fil / .h5) files
 - Daily HTML report generation (charts, candidate rankings)
 - Self-correcting strategy (sensitivity, file source rebalancing)
@@ -81,7 +81,7 @@ DAILY_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE = DATA_DIR / "streaming_observation.log"
 
-logger = logging.getLogger("astroseti.streaming")
+logger = logging.getLogger("mitraseti.streaming")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     _fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
@@ -221,7 +221,7 @@ class StreamingObserver:
     """
     Multi-day streaming observation orchestrator.
 
-    Wraps the astroSETI pipeline (Rust core -> classifier -> OOD -> catalog)
+    Wraps the MitraSETI pipeline (Rust core -> classifier -> OOD -> catalog)
     with intelligence layers:
     1. Daily assessment and report generation
     2. Self-correcting sensitivity (threshold, source, mode adjustments)
@@ -306,10 +306,10 @@ class StreamingObserver:
     @property
     def pipeline(self):
         if self._pipeline is None:
-            from pipeline import AstroSETIPipeline
+            from pipeline import MitraSETIPipeline
             model_path = MODELS_DIR / "signal_classifier_v1.pt"
             ood_cal_path = MODELS_DIR / "ood_calibration.json"
-            self._pipeline = AstroSETIPipeline(
+            self._pipeline = MitraSETIPipeline(
                 model_path=str(model_path) if model_path.exists() else None,
                 ood_calibration_path=str(ood_cal_path) if ood_cal_path.exists() else None,
             )
@@ -420,7 +420,7 @@ class StreamingObserver:
 
     def _process_file(self, filepath: Path) -> Optional[dict]:
         """
-        Process a single filterbank file through AstroSETIPipeline.
+        Process a single filterbank file through MitraSETIPipeline.
 
         Returns:
             Result dictionary or None on failure.
@@ -1387,8 +1387,8 @@ class StreamingObserver:
     @staticmethod
     def _print_star_reminder():
         print("\n" + "=" * 60)
-        print("  If astroSETI helped your research, please star the repo:")
-        print("  https://github.com/samantaba/astroSETI")
+        print("  If MitraSETI helped your research, please star the repo:")
+        print("  https://github.com/samantaba/MitraSETI")
         print("  It takes 2 seconds and helps others discover the tool.")
         print("=" * 60)
 
@@ -1397,7 +1397,7 @@ class StreamingObserver:
     def run(self):
         """Run multi-day streaming observation."""
         logger.info("=" * 60)
-        logger.info("  ASTROSETI STREAMING OBSERVATION ENGINE")
+        logger.info("  MITRASETI STREAMING OBSERVATION ENGINE")
         logger.info("=" * 60)
         logger.info(f"  Target duration: {self.target_days} days")
         logger.info(f"  Mode: {self.state.current_mode.upper()}")
@@ -1644,7 +1644,7 @@ class StreamingObserver:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="astroSETI Streaming Observation Engine",
+        description="MitraSETI Streaming Observation Engine",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

@@ -1,4 +1,4 @@
-"""astroSETI — Intelligent SETI Signal Analysis."""
+"""MitraSETI — Intelligent SETI Signal Analysis."""
 
 from setuptools import setup, find_packages
 from pathlib import Path
@@ -7,18 +7,18 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
 setup(
-    name="astroseti",
+    name="mitraseti",
     version="0.1.0",
     author="Saman Tabatabaeian",
-    author_email="saman@astroseti.dev",
+    author_email="saman@mitraseti.dev",
     description="Intelligent SETI Signal Analysis — Decode the Cosmos with Machine Intelligence",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/SamanTabworlds/astroSETI",
+    url="https://github.com/SamanTabworlds/MitraSETI",
     project_urls={
-        "Bug Tracker": "https://github.com/SamanTabworlds/astroSETI/issues",
-        "Documentation": "https://github.com/SamanTabworlds/astroSETI#readme",
-        "Source Code": "https://github.com/SamanTabworlds/astroSETI",
+        "Bug Tracker": "https://github.com/SamanTabworlds/MitraSETI/issues",
+        "Documentation": "https://github.com/SamanTabworlds/MitraSETI#readme",
+        "Source Code": "https://github.com/SamanTabworlds/MitraSETI",
     },
     packages=find_packages(exclude=["tests", "tests.*"]),
     python_requires=">=3.10",
@@ -50,7 +50,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "astroseti=main:main",
+            "mitraseti=main:main",
         ],
     },
     classifiers=[

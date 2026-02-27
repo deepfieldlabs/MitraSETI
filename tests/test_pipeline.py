@@ -1,5 +1,5 @@
 """
-Tests for the astroSETI processing pipeline, Rust core, ML models, and API.
+Tests for the MitraSETI processing pipeline, Rust core, ML models, and API.
 
 These tests verify end-to-end functionality when components are available,
 and gracefully skip when optional dependencies (Rust core, model weights,
@@ -19,13 +19,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 class TestRustCore:
     def test_import(self):
-        import astroseti_core
-        assert hasattr(astroseti_core, "DedopplerEngine")
+        import mitraseti_core
+        assert hasattr(mitraseti_core, "DedopplerEngine")
 
     def test_filterbank_reader(self):
-        import astroseti_core
+        import mitraseti_core
 
-        reader = astroseti_core.FilterbankReader()
+        reader = mitraseti_core.FilterbankReader()
         fil_files = list(Path("data/filterbank").glob("*.fil"))
         if fil_files:
             header, data, n_times, n_chans = reader.read(str(fil_files[0]))
@@ -35,20 +35,20 @@ class TestRustCore:
             pytest.skip("No .fil files in data/filterbank")
 
     def test_search_params(self):
-        import astroseti_core
+        import mitraseti_core
 
-        params = astroseti_core.SearchParams(max_drift_rate=4.0, min_snr=5.0)
+        params = mitraseti_core.SearchParams(max_drift_rate=4.0, min_snr=5.0)
         assert params is not None
 
     def test_rfi_filter_exists(self):
-        import astroseti_core
-        assert hasattr(astroseti_core, "RFIFilter")
+        import mitraseti_core
+        assert hasattr(mitraseti_core, "RFIFilter")
 
     def test_dedoppler_engine_creation(self):
-        import astroseti_core
+        import mitraseti_core
 
-        params = astroseti_core.SearchParams(max_drift_rate=4.0, min_snr=5.0)
-        engine = astroseti_core.DedopplerEngine(params)
+        params = mitraseti_core.SearchParams(max_drift_rate=4.0, min_snr=5.0)
+        engine = mitraseti_core.DedopplerEngine(params)
         assert engine is not None
 
 
@@ -58,24 +58,24 @@ class TestRustCore:
 
 class TestPipeline:
     def test_pipeline_init(self):
-        from pipeline import AstroSETIPipeline
+        from pipeline import MitraSETIPipeline
 
-        pipe = AstroSETIPipeline()
+        pipe = MitraSETIPipeline()
         assert pipe._rust_available
 
     def test_pipeline_init_with_model(self):
-        from pipeline import AstroSETIPipeline
+        from pipeline import MitraSETIPipeline
 
         model_path = Path("models/signal_classifier_v1.pt")
-        pipe = AstroSETIPipeline(
+        pipe = MitraSETIPipeline(
             model_path=str(model_path) if model_path.exists() else None,
         )
         assert pipe is not None
 
     def test_process_file(self):
-        from pipeline import AstroSETIPipeline
+        from pipeline import MitraSETIPipeline
 
-        pipe = AstroSETIPipeline()
+        pipe = MitraSETIPipeline()
         fil_files = list(Path("data/filterbank").glob("*.fil"))
         if fil_files:
             result = pipe.process_file(str(fil_files[0]))
@@ -87,9 +87,9 @@ class TestPipeline:
             pytest.skip("No .fil files in data/filterbank")
 
     def test_process_file_returns_timing(self):
-        from pipeline import AstroSETIPipeline
+        from pipeline import MitraSETIPipeline
 
-        pipe = AstroSETIPipeline()
+        pipe = MitraSETIPipeline()
         fil_files = list(Path("data/filterbank").glob("*.fil"))
         if fil_files:
             result = pipe.process_file(str(fil_files[0]))
@@ -99,16 +99,16 @@ class TestPipeline:
             pytest.skip("No .fil files in data/filterbank")
 
     def test_process_file_invalid_path(self):
-        from pipeline import AstroSETIPipeline
+        from pipeline import MitraSETIPipeline
 
-        pipe = AstroSETIPipeline()
+        pipe = MitraSETIPipeline()
         result = pipe.process_file("/nonexistent/file.fil")
         assert result["summary"]["status"] == "error"
 
     def test_process_batch(self):
-        from pipeline import AstroSETIPipeline
+        from pipeline import MitraSETIPipeline
 
-        pipe = AstroSETIPipeline()
+        pipe = MitraSETIPipeline()
         fil_files = list(Path("data/filterbank").glob("*.fil"))
         if len(fil_files) >= 2:
             results = pipe.process_batch([str(f) for f in fil_files[:2]])

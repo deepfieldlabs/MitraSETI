@@ -1,5 +1,5 @@
 """
-astroSETI Catalog Module
+MitraSETI Catalog Module
 
 Query radio astronomy catalogs and cross-reference sky positions with
 optical anomalies from AstroLens.

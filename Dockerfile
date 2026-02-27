@@ -1,5 +1,5 @@
 # =============================================================================
-# astroSETI — Multi-stage Docker Build
+# MitraSETI — Multi-stage Docker Build
 # Stage 1: Build Rust core
 # Stage 2: Python runtime with compiled extension
 # =============================================================================
@@ -23,9 +23,9 @@ RUN cargo build --release
 # ---------------------
 FROM python:3.12-slim-bookworm AS runtime
 
-LABEL maintainer="Saman Tabatabaeian <saman@astroseti.dev>"
-LABEL description="astroSETI — Intelligent SETI Signal Analysis"
-LABEL org.opencontainers.image.source="https://github.com/SamanTabworlds/astroSETI"
+LABEL maintainer="Saman Tabatabaeian <saman@mitraseti.dev>"
+LABEL description="MitraSETI — Intelligent SETI Signal Analysis"
+LABEL org.opencontainers.image.source="https://github.com/SamanTabworlds/MitraSETI"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -57,9 +57,9 @@ COPY --from=rust-builder /build/target/release/*.so /app/lib/ 2>/dev/null || tru
 COPY --from=rust-builder /build/target/release/*.dylib /app/lib/ 2>/dev/null || true
 
 # Create non-root user
-RUN useradd --create-home --shell /bin/bash astroseti
-RUN chown -R astroseti:astroseti /app
-USER astroseti
+RUN useradd --create-home --shell /bin/bash mitraseti
+RUN chown -R mitraseti:mitraseti /app
+USER mitraseti
 
 # Expose ports: 8000 for API, 8080 for web UI
 EXPOSE 8000

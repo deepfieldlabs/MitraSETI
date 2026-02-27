@@ -1,5 +1,5 @@
 """
-astroSETI Automation Scripts
+MitraSETI Automation Scripts
 
 CLI tools for continuous observation, batch processing, reporting,
 data downloading, and benchmarking.

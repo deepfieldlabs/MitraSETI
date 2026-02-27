@@ -1,12 +1,13 @@
 """
-Centralized path configuration for astroSETI.
+Centralized path configuration for MitraSETI.
 
 All large files (data, models, database) are stored OUTSIDE the git repo
 in a sibling folder called 'astroseti_artifacts' to avoid bloating the repo.
+(The directory on disk is still called 'astroseti_artifacts' — unchanged.)
 
 Directory Structure:
     projects/
-    ├── astroSETI/                 <- This git repo (code only)
+    ├── MitraSETI/                 <- This git repo (code only)
     │   ├── api/
     │   ├── catalog/
     │   ├── inference/
@@ -17,7 +18,7 @@ Directory Structure:
         └── candidates/            <- Verified ET candidate exports
 
 Environment Variables (override defaults):
-    ASTROSETI_ARTIFACTS_DIR  - Base path for all artifacts
+    MITRASETI_ARTIFACTS_DIR  - Base path for all artifacts
     DATABASE_URL             - SQLite database URL
     MODELS_DIR               - Trained model weights
 """
@@ -35,10 +36,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.resolve()
 
 # Artifacts directory (sibling to project, contains all large files)
-# Default: ../astroseti_artifacts relative to project root
+# Default: ../astroseti_artifacts relative to project root (dir name on disk unchanged)
 ARTIFACTS_DIR = Path(
     os.environ.get(
-        "ASTROSETI_ARTIFACTS_DIR",
+        "MITRASETI_ARTIFACTS_DIR",
         PROJECT_ROOT.parent / "astroseti_artifacts",
     )
 ).resolve()
@@ -126,7 +127,7 @@ def get_plot_path(signal_id: int, suffix: str = "waterfall") -> Path:
 
 # Print paths on import (for debugging)
 if __name__ == "__main__":
-    print("astroSETI Paths Configuration")
+    print("MitraSETI Paths Configuration")
     print("=" * 50)
     print(f"PROJECT_ROOT:        {PROJECT_ROOT}")
     print(f"ARTIFACTS_DIR:       {ARTIFACTS_DIR}")

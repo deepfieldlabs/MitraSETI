@@ -1,6 +1,6 @@
-# astroSETI Improvements Log
+# MitraSETI Improvements Log
 
-Chronological record of every improvement applied to astroSETI, the reasoning behind each change, and its measured impact. This document serves as a reference for future documentation, publications, and architectural decisions.
+Chronological record of every improvement applied to MitraSETI, the reasoning behind each change, and its measured impact. This document serves as a reference for future documentation, publications, and architectural decisions.
 
 ---
 
@@ -98,7 +98,7 @@ After a 9.5-hour overnight run, only 4 of 20 files were processed. Root causes:
 - **Files**: `pipeline.py` (`_cluster_hits`, integrated into `process_file`)
 
 ### 3.3 Spectrogram Caching for Retraining
-- **What**: During ML inference, spectrograms of candidate signals are saved as `.npz` files to `astroseti_artifacts/data/spectrogram_cache/`.
+- **What**: During ML inference, spectrograms of candidate signals are saved as `.npz` files to `mitraseti_artifacts/data/spectrogram_cache/`.
 - **Why**: The model needs real BL data to train on. Caching spectrograms during processing builds a training set automatically.
 - **Files**: `pipeline.py` (`_classify_candidates`, `_SPECTROGRAM_CACHE_DIR`)
 
@@ -188,7 +188,7 @@ After 23 hours / 344 files / 17.2 cycles, four issues were identified:
 
 ### 5.1 Spectrogram Cache Path Fix
 - **What**: Changed `pipeline.py` to import `DATA_DIR` from `paths.py` instead of computing its own path via `Path(__file__).parent`.
-- **Why**: Pipeline cached to `astroSETI/astroseti_artifacts/data/spectrogram_cache/` but streaming looked at `astroseti_artifacts/data/spectrogram_cache/` (the canonical path from `paths.py`). 1,673 spectrograms were invisible to the fine-tuning logic.
+- **Why**: Pipeline cached to `MitraSETI/mitraseti_artifacts/data/spectrogram_cache/` but streaming looked at `mitraseti_artifacts/data/spectrogram_cache/` (the canonical path from `paths.py`). 1,673 spectrograms were invisible to the fine-tuning logic.
 - **Impact**: Fine-tuning now sees the cached spectrograms and will trigger on next cycle.
 - **Files**: `pipeline.py`
 
@@ -366,16 +366,16 @@ After 12.2 hours / 230 files / 2.6 cycles with 88 files (40 GB dataset), five is
 - **Impact**: Cache files now use default 256×64 dimensions (~50 KB each). 1,036 oversized files deleted, 30.3 GB freed.
 - **Files**: `pipeline.py` (`_classify_candidates`)
 
-### 8.8 Disk Space Cleanup — astroSETI Redundant Data
+### 8.8 Disk Space Cleanup — MitraSETI Redundant Data
 - **What**: Removed duplicate training data and oversized cache files.
 - **Deleted**:
-  - `data/training/` (281 MB) — duplicate of `astroseti_artifacts/data/training/`
+  - `data/training/` (281 MB) — duplicate of `mitraseti_artifacts/data/training/`
   - 1,036 oversized spectrogram cache files (30.3 GB) — from cache size bug (8.7)
 - **Preserved**:
   - All 88 BL data files (40 GB) — core observation data for streaming
   - Spectrogram cache (4,761 files, 259 MB) — training data for ML model
   - All model weights (signal_classifier_v1.pt, OOD calibration)
-- **Impact**: Freed ~30.6 GB from astroSETI artifacts.
+- **Impact**: Freed ~30.6 GB from MitraSETI artifacts.
 
 ---
 

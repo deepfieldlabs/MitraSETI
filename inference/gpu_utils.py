@@ -1,5 +1,5 @@
 """
-GPU Acceleration Utility for astroSETI
+GPU Acceleration Utility for MitraSETI
 
 Provides device detection, management, and performance utilities
 for PyTorch-based ML inference and training.

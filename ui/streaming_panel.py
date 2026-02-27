@@ -1,5 +1,5 @@
 """
-astroSETI Streaming Panel — Continuous Observation Monitor
+MitraSETI Streaming Panel — Continuous Observation Monitor
 
 Adapted from AstroLens streaming_panel.py with crystalline glass theme.
 Controls continuous SETI signal processing with:

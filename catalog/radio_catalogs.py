@@ -1,5 +1,5 @@
 """
-Radio Astronomy Catalog Queries for astroSETI.
+Radio Astronomy Catalog Queries for MitraSETI.
 
 Query SIMBAD, NVSS, FIRST, and pulsar catalogs to determine whether a
 detected radio signal matches a known astronomical source.  All remote

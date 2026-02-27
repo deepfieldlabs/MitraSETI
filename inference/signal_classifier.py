@@ -1,5 +1,5 @@
 """
-Radio Signal Classifier for astroSETI
+Radio Signal Classifier for MitraSETI
 
 CNN + Transformer hybrid for classifying radio SETI spectrograms.
 Uses 1D CNN backbone for spectral features and a small transformer

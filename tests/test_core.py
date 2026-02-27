@@ -1,4 +1,4 @@
-"""Core tests for astroSETI.
+"""Core tests for MitraSETI.
 
 Tests for project structure, imports, the Rust core bindings,
 the ML inference layer, and the processing pipeline.
@@ -38,8 +38,8 @@ class TestProjectStructure:
         assert PROJECT_ROOT.exists()
 
     def test_pipeline_module_importable(self):
-        from pipeline import AstroSETIPipeline
-        assert AstroSETIPipeline is not None
+        from pipeline import MitraSETIPipeline
+        assert MitraSETIPipeline is not None
 
 
 class TestImports:
@@ -66,31 +66,31 @@ class TestRustCoreIntegration:
     """Tests for the compiled Rust extension module."""
 
     def test_rust_core_importable(self):
-        import astroseti_core
-        assert astroseti_core is not None
+        import mitraseti_core
+        assert mitraseti_core is not None
 
     def test_dedoppler_engine(self):
-        import astroseti_core
-        params = astroseti_core.SearchParams(max_drift_rate=4.0, min_snr=5.0)
-        engine = astroseti_core.DedopplerEngine(params)
+        import mitraseti_core
+        params = mitraseti_core.SearchParams(max_drift_rate=4.0, min_snr=5.0)
+        engine = mitraseti_core.DedopplerEngine(params)
         assert engine is not None
 
     def test_rfi_filter(self):
-        import astroseti_core
-        rfi_filter = astroseti_core.RFIFilter()
+        import mitraseti_core
+        rfi_filter = mitraseti_core.RFIFilter()
         assert rfi_filter is not None
 
     def test_filterbank_reader(self):
-        import astroseti_core
-        reader = astroseti_core.FilterbankReader()
+        import mitraseti_core
+        reader = mitraseti_core.FilterbankReader()
         assert reader is not None
 
     def test_filterbank_read_real_file(self):
-        import astroseti_core
+        import mitraseti_core
         fil_files = list(Path("data/filterbank").glob("*.fil"))
         if not fil_files:
             pytest.skip("No .fil files available")
-        reader = astroseti_core.FilterbankReader()
+        reader = mitraseti_core.FilterbankReader()
         header, data, n_times, n_chans = reader.read(str(fil_files[0]))
         assert n_times > 0
         assert n_chans > 0
@@ -127,13 +127,13 @@ class TestPipelineEndToEnd:
     """End-to-end pipeline tests with real files when available."""
 
     def test_pipeline_init_default(self):
-        from pipeline import AstroSETIPipeline
-        pipe = AstroSETIPipeline()
+        from pipeline import MitraSETIPipeline
+        pipe = MitraSETIPipeline()
         assert pipe._rust_available
 
     def test_pipeline_process_returns_structure(self):
-        from pipeline import AstroSETIPipeline
-        pipe = AstroSETIPipeline()
+        from pipeline import MitraSETIPipeline
+        pipe = MitraSETIPipeline()
         fil_files = list(Path("data/filterbank").glob("*.fil"))
         if not fil_files:
             pytest.skip("No .fil files in data/filterbank")
@@ -144,8 +144,8 @@ class TestPipelineEndToEnd:
         assert "summary" in result
 
     def test_pipeline_error_on_missing_file(self):
-        from pipeline import AstroSETIPipeline
-        pipe = AstroSETIPipeline()
+        from pipeline import MitraSETIPipeline
+        pipe = MitraSETIPipeline()
         result = pipe.process_file("/tmp/nonexistent_file_12345.fil")
         assert result["summary"]["status"] == "error"
 

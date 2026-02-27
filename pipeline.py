@@ -1,5 +1,5 @@
 """
-astroSETI End-to-End Processing Pipeline
+MitraSETI End-to-End Processing Pipeline
 
 Connects the Rust core (de-Doppler search, filterbank reading, RFI filtering)
 with the Python ML layer (signal classification, feature extraction, OOD detection)
@@ -15,9 +15,9 @@ Pipeline stages:
     7. Return comprehensive results dict
 
 Usage:
-    from pipeline import AstroSETIPipeline
+    from pipeline import MitraSETIPipeline
 
-    pipe = AstroSETIPipeline(model_path="models/signal_classifier_v1.pt")
+    pipe = MitraSETIPipeline(model_path="models/signal_classifier_v1.pt")
     results = pipe.process_file("data/filterbank/observation.fil")
 """
 
@@ -42,7 +42,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-class AstroSETIPipeline:
+class MitraSETIPipeline:
     """End-to-end processing pipeline for radio SETI observations.
 
     Orchestrates Rust-accelerated de-Doppler search with Python ML inference.
@@ -81,11 +81,14 @@ class AstroSETIPipeline:
     def _init_rust_core(self) -> None:
         """Load the compiled Rust extension module."""
         try:
-            import astroseti_core
-            self._core = astroseti_core
-            params = astroseti_core.SearchParams(max_drift_rate=4.0, min_snr=5.0)
-            self._dedoppler = astroseti_core.DedopplerEngine(params)
-            self._rfi_filter = astroseti_core.RFIFilter()
+            try:
+                import mitraseti_core as _core
+            except ImportError:
+                import astroseti_core as _core
+            self._core = _core
+            params = _core.SearchParams(max_drift_rate=4.0, min_snr=5.0)
+            self._dedoppler = _core.DedopplerEngine(params)
+            self._rfi_filter = _core.RFIFilter()
             self._rust_available = True
             logger.info("Rust core loaded successfully")
         except ImportError:
@@ -925,7 +928,7 @@ class AstroSETIPipeline:
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run astroSETI processing pipeline")
+    parser = argparse.ArgumentParser(description="Run MitraSETI processing pipeline")
     parser.add_argument("files", nargs="+", help="Filterbank (.fil) or HDF5 (.h5) files")
     parser.add_argument("--model", type=str, default="models/signal_classifier_v1.pt",
                         help="Path to classifier model weights")
@@ -941,7 +944,7 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    pipe = AstroSETIPipeline(
+    pipe = MitraSETIPipeline(
         model_path=args.model,
         db_path=args.db,
         ood_calibration_path=args.ood_cal,

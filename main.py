@@ -1,4 +1,4 @@
-"""astroSETI — Desktop Application Entry Point.
+"""MitraSETI — Desktop Application Entry Point.
 
 Launches the PyQt5-based desktop application for interactive
 SETI signal analysis and visualization.
@@ -15,11 +15,11 @@ from ui.theme import get_stylesheet
 
 
 def main():
-    """Launch the astroSETI desktop application."""
+    """Launch the MitraSETI desktop application."""
     app = QApplication(sys.argv)
-    app.setApplicationName("astroSETI")
+    app.setApplicationName("MitraSETI")
     app.setApplicationVersion("0.1.0")
-    app.setOrganizationName("astroSETI")
+    app.setOrganizationName("MitraSETI")
     app.setStyleSheet(get_stylesheet())
 
     window = MainWindow()

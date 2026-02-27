@@ -1,5 +1,5 @@
 """
-astroSETI Theme — Crystalline Glass Aesthetic
+MitraSETI Theme — Crystalline Glass Aesthetic
 
 Frosted glass panels, translucent effects, blue-cyan glow accents.
 Designed to evoke deep-space observation and alien signal detection.

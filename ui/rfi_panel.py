@@ -1,5 +1,5 @@
 """
-astroSETI RFI Dashboard
+MitraSETI RFI Dashboard
 
 Radio Frequency Interference rejection dashboard:
 - Top stats row with rejection metrics

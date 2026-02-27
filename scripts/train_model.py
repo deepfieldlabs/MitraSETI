@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Model Training Script for astroSETI Signal Classifier
+Model Training Script for MitraSETI Signal Classifier
 
 Trains the CNN + Transformer hybrid model on synthetic spectrograms.
 After training, extracts penultimate-layer embeddings for OOD calibration
@@ -49,12 +49,12 @@ def get_device() -> torch.device:
     """Select the best available training device.
     
     Note: MPS has known numerical issues with some operations.
-    Set ASTROSETI_DEVICE=cpu to force CPU.
+    Set MITRASETI_DEVICE=cpu to force CPU.
     """
     import os
-    forced = os.environ.get("ASTROSETI_DEVICE", "").lower()
+    forced = os.environ.get("MITRASETI_DEVICE", "").lower()
     if forced == "cpu":
-        logger.info("Using CPU (forced via ASTROSETI_DEVICE)")
+        logger.info("Using CPU (forced via MITRASETI_DEVICE)")
         return torch.device("cpu")
     if torch.cuda.is_available():
         dev = torch.device("cuda")
@@ -351,7 +351,7 @@ def compute_ood_calibration(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Train astroSETI signal classifier model."
+        description="Train MitraSETI signal classifier model."
     )
     parser.add_argument("--data-dir", type=str, default="data/training",
                         help="Directory containing spectrograms.npy and labels.npy")
@@ -424,7 +424,7 @@ def main() -> None:
     best_epoch = 0
     history = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": [], "lr": []}
 
-    print(f"\nastroSETI Model Training")
+    print(f"\nMitraSETI Model Training")
     print(f"  Device:     {device}")
     print(f"  Model:      CNN + Transformer ({param_count:,} params)")
     print(f"  Data:       {len(train_ds)} train / {len(val_ds)} val")

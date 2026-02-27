@@ -1,5 +1,5 @@
 """
-astroSETI Waterfall Viewer — THE HERO PANEL
+MitraSETI Waterfall Viewer — THE HERO PANEL
 
 Spectrogram / waterfall display with:
 - Embedded matplotlib canvas for the main spectrogram

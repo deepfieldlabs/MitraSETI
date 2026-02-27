@@ -1,5 +1,5 @@
 """
-astroSETI Dashboard — The First Thing Users See
+MitraSETI Dashboard — The First Thing Users See
 
 Hero section, stat cards, quick actions, recent activity,
 system health indicators, and mini waterfall preview.
@@ -53,7 +53,7 @@ class _HealthDot(QFrame):
 # ── Dashboard Panel ──────────────────────────────────────────────────────────
 
 class DashboardPanel(QWidget):
-    """Main dashboard — the landing page of astroSETI."""
+    """Main dashboard — the landing page of MitraSETI."""
 
     navigate_to = pyqtSignal(int)  # Emit panel index to switch to
 
@@ -103,7 +103,7 @@ class DashboardPanel(QWidget):
         hero_layout.setSpacing(8)
 
         # Title with glow feel
-        hero_title = QLabel("astroSETI")
+        hero_title = QLabel("MitraSETI")
         hero_title.setStyleSheet("""
             font-size: 42px;
             font-weight: 800;
@@ -214,7 +214,7 @@ class DashboardPanel(QWidget):
 
         bench_btn = self._make_action_btn(
             "⚡  Run Benchmark", "#f87171",
-            "Compare astroSETI vs turboSETI performance"
+            "Compare MitraSETI vs turboSETI performance"
         )
         bench_btn.clicked.connect(self._run_benchmark)
         actions_row2.addWidget(bench_btn)

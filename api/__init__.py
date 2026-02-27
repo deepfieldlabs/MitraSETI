@@ -1,5 +1,5 @@
 """
-astroSETI FastAPI Backend
+MitraSETI FastAPI Backend
 
 API endpoints for radio-signal processing, classification, and ET candidate management.
 """

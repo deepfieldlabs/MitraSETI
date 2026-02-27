@@ -1,5 +1,5 @@
 """
-astroSETI Settings Panel
+MitraSETI Settings Panel
 
 Configuration for pipeline, streaming, paths, and display preferences.
 """

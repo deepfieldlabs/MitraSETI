@@ -1,12 +1,12 @@
 [package]
-name = "astroseti-core"
+name = "mitraseti-core"
 version = "0.1.0"
 edition = "2021"
 description = "High-performance SETI signal processing core — de-Doppler search, filterbank I/O, and RFI rejection in Rust with Python bindings."
 license = "MIT"
 
 [lib]
-name = "astroseti_core"
+name = "mitraseti_core"
 crate-type = ["cdylib", "rlib"]
 
 [features]

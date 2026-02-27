@@ -1,11 +1,11 @@
-//! # astroseti-core
+//! # mitraseti-core
 //!
 //! High-performance SETI signal-processing library written in Rust with
 //! Python bindings via [PyO3](https://pyo3.rs).
 //!
 //! ## Overview
 //!
-//! This crate provides the computational core of the **astroSETI** pipeline:
+//! This crate provides the computational core of the **MitraSETI** pipeline:
 //!
 //! | Module        | Purpose                                                  |
 //! |---------------|----------------------------------------------------------|
@@ -17,16 +17,16 @@
 //! ## Python usage
 //!
 //! When compiled as a `cdylib` (the default crate-type), the library
-//! exposes a Python module called `astroseti_core`:
+//! exposes a Python module called `mitraseti_core`:
 //!
 //! ```python
-//! import astroseti_core
+//! import mitraseti_core
 //!
-//! reader = astroseti_core.FilterbankReader()
+//! reader = mitraseti_core.FilterbankReader()
 //! header, data, n_times, n_chans = reader.read("observation.fil")
 //!
-//! params = astroseti_core.SearchParams(max_drift_rate=4.0, min_snr=10.0)
-//! engine = astroseti_core.DedopplerSearch(params)
+//! params = mitraseti_core.SearchParams(max_drift_rate=4.0, min_snr=10.0)
+//! engine = mitraseti_core.DedopplerSearch(params)
 //! result = engine.search(data, n_times, n_chans, header)
 //!
 //! for candidate in result.candidates:
@@ -57,7 +57,7 @@ use pyo3::prelude::*;
 /// - `SearchParams` — search configuration
 /// - `SearchResult` — aggregated search output
 #[pymodule]
-fn astroseti_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn mitraseti_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Expose DedopplerEngine under the name "DedopplerSearch" for a
     // friendlier Python API.
     m.add_class::<DedopplerEngine>()?;

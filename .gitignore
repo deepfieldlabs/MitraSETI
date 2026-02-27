@@ -70,8 +70,9 @@ desktop.ini
 *.key
 
 # =========================
-# astroSETI specific
+# MitraSETI specific
 # =========================
+# Note: directory on disk is still 'astroseti_artifacts' (unchanged)
 astroseti_artifacts/
 *.pt
 *.pth

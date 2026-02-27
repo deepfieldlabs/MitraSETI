@@ -1,1 +1,1 @@
-# astroSETI test suite
+# MitraSETI test suite

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-astroSETI Benchmark Suite
+MitraSETI Benchmark Suite
 
-Benchmark astroSETI against turboSETI with synthetic filterbank data
+Benchmark MitraSETI against turboSETI with synthetic filterbank data
 of various sizes. Produces comparison tables and an HTML report
 suitable for README marketing material.
 
 Benchmarks:
-- Processing time (astroSETI vs turboSETI)
+- Processing time (MitraSETI vs turboSETI)
 - Signal detections and candidates found
 - RFI rejection accuracy
 - Memory usage
@@ -73,13 +73,13 @@ class BenchmarkResult:
     nchans: int
     ntime: int
     file_size_mb: float
-    # astroSETI results
-    astroseti_time_s: float = 0.0
-    astroseti_signals: int = 0
-    astroseti_candidates: int = 0
-    astroseti_rfi: int = 0
-    astroseti_memory_mb: float = 0.0
-    astroseti_throughput_mbs: float = 0.0
+    # MitraSETI results
+    mitraseti_time_s: float = 0.0
+    mitraseti_signals: int = 0
+    mitraseti_candidates: int = 0
+    mitraseti_rfi: int = 0
+    mitraseti_memory_mb: float = 0.0
+    mitraseti_throughput_mbs: float = 0.0
     # turboSETI results
     turboseti_time_s: float = 0.0
     turboseti_signals: int = 0
@@ -88,7 +88,7 @@ class BenchmarkResult:
     turboseti_memory_mb: float = 0.0
     turboseti_throughput_mbs: float = 0.0
     # Comparison
-    speedup: float = 0.0  # astroSETI speedup factor vs turboSETI
+    speedup: float = 0.0  # MitraSETI speedup factor vs turboSETI
     error: str = ""
 
 
@@ -237,9 +237,9 @@ def get_memory_mb() -> float:
 # Benchmark runners
 # ─────────────────────────────────────────────────────────────────────────────
 
-def benchmark_astroseti(spectrogram: np.ndarray) -> dict:
+def benchmark_mitraseti(spectrogram: np.ndarray) -> dict:
     """
-    Benchmark astroSETI pipeline on a spectrogram.
+    Benchmark MitraSETI pipeline on a spectrogram.
 
     Returns dict with timing, signals, candidates, RFI, memory.
     """
@@ -284,7 +284,7 @@ def benchmark_astroseti(spectrogram: np.ndarray) -> dict:
             result["candidates"] = max(result["candidates"], 1)
 
     except Exception as e:
-        logger.warning(f"astroSETI benchmark error: {e}")
+        logger.warning(f"MitraSETI benchmark error: {e}")
         result["error"] = str(e)[:100]
 
     end = time.perf_counter()
@@ -358,7 +358,7 @@ def benchmark_turboseti(filepath: Path) -> dict:
 
 class Benchmark:
     """
-    Run astroSETI vs turboSETI benchmarks.
+    Run MitraSETI vs turboSETI benchmarks.
 
     Generates synthetic data at various sizes, processes through both
     pipelines, and produces comparison results.
@@ -423,7 +423,7 @@ class Benchmark:
         )
 
         print("=" * 70)
-        print("  ASTROSETI BENCHMARK SUITE")
+        print("  MITRASETI BENCHMARK SUITE")
         print("=" * 70)
         print(f"  Sizes: {', '.join(self.sizes)}")
         print(f"  Runs per size: {self.runs_per_size}")
@@ -456,11 +456,11 @@ class Benchmark:
             h5_path = self.output_dir / f"bench_{size_name}.h5"
             save_synthetic_h5(spectrogram, h5_path, metadata)
 
-            # Run astroSETI benchmark (multiple runs, take median)
+            # Run MitraSETI benchmark (multiple runs, take median)
             astro_times = []
             astro_result = None
             for run_idx in range(self.runs_per_size):
-                r = benchmark_astroseti(spectrogram)
+                r = benchmark_mitraseti(spectrogram)
                 astro_times.append(r["time_s"])
                 if astro_result is None:
                     astro_result = r
@@ -492,12 +492,12 @@ class Benchmark:
                 nchans=nchans,
                 ntime=ntime,
                 file_size_mb=round(file_size_mb, 2),
-                astroseti_time_s=round(astro_median_time, 4),
-                astroseti_signals=astro_result.get("signals", 0) if astro_result else 0,
-                astroseti_candidates=astro_result.get("candidates", 0) if astro_result else 0,
-                astroseti_rfi=astro_result.get("rfi", 0) if astro_result else 0,
-                astroseti_memory_mb=astro_result.get("memory_mb", 0) if astro_result else 0,
-                astroseti_throughput_mbs=round(
+                mitraseti_time_s=round(astro_median_time, 4),
+                mitraseti_signals=astro_result.get("signals", 0) if astro_result else 0,
+                mitraseti_candidates=astro_result.get("candidates", 0) if astro_result else 0,
+                mitraseti_rfi=astro_result.get("rfi", 0) if astro_result else 0,
+                mitraseti_memory_mb=astro_result.get("memory_mb", 0) if astro_result else 0,
+                mitraseti_throughput_mbs=round(
                     file_size_mb / astro_median_time if astro_median_time > 0 else 0, 2
                 ),
                 turboseti_time_s=round(turbo_median_time, 4),
@@ -514,11 +514,11 @@ class Benchmark:
             suite.results.append(asdict(result))
 
             # Print inline result
-            print(f"    astroSETI:  {astro_median_time:.4f}s | "
-                  f"{result.astroseti_throughput_mbs:.1f} MB/s | "
-                  f"signals={result.astroseti_signals} | "
-                  f"candidates={result.astroseti_candidates} | "
-                  f"RFI={result.astroseti_rfi}")
+            print(f"    MitraSETI:  {astro_median_time:.4f}s | "
+                  f"{result.mitraseti_throughput_mbs:.1f} MB/s | "
+                  f"signals={result.mitraseti_signals} | "
+                  f"candidates={result.mitraseti_candidates} | "
+                  f"RFI={result.mitraseti_rfi}")
             if self.turboseti_available:
                 print(f"    turboSETI:  {turbo_median_time:.4f}s | "
                       f"{result.turboseti_throughput_mbs:.1f} MB/s | "
@@ -560,7 +560,7 @@ class Benchmark:
         if suite.turboseti_available:
             print(
                 f"  {'Size':<20} {'File MB':>8} "
-                f"{'astroSETI':>10} {'turboSETI':>10} {'Speedup':>8} "
+                f"{'MitraSETI':>10} {'turboSETI':>10} {'Speedup':>8} "
                 f"{'Signals':>8} {'Cands':>6} {'RFI':>5}"
             )
             print(
@@ -584,22 +584,22 @@ class Benchmark:
                 print(
                     f"  {r['size_label']:<20} "
                     f"{r['file_size_mb']:>8.2f} "
-                    f"{r['astroseti_time_s']:>9.4f}s "
+                    f"{r['mitraseti_time_s']:>9.4f}s "
                     f"{r['turboseti_time_s']:>9.4f}s "
                     f"{speedup_str:>8} "
-                    f"{r['astroseti_signals']:>8} "
-                    f"{r['astroseti_candidates']:>6} "
-                    f"{r['astroseti_rfi']:>5}"
+                    f"{r['mitraseti_signals']:>8} "
+                    f"{r['mitraseti_candidates']:>6} "
+                    f"{r['mitraseti_rfi']:>5}"
                 )
             else:
                 print(
                     f"  {r['size_label']:<20} "
                     f"{r['file_size_mb']:>8.2f} "
-                    f"{r['astroseti_time_s']:>9.4f}s "
-                    f"{r['astroseti_throughput_mbs']:>7.1f} "
-                    f"{r['astroseti_signals']:>8} "
-                    f"{r['astroseti_candidates']:>6} "
-                    f"{r['astroseti_rfi']:>5}"
+                    f"{r['mitraseti_time_s']:>9.4f}s "
+                    f"{r['mitraseti_throughput_mbs']:>7.1f} "
+                    f"{r['mitraseti_signals']:>8} "
+                    f"{r['mitraseti_candidates']:>6} "
+                    f"{r['mitraseti_rfi']:>5}"
                 )
 
         print(f"{'=' * 90}")
@@ -623,13 +623,13 @@ class Benchmark:
             <tr>
                 <td>{r['size_label']}</td>
                 <td>{r['file_size_mb']:.2f}</td>
-                <td><strong>{r['astroseti_time_s']:.4f}s</strong></td>
+                <td><strong>{r['mitraseti_time_s']:.4f}s</strong></td>
                 <td>{r['turboseti_time_s']:.4f}s</td>
                 <td>{speedup_html}</td>
-                <td>{r['astroseti_throughput_mbs']:.1f}</td>
-                <td>{r['astroseti_signals']}</td>
-                <td>{r['astroseti_candidates']}</td>
-                <td>{r['astroseti_rfi']}</td>
+                <td>{r['mitraseti_throughput_mbs']:.1f}</td>
+                <td>{r['mitraseti_signals']}</td>
+                <td>{r['mitraseti_candidates']}</td>
+                <td>{r['mitraseti_rfi']}</td>
             </tr>"""
 
         # Build chart
@@ -654,7 +654,7 @@ class Benchmark:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>astroSETI Benchmark Report</title>
+<title>MitraSETI Benchmark Report</title>
 <style>
 body {{
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Helvetica, Arial, sans-serif;
@@ -717,7 +717,7 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 <body>
 <div class="container">
 
-<h1>astroSETI Benchmark Report</h1>
+<h1>MitraSETI Benchmark Report</h1>
 <div class="subtitle">
     {datetime.now().strftime('%Y-%m-%d %H:%M')} |
     turboSETI: {'available' if suite.turboseti_available else 'not installed'} |
@@ -735,7 +735,7 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 <thead>
     <tr>
         <th>Size</th><th>File (MB)</th>
-        <th>astroSETI</th><th>turboSETI</th><th>Speedup</th>
+        <th>MitraSETI</th><th>turboSETI</th><th>Speedup</th>
         <th>MB/s</th><th>Signals</th><th>Candidates</th><th>RFI</th>
     </tr>
 </thead>
@@ -755,7 +755,7 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 </div>
 
 <div class="footer">
-    Generated by <a href="https://github.com/samantaba/astroSETI">astroSETI</a><br>
+    Generated by <a href="https://github.com/samantaba/MitraSETI">MitraSETI</a><br>
     Benchmark suite for SETI signal processing performance comparison.
 </div>
 
@@ -769,14 +769,14 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 
     @staticmethod
     def _create_benchmark_chart(results: List[dict]) -> str:
-        """Create a bar chart comparing astroSETI vs turboSETI times."""
+        """Create a bar chart comparing MitraSETI vs turboSETI times."""
         try:
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
 
             labels = [r["size_label"] for r in results]
-            astro_times = [r["astroseti_time_s"] for r in results]
+            astro_times = [r["mitraseti_time_s"] for r in results]
             turbo_times = [r["turboseti_time_s"] for r in results]
             has_turbo = any(t > 0 for t in turbo_times)
 
@@ -790,7 +790,7 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
             bars1 = ax1.bar(
                 x - width / 2 if has_turbo else x,
                 astro_times, width if has_turbo else 0.6,
-                color="#38bdf8", alpha=0.8, label="astroSETI",
+                color="#38bdf8", alpha=0.8, label="MitraSETI",
             )
             if has_turbo:
                 bars2 = ax1.bar(
@@ -818,13 +818,13 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 
             # Throughput chart
             ax2.set_facecolor("#111827")
-            throughputs = [r["astroseti_throughput_mbs"] for r in results]
+            throughputs = [r["mitraseti_throughput_mbs"] for r in results]
             ax2.bar(x, throughputs, 0.6, color="#34d399", alpha=0.8)
             ax2.set_xticks(x)
             ax2.set_xticklabels(labels, rotation=20, ha="right")
             ax2.set_ylabel("Throughput (MB/s)", color="#94a3b8", fontsize=11)
             ax2.set_title(
-                "astroSETI Throughput",
+                "MitraSETI Throughput",
                 color="#e2e8f0", fontsize=13, fontweight="bold",
             )
             ax2.tick_params(colors="#94a3b8")
@@ -857,7 +857,7 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 
 def main():
     parser = argparse.ArgumentParser(
-        description="astroSETI Benchmark Suite – compare against turboSETI",
+        description="MitraSETI Benchmark Suite – compare against turboSETI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

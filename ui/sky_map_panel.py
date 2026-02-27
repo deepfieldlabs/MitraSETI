@@ -261,7 +261,7 @@ class SkyMapPanel(QWidget):
                 )
 
         ax.set_title(
-            "AstroSETI Observation Coverage",
+            "MitraSETI Observation Coverage",
             fontsize=11, color=(0.85, 0.90, 0.95, 0.75),
             pad=12, fontweight=500,
         )

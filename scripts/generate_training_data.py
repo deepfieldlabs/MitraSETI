@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Synthetic Training Data Generator for astroSETI
+Synthetic Training Data Generator for MitraSETI
 
 Generates ~5000 synthetic spectrograms (256 freq x 64 time) across 9 signal
 classes, plus 10 Sigproc-format .fil files for testing the Rust core pipeline.
@@ -397,7 +397,7 @@ def generate_training_data(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate synthetic training data for astroSETI signal classifier."
+        description="Generate synthetic training data for MitraSETI signal classifier."
     )
     parser.add_argument(
         "--output-dir",
@@ -428,7 +428,7 @@ def main() -> None:
         counts = dict(DEFAULT_COUNTS)
 
     total = sum(counts.values())
-    print(f"astroSETI Training Data Generator")
+    print(f"MitraSETI Training Data Generator")
     print(f"  Output:  {output_dir}")
     print(f"  Classes: {len(CLASS_NAMES)}")
     print(f"  Total:   {total} spectrograms ({N_FREQ}x{N_TIME})")

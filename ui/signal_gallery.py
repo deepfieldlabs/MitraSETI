@@ -1,5 +1,5 @@
 """
-astroSETI Signal Gallery
+MitraSETI Signal Gallery
 
 Grid view of detected signal thumbnails with filtering, sorting,
 and batch actions. Each card shows a mini spectrogram + signal info.

@@ -1,5 +1,5 @@
 """
-astroSETI Web Interface
+MitraSETI Web Interface
 
 Browser-based UI for SETI signal analysis, waterfall viewing, RFI monitoring,
 and sky mapping. Proxies requests to the main API backend.
@@ -44,10 +44,10 @@ from paths import (
 logger = logging.getLogger(__name__)
 
 # API backend URL
-API_BASE = os.environ.get("ASTROSETI_API", "http://localhost:9000")
+API_BASE = os.environ.get("MITRASETI_API", "http://localhost:9000")
 
 # Setup app
-app = FastAPI(title="astroSETI Web", version="1.0.0")
+app = FastAPI(title="MitraSETI Web", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -362,12 +362,12 @@ async def device_info():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="astroSETI Web Interface")
+    parser = argparse.ArgumentParser(description="MitraSETI Web Interface")
     parser.add_argument("--port", type=int, default=9090, help="Port (default: 9090)")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host (default: 0.0.0.0)")
     args = parser.parse_args()
 
-    print(f"\n  astroSETI Web Interface")
+    print(f"\n  MitraSETI Web Interface")
     print(f"  http://localhost:{args.port}")
     print(f"  API Backend: {API_BASE}\n")
 

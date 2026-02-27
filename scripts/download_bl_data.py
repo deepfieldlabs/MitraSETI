@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-astroSETI Breakthrough Listen Data Downloader
+MitraSETI Breakthrough Listen Data Downloader
 
 Download sample data from the Breakthrough Listen Open Data Archive
 for demo, testing, and development.
@@ -494,7 +494,7 @@ class BLDataDownloader:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download Breakthrough Listen sample data for astroSETI",
+        description="Download Breakthrough Listen sample data for MitraSETI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

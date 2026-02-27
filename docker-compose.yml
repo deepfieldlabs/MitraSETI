@@ -8,7 +8,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: astroseti-api
+    container_name: mitraseti-api
     ports:
       - "9000:9000"
     volumes:
@@ -16,11 +16,11 @@ services:
       - ./models:/app/models
       - ./output:/app/output
     environment:
-      - ASTROSETI_ENV=production
-      - ASTROSETI_LOG_LEVEL=info
-      - ASTROSETI_DATA_DIR=/app/data
-      - ASTROSETI_MODEL_DIR=/app/models
-      - ASTROSETI_OUTPUT_DIR=/app/output
+      - MITRASETI_ENV=production
+      - MITRASETI_LOG_LEVEL=info
+      - MITRASETI_DATA_DIR=/app/data
+      - MITRASETI_MODEL_DIR=/app/models
+      - MITRASETI_OUTPUT_DIR=/app/output
     command: uvicorn api.server:app --host 0.0.0.0 --port 9000 --workers 4
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
@@ -37,7 +37,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: astroseti-web
+    container_name: mitraseti-web
     ports:
       - "9090:9090"
     volumes:
@@ -45,9 +45,9 @@ services:
       - ./models:/app/models
       - ./output:/app/output
     environment:
-      - ASTROSETI_ENV=production
-      - ASTROSETI_LOG_LEVEL=info
-      - ASTROSETI_API_URL=http://api:9000
+      - MITRASETI_ENV=production
+      - MITRASETI_LOG_LEVEL=info
+      - MITRASETI_API_URL=http://api:9000
     command: uvicorn web.app:app --host 0.0.0.0 --port 9090 --workers 2
     depends_on:
       api:
@@ -61,19 +61,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: astroseti-worker
+    container_name: mitraseti-worker
     volumes:
       - ./data:/app/data
       - ./models:/app/models
       - ./output:/app/output
     environment:
-      - ASTROSETI_ENV=production
-      - ASTROSETI_LOG_LEVEL=info
-      - ASTROSETI_API_URL=http://api:9000
-      - ASTROSETI_DATA_DIR=/app/data
-      - ASTROSETI_MODEL_DIR=/app/models
-      - ASTROSETI_OUTPUT_DIR=/app/output
-      - ASTROSETI_WORKER_CONCURRENCY=4
+      - MITRASETI_ENV=production
+      - MITRASETI_LOG_LEVEL=info
+      - MITRASETI_API_URL=http://api:9000
+      - MITRASETI_DATA_DIR=/app/data
+      - MITRASETI_MODEL_DIR=/app/models
+      - MITRASETI_OUTPUT_DIR=/app/output
+      - MITRASETI_WORKER_CONCURRENCY=4
     command: python -m workers.batch_processor
     depends_on:
       api:

@@ -1,5 +1,5 @@
 """
-astroSETI Desktop UI
+MitraSETI Desktop UI
 
 PyQt5-based desktop application for intelligent SETI signal analysis.
 Crystalline glass aesthetic with blue-cyan glow accents.

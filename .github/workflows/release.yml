@@ -104,12 +104,12 @@ jobs:
       - name: Generate release notes
         id: notes
         run: |
-          echo "## astroSETI v${{ steps.version.outputs.VERSION }}" > release_notes.md
+          echo "## MitraSETI v${{ steps.version.outputs.VERSION }}" > release_notes.md
           echo "" >> release_notes.md
           echo "### Installation" >> release_notes.md
           echo "" >> release_notes.md
           echo '```bash' >> release_notes.md
-          echo "pip install astroseti==${{ steps.version.outputs.VERSION }}" >> release_notes.md
+          echo "pip install mitraseti==${{ steps.version.outputs.VERSION }}" >> release_notes.md
           echo '```' >> release_notes.md
           echo "" >> release_notes.md
           echo "### Docker" >> release_notes.md

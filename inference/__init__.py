@@ -1,5 +1,5 @@
 """
-astroSETI Inference Layer
+MitraSETI Inference Layer
 
 ML models for radio signal classification, anomaly detection, and feature extraction.
 """
