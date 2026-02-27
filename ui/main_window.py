@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         ("📡", "Waterfall Viewer", 1),
         ("🔬", "Signal Gallery", 2),
         ("🛡️", "RFI Dashboard", 3),
-        ("🌌", "Sky Map", 4),
+        ("📡", "Space Radar", 4),
         ("📶", "Streaming", 5),
         ("⚙️", "Settings", 6),
     ]
