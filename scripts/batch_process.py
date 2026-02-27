@@ -540,7 +540,7 @@ Examples:
         "--output-dir",
         type=str,
         default=None,
-        help="Output directory for results (default: astroseti_artifacts/data/batch_output)",
+        help="Output directory for results (default: mitraseti_artifacts/data/batch_output)",
     )
     parser.add_argument(
         "--workers",

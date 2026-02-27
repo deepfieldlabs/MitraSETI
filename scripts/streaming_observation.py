@@ -20,7 +20,7 @@ Usage:
     python scripts/streaming_observation.py --report-only
     python scripts/streaming_observation.py --reset
 
-Reports are saved to: astroseti_artifacts/streaming_reports/
+Reports are saved to: mitraseti_artifacts/streaming_reports/
 """
 
 from __future__ import annotations

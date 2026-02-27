@@ -72,8 +72,7 @@ desktop.ini
 # =========================
 # MitraSETI specific
 # =========================
-# Note: directory on disk is still 'astroseti_artifacts' (unchanged)
-astroseti_artifacts/
+mitraseti_artifacts/
 *.pt
 *.pth
 *.onnx

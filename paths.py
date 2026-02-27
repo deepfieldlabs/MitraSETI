@@ -2,8 +2,8 @@
 Centralized path configuration for MitraSETI.
 
 All large files (data, models, database) are stored OUTSIDE the git repo
-in a sibling folder called 'astroseti_artifacts' to avoid bloating the repo.
-(The directory on disk is still called 'astroseti_artifacts' — unchanged.)
+in a sibling folder called 'mitraseti_artifacts' to avoid bloating the repo.
+(The directory on disk is still called 'mitraseti_artifacts' — unchanged.)
 
 Directory Structure:
     projects/
@@ -12,7 +12,7 @@ Directory Structure:
     │   ├── catalog/
     │   ├── inference/
     │   └── ...
-    └── astroseti_artifacts/       <- Large files (gitignored)
+    └── mitraseti_artifacts/       <- Large files (gitignored)
         ├── data/                  <- SQLite DB, filterbank files, plots
         ├── models/                <- Trained model weights
         └── candidates/            <- Verified ET candidate exports
@@ -36,11 +36,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.resolve()
 
 # Artifacts directory (sibling to project, contains all large files)
-# Default: ../astroseti_artifacts relative to project root (dir name on disk unchanged)
+# Default: ../mitraseti_artifacts relative to project root (dir name on disk unchanged)
 ARTIFACTS_DIR = Path(
     os.environ.get(
         "MITRASETI_ARTIFACTS_DIR",
-        PROJECT_ROOT.parent / "astroseti_artifacts",
+        PROJECT_ROOT.parent / "mitraseti_artifacts",
     )
 ).resolve()
 
@@ -53,7 +53,7 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", ARTIFACTS_DIR / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # SQLite database
-DB_PATH = DATA_DIR / "astroseti.db"
+DB_PATH = DATA_DIR / "mitraseti.db"
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite+aiosqlite:///{DB_PATH}")
 
 # Filterbank / HDF5 input files

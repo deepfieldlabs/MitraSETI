@@ -57,7 +57,7 @@ class DashboardPanel(QWidget):
 
     navigate_to = pyqtSignal(int)  # Emit panel index to switch to
 
-    _STATE_FILE = Path(__file__).parent.parent.parent / "astroseti_artifacts" / "data" / "streaming_state.json"
+    _STATE_FILE = Path(__file__).parent.parent.parent / "mitraseti_artifacts" / "data" / "streaming_state.json"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -451,7 +451,7 @@ class DashboardPanel(QWidget):
     def _run_benchmark(self):
         """Launch the benchmark suite in a subprocess."""
         script = Path(__file__).parent.parent / "scripts" / "benchmark.py"
-        artifacts = Path(__file__).parent.parent.parent / "astroseti_artifacts" / "benchmarks"
+        artifacts = Path(__file__).parent.parent.parent / "mitraseti_artifacts" / "benchmarks"
         artifacts.mkdir(parents=True, exist_ok=True)
         try:
             self._bench_proc = subprocess.Popen(
@@ -473,7 +473,7 @@ class DashboardPanel(QWidget):
     def _check_benchmark_done(self):
         if hasattr(self, "_bench_proc") and self._bench_proc:
             if self._bench_proc.poll() is not None:
-                artifacts = Path(__file__).parent.parent.parent / "astroseti_artifacts" / "benchmarks"
+                artifacts = Path(__file__).parent.parent.parent / "mitraseti_artifacts" / "benchmarks"
                 reports = sorted(artifacts.glob("benchmark_report_*.html"), reverse=True)
                 if reports:
                     webbrowser.open(f"file://{reports[0]}")

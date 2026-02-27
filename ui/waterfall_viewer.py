@@ -35,7 +35,7 @@ from pathlib import Path as _Path
 
 from .theme import COLORS, create_glass_card, create_glow_button
 
-_ARTIFACTS_DIR = _Path(__file__).parent.parent.parent / "astroseti_artifacts"
+_ARTIFACTS_DIR = _Path(__file__).parent.parent.parent / "mitraseti_artifacts"
 _FILTERBANK_DIR = _ARTIFACTS_DIR / "data" / "filterbank"
 
 

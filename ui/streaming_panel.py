@@ -34,7 +34,7 @@ from .theme import COLORS, make_stat_card, create_glow_button
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-_ARTIFACTS_DIR = Path(__file__).parent.parent.parent / "astroseti_artifacts"
+_ARTIFACTS_DIR = Path(__file__).parent.parent.parent / "mitraseti_artifacts"
 _DATA_DIR = _ARTIFACTS_DIR / "data"
 _STREAMING_STATE = _DATA_DIR / "streaming_state.json"
 _STREAMING_LOG = _DATA_DIR / "streaming_observation.log"

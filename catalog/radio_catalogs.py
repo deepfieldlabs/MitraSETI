@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Local cache directory (inside artifacts)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_ARTIFACTS_DIR = Path(__file__).parent.parent.parent / "astroseti_artifacts"
+_ARTIFACTS_DIR = Path(__file__).parent.parent.parent / "mitraseti_artifacts"
 _CACHE_DIR = _ARTIFACTS_DIR / "data" / "catalog_cache"
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 

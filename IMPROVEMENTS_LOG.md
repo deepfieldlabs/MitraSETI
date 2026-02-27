@@ -385,7 +385,7 @@ After 12.2 hours / 230 files / 2.6 cycles with 88 files (40 GB dataset), five is
 - **What**: Renamed the entire project from `astroSETI` to `MitraSETI` across 50 files.
 - **Scope**: All display names, UI labels, docstrings, comments, package metadata, Docker configs, CI/CD, web templates, tests, Rust crate.
 - **Environment variables**: `ASTROSETI_*` → `MITRASETI_*`
-- **Backward compatibility**: Filesystem path `astroseti_artifacts` kept as-is on disk; Python import adds fallback (`import mitraseti_core` → `import astroseti_core`).
+- **Backward compatibility**: Filesystem path `mitraseti_artifacts` kept as-is on disk; Python import adds fallback (`import mitraseti_core` → `import astroseti_core`).
 - **Why**: The name `astroSETI` was previously taken. `MitraSETI` derives from "Mitra" (Sanskrit: friend/ally), representing a collaborative approach to the search for extraterrestrial intelligence.
 
 ### 9.2 Space Radar Visualizer (replaces Sky Map)

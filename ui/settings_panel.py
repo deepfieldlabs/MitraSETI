@@ -21,7 +21,7 @@ from PyQt5.QtCore import Qt
 from .theme import COLORS
 
 # Paths
-_ARTIFACTS_DIR = Path(__file__).parent.parent.parent / "astroseti_artifacts"
+_ARTIFACTS_DIR = Path(__file__).parent.parent.parent / "mitraseti_artifacts"
 _SETTINGS_FILE = _ARTIFACTS_DIR / "data" / "settings.json"
 
 
