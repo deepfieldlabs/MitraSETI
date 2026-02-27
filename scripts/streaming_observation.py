@@ -467,10 +467,11 @@ class StreamingObserver:
         n_anomalies = summary.get("anomaly_count", 0)
         total_hits = summary.get("total_hits_filtered", len(candidates))
 
+        real_candidates = [c for c in candidates if c.get("is_candidate", False)]
         best_snr = max((c.get("snr", 0) for c in candidates), default=0.0)
-        best_ood = max((c.get("ood_score", 0) for c in candidates), default=0.0)
-        best_drift = max((abs(c.get("drift_rate", 0)) for c in candidates), default=0.0)
-        best_cand = max(candidates, key=lambda c: c.get("snr", 0)) if candidates else {}
+        best_ood = max((c.get("ood_score", 0) for c in real_candidates), default=0.0)
+        best_drift = max((abs(c.get("drift_rate", 0)) for c in real_candidates), default=0.0)
+        best_cand = max(real_candidates, key=lambda c: c.get("snr", 0)) if real_candidates else {}
 
         if total_hits == 0 or best_snr < self.state.current_min_snr:
             return {
