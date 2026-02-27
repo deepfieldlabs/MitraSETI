@@ -259,6 +259,11 @@ class MainWindow(QMainWindow):
         self.waterfall_viewer.signal_detected.connect(
             self.signal_gallery.add_signal
         )
+        self.signal_gallery.open_in_viewer.connect(self._open_signal_in_viewer)
+
+    def _open_signal_in_viewer(self, signal_data: dict):
+        """Navigate to waterfall viewer with the selected signal's file."""
+        self._on_nav_clicked("Waterfall Viewer")
 
     # ── Status bar ────────────────────────────────────────────────────────
 

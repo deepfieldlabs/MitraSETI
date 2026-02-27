@@ -279,6 +279,7 @@ class SignalGallery(QWidget):
         self._current_filter = "All"
         self._current_sort = "SNR"
         self._setup_ui()
+        self._load_candidates()
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
@@ -312,7 +313,25 @@ class SignalGallery(QWidget):
         self._sort_combo.currentTextChanged.connect(self._on_sort_changed)
         header.addWidget(self._sort_combo)
 
-        header.addSpacing(12)
+        header.addSpacing(8)
+
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setFixedHeight(30)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0,212,255,0.1);
+                border: 1px solid rgba(0,212,255,0.2);
+                border-radius: 6px;
+                padding: 4px 14px;
+                color: rgba(0,212,255,0.8);
+                font-size: 12px;
+            }
+            QPushButton:hover { background: rgba(0,212,255,0.2); }
+        """)
+        refresh_btn.clicked.connect(self.refresh)
+        header.addWidget(refresh_btn)
+
+        header.addSpacing(8)
 
         # Count label
         self._count_label = QLabel("0 signals")
@@ -441,6 +460,75 @@ class SignalGallery(QWidget):
                 """)
 
     # ── Data management ───────────────────────────────────────────────────
+
+    def _load_candidates(self):
+        """Load verified candidates and streaming signals on startup."""
+        import json
+        from pathlib import Path
+
+        try:
+            from paths import CANDIDATES_DIR, DATA_DIR
+        except ImportError:
+            return
+
+        loaded: list[dict] = []
+        cand_file = CANDIDATES_DIR / "verified_candidates.json"
+        if cand_file.exists():
+            try:
+                with open(cand_file) as f:
+                    candidates = json.load(f)
+                for i, c in enumerate(candidates):
+                    loaded.append({
+                        "id": f"vc_{i}",
+                        "frequency_hz": c.get("frequency_hz", 0),
+                        "snr": c.get("snr", 0),
+                        "drift_rate": c.get("drift_rate", 0),
+                        "classification": c.get("classification", "unknown"),
+                        "confidence": c.get("confidence", 0),
+                        "rfi_score": c.get("rfi_probability", 0),
+                        "ood_score": c.get("ood_score", 0),
+                        "is_anomaly": c.get("is_anomaly", False),
+                        "verified": True,
+                        "target": c.get("target_name", ""),
+                        "category": c.get("category", ""),
+                        "file": c.get("file_name", ""),
+                        "processed_at": c.get("processed_at", ""),
+                    })
+            except Exception:
+                pass
+
+        state_file = DATA_DIR / "streaming_state.json"
+        if state_file.exists():
+            try:
+                with open(state_file) as f:
+                    state = json.load(f)
+                cats = state.get("category_stats", {})
+                for cat, stats in cats.items():
+                    if stats.get("candidates", 0) > 0 and not any(
+                        s.get("category") == cat for s in loaded
+                    ):
+                        loaded.append({
+                            "id": f"cat_{cat}",
+                            "frequency_hz": 0,
+                            "snr": stats.get("signals", 0),
+                            "drift_rate": 0,
+                            "classification": f"{cat} summary",
+                            "confidence": 0,
+                            "rfi_score": 0,
+                            "verified": False,
+                            "target": cat,
+                            "category": cat,
+                            "file": f"{stats.get('files', 0)} files",
+                        })
+            except Exception:
+                pass
+
+        if loaded:
+            self.set_signals(loaded)
+
+    def refresh(self):
+        """Reload candidates from disk."""
+        self._load_candidates()
 
     def add_signal(self, signal_data: dict):
         """Add a signal from detection pipeline."""
