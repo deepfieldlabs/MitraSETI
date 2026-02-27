@@ -379,9 +379,51 @@ After 12.2 hours / 230 files / 2.6 cycles with 88 files (40 GB dataset), five is
 
 ---
 
+## Session 9 — Feb 8, 2026
+
+### 9.1 Project Rename: astroSETI → MitraSETI
+- **What**: Renamed the entire project from `astroSETI` to `MitraSETI` across 50 files.
+- **Scope**: All display names, UI labels, docstrings, comments, package metadata, Docker configs, CI/CD, web templates, tests, Rust crate.
+- **Environment variables**: `ASTROSETI_*` → `MITRASETI_*`
+- **Backward compatibility**: Filesystem path `astroseti_artifacts` kept as-is on disk; Python import adds fallback (`import mitraseti_core` → `import astroseti_core`).
+- **Why**: The name `astroSETI` was previously taken. `MitraSETI` derives from "Mitra" (Sanskrit: friend/ally), representing a collaborative approach to the search for extraterrestrial intelligence.
+
+### 9.2 Space Radar Visualizer (replaces Sky Map)
+- **What**: Replaced the static Aitoff sky map with an animated radar-style space visualizer.
+- **Features**:
+  - Custom QPainter radar display with animated sweep line
+  - Phosphor-persistence fading (targets glow bright when swept, then fade)
+  - RA→angle, Dec→radius polar projection
+  - Color-coded blips: green=candidate, blue=signal, dim=observation
+  - Pulsing rings on candidate targets
+  - Hover tooltips with target details (RA/Dec, SNR, classification)
+  - Filter dropdown (All / With Signals / Candidates Only)
+  - Auto-loads data from streaming_state.json and verified_candidates.json
+- **Why**: The static Aitoff projection was not visually engaging. The radar metaphor is more intuitive for monitoring real-time observations and immediately conveys the "scanning space" concept.
+
+### 9.3 ON-OFF Cadence Analysis
+- **What**: Implemented the standard Breakthrough Listen ABACAD cadence filter.
+- **New file**: `scripts/cadence_analysis.py`
+- **How it works**:
+  1. Scans data directory and pairs ON/OFF files by target name (regex-based)
+  2. Runs the full MitraSETI pipeline on each ON and OFF file
+  3. Compares signals: frequency matching within configurable tolerance (default 5 kHz)
+  4. Signals in ON but NOT in OFF → pass cadence filter (potential ETI candidates)
+  5. Signals in both → rejected as RFI
+- **Supported targets**: TRAPPIST-1, GJ699, KIC8462852, LHS292, Kepler-160
+- **Integration**:
+  - Auto-runs every 100 streaming cycles
+  - "Run Cadence Analysis" button in Streaming UI
+  - Cadence Passed / Cadence RFI stat cards in Streaming panel
+  - Results saved to `cadence_results.json`
+- **CLI**: `python scripts/cadence_analysis.py [--target TRAPPIST1] [--freq-tolerance 0.002] [-v]`
+- **Why**: ON-OFF cadence is the gold standard for SETI RFI rejection. A genuine ET signal should appear only when the telescope points at the target, not during off-source pointings. This is critical for publishable results.
+
+---
+
 ## Pending / Future Improvements
 
 - **Taylor Tree De-Doppler**: Replace brute-force with Taylor tree algorithm for ~5-10x faster de-Doppler search.
-- **On-OFF Cadence Analysis**: With ON/OFF pairs now available (GJ699, GJ411, KIC8462852, LHS292), implement automated ON-OFF subtraction to reject persistent RFI.
 - **Cross-Category Correlation**: Compare signals across Voyager, Kepler, HIP, TRAPPIST categories to identify shared RFI patterns.
 - **Parkes Telescope Data**: Add Parkes (Murriyang) data for multi-telescope confirmation of candidate signals.
+- **Rust Module Recompilation**: Rebuild `mitraseti_core` (was `astroseti_core`) to match the new project name (`cd core && maturin develop`).
