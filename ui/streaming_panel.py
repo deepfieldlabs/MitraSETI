@@ -276,6 +276,22 @@ class StreamingPanel(QWidget):
             stats_grid.addWidget(card, 0, i)
             self._stat_cards[key] = card
 
+        cadence_defs = [
+            ("cadence_passed", "Cadence Passed", "0", "#34d399"),
+            ("cadence_rfi", "Cadence RFI", "0", "#f87171"),
+        ]
+        for i, (key, label, default, color) in enumerate(cadence_defs):
+            card = make_stat_card(label, default, color)
+            stats_grid.addWidget(card, 1, i)
+            self._stat_cards[key] = card
+
+        cadence_btn = create_glow_button("Run Cadence Analysis", "#7c3aed")
+        cadence_btn.setToolTip(
+            "Run ON-OFF cadence filter on available observation pairs"
+        )
+        cadence_btn.clicked.connect(self._run_cadence)
+        stats_grid.addWidget(cadence_btn, 1, 2, 1, 2)
+
         layout.addLayout(stats_grid)
 
         # ── Live log viewer ───────────────────────────────────────────────
@@ -520,6 +536,13 @@ class StreamingPanel(QWidget):
         else:
             self._update_stat("rate", "—")
 
+        # Cadence analysis stats
+        cadence_p = state.get("cadence_passed", 0)
+        cadence_r = state.get("cadence_rfi_rejected", 0)
+        self._update_stat("cadence_passed", str(cadence_p),
+                          "#34d399" if cadence_p > 0 else "")
+        self._update_stat("cadence_rfi", str(cadence_r))
+
         # Elapsed -- compute from started_at if not explicitly stored
         elapsed_str = state.get("elapsed", "")
         if not elapsed_str and state.get("started_at"):
@@ -592,6 +615,38 @@ class StreamingPanel(QWidget):
                 subprocess.Popen(["xdg-open", str(_REPORTS_DIR)])
             else:
                 subprocess.Popen(["explorer", str(_REPORTS_DIR)])
+
+    def _run_cadence(self):
+        """Trigger ON-OFF cadence analysis in a background thread."""
+        import threading
+
+        self._update_stat("cadence_passed", "running...", "#a78bfa")
+
+        def _worker():
+            try:
+                sys_path_entry = str(Path(__file__).parent.parent)
+                if sys_path_entry not in sys.path:
+                    sys.path.insert(0, sys_path_entry)
+
+                from scripts.cadence_analysis import (
+                    discover_on_off_pairs, run_cadence_filter,
+                    save_cadence_results,
+                )
+
+                groups = discover_on_off_pairs()
+                if not groups:
+                    self._update_stat("cadence_passed", "no pairs", "#f87171")
+                    return
+
+                result = run_cadence_filter(groups)
+                save_cadence_results(result)
+                self._update_stat("cadence_passed", str(result.cadence_passed),
+                                  "#34d399" if result.cadence_passed else "#4da6ff")
+                self._update_stat("cadence_rfi", str(result.rfi_rejected))
+            except Exception as e:
+                self._update_stat("cadence_passed", "error", "#f87171")
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     _last_valid_state: dict = {}
 

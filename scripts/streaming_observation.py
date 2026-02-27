@@ -166,6 +166,9 @@ class StreamingState:
     pipeline_metrics: Dict[str, dict] = field(default_factory=dict)
     # Track when we last trained/fine-tuned the model
     last_trained_at_file: int = 0
+    # ON-OFF cadence analysis results
+    cadence_passed: int = 0
+    cadence_rfi_rejected: int = 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -863,6 +866,40 @@ class StreamingObserver:
     _MIN_FILES_FOR_TRAIN = 5
     _RETRAIN_INTERVAL = 500  # retrain every N cycles (~4,400 files in aggressive mode)
 
+    # ── ON-OFF cadence analysis ──────────────────────────────────────────
+
+    def _run_cadence_check(self):
+        """Run ON-OFF cadence analysis on available file pairs."""
+        try:
+            from scripts.cadence_analysis import (
+                discover_on_off_pairs, run_cadence_filter,
+                save_cadence_results,
+            )
+
+            groups = discover_on_off_pairs()
+            if not groups:
+                return
+
+            logger.info(f"Running ON-OFF cadence analysis on {len(groups)} targets...")
+            result = run_cadence_filter(groups, pipeline=self.pipeline)
+            save_cadence_results(result)
+
+            if result.cadence_passed > 0:
+                logger.info(
+                    f"  CADENCE RESULT: {result.cadence_passed} signals passed "
+                    f"ON-OFF filter! ({result.rfi_rejected} rejected as RFI)"
+                )
+                self.state.cadence_passed = result.cadence_passed
+                self.state.cadence_rfi_rejected = result.rfi_rejected
+            else:
+                logger.info(
+                    f"  Cadence complete: all {result.rfi_rejected} signals "
+                    f"appeared in OFF pointings (RFI)."
+                )
+
+        except Exception as e:
+            logger.warning(f"Cadence analysis failed: {e}")
+
     def _maybe_auto_train(self):
         """Train or fine-tune the model using cached real BL spectrograms.
 
@@ -1533,6 +1570,10 @@ class StreamingObserver:
                 if (cycle_count % self._RETRAIN_INTERVAL == 0
                         or cycle_count == self._MIN_FILES_FOR_TRAIN):
                     self._maybe_auto_train()
+
+                # Run ON-OFF cadence analysis periodically
+                if cycle_count % 100 == 0 and cycle_count > 0:
+                    self._run_cadence_check()
 
                 # Save state every cycle so UI stays responsive
                 self.state.total_runtime_hours = (
