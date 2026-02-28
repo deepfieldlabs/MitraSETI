@@ -25,12 +25,10 @@ from __future__ import annotations
 import argparse
 import json
 import struct
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import chirp as scipy_chirp
 from tqdm import tqdm
 
 # Spectrogram dimensions
@@ -66,6 +64,7 @@ DEFAULT_COUNTS = {
 # ---------------------------------------------------------------------------
 # Signal generators
 # ---------------------------------------------------------------------------
+
 
 def _base_noise(rng: np.random.Generator, n_freq: int = N_FREQ, n_time: int = N_TIME) -> np.ndarray:
     """Generate base Gaussian noise spectrogram."""
@@ -228,6 +227,7 @@ GENERATORS = {
 # Sigproc filterbank writer
 # ---------------------------------------------------------------------------
 
+
 def _write_sigproc_string(f, keyword: str) -> None:
     """Write a Sigproc header keyword string (length-prefixed)."""
     encoded = keyword.encode("ascii")
@@ -310,7 +310,7 @@ def generate_filterbank_files(
 
         noise = rng.normal(0, 1, (n_time, n_chans)).astype(np.float32)
 
-        for s in range(n_signals):
+        for _s in range(n_signals):
             if is_voyager:
                 chan_center = n_chans // 2
                 drift_per_step = 2.5
@@ -344,6 +344,7 @@ def generate_filterbank_files(
 # ---------------------------------------------------------------------------
 # Main generation pipeline
 # ---------------------------------------------------------------------------
+
 
 def generate_training_data(
     output_dir: Path,
@@ -428,7 +429,7 @@ def main() -> None:
         counts = dict(DEFAULT_COUNTS)
 
     total = sum(counts.values())
-    print(f"MitraSETI Training Data Generator")
+    print("MitraSETI Training Data Generator")
     print(f"  Output:  {output_dir}")
     print(f"  Classes: {len(CLASS_NAMES)}")
     print(f"  Total:   {total} spectrograms ({N_FREQ}x{N_TIME})")

@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import webbrowser
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QFrame,
-)
 from PyQt5.QtCore import Qt
-
-from .theme import COLORS
+from PyQt5.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class AboutPanel(QWidget):
@@ -98,9 +101,12 @@ class AboutPanel(QWidget):
         tech_row.setSpacing(10)
         tech_row.setContentsMargins(0, 0, 0, 0)
         for name, col in [
-            ("Rust", "#fbbf24"), ("Python", "#34d399"),
-            ("FastAPI", "#4da6ff"), ("PyTorch", "#6366f1"),
-            ("rayon", "#f87171"), ("PyO3", "#a78bfa"),
+            ("Rust", "#fbbf24"),
+            ("Python", "#34d399"),
+            ("FastAPI", "#4da6ff"),
+            ("PyTorch", "#6366f1"),
+            ("rayon", "#f87171"),
+            ("PyO3", "#a78bfa"),
         ]:
             t = QLabel(name)
             t.setStyleSheet(f"""
@@ -135,7 +141,7 @@ class AboutPanel(QWidget):
         role_lbl.setStyleSheet("font-size: 13px; color: rgba(140,165,200,0.5); margin-top: 2px;")
         layout.addWidget(role_lbl)
 
-        role2_lbl = QLabel("Cloud & DevOps Engineer  \u00B7  AI/ML Developer")
+        role2_lbl = QLabel("Cloud & DevOps Engineer  \u00b7  AI/ML Developer")
         role2_lbl.setStyleSheet("font-size: 12px; color: rgba(140,165,200,0.35); margin-top: 2px;")
         layout.addWidget(role2_lbl)
 
@@ -227,18 +233,18 @@ class AboutPanel(QWidget):
         layout.addSpacing(18)
         contact_btn = QPushButton("  Contact Us on LinkedIn")
         contact_btn.setCursor(Qt.PointingHandCursor)
-        contact_btn.setStyleSheet(f"""
-            QPushButton {{
+        contact_btn.setStyleSheet("""
+            QPushButton {
                 background: rgba(99,102,241,0.12);
                 border: 1px solid rgba(99,102,241,0.25);
                 border-radius: 10px; padding: 12px 24px;
                 color: #a78bfa; font-size: 13px; font-weight: 500;
                 text-align: left;
-            }}
-            QPushButton:hover {{
+            }
+            QPushButton:hover {
                 background: rgba(99,102,241,0.20);
                 border-color: rgba(99,102,241,0.4);
-            }}
+            }
         """)
         contact_btn.clicked.connect(lambda: webbrowser.open(self._LINKEDIN))
         layout.addWidget(contact_btn)
@@ -261,8 +267,8 @@ class AboutPanel(QWidget):
 
     @staticmethod
     def _hex_to_rgb(hex_color: str) -> str:
-        h = hex_color.lstrip('#')
-        return ','.join(str(int(h[i:i+2], 16)) for i in (0, 2, 4))
+        h = hex_color.lstrip("#")
+        return ",".join(str(int(h[i : i + 2], 16)) for i in (0, 2, 4))
 
     def _action_button(self, text: str, url: str) -> QPushButton:
         btn = QPushButton(text)

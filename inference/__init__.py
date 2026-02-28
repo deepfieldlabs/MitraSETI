@@ -4,9 +4,9 @@ MitraSETI Inference Layer
 ML models for radio signal classification, anomaly detection, and feature extraction.
 """
 
-from .signal_classifier import SignalClassifier, SignalType, ClassificationResult
-from .ood_detector import RadioOODDetector, OODResult
 from .feature_extractor import FeatureExtractor, RadioFeatures
+from .ood_detector import OODResult, RadioOODDetector
+from .signal_classifier import ClassificationResult, SignalClassifier, SignalType
 
 __all__ = [
     "SignalClassifier",

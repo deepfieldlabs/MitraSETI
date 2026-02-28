@@ -63,7 +63,11 @@ const KNOWN_RFI_BANDS: &[(f64, f64, &str)] = &[
     // Aeronautical radar (L-band)
     (1_215_000_000.0, 1_240_000_000.0, "L-band radar"),
     // Hydrogen line — not RFI, but galactic emission can mimic a hit
-    (1_420_405_751.0 - 500_000.0, 1_420_405_751.0 + 500_000.0, "HI 21 cm (galactic)"),
+    (
+        1_420_405_751.0 - 500_000.0,
+        1_420_405_751.0 + 500_000.0,
+        "HI 21 cm (galactic)",
+    ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -107,7 +111,10 @@ impl RFIFilter {
     #[new]
     #[pyo3(signature = (extra_bands=None))]
     pub fn new(extra_bands: Option<Vec<(f64, f64)>>) -> Self {
-        let mut bands: Vec<(f64, f64)> = KNOWN_RFI_BANDS.iter().map(|&(lo, hi, _)| (lo, hi)).collect();
+        let mut bands: Vec<(f64, f64)> = KNOWN_RFI_BANDS
+            .iter()
+            .map(|&(lo, hi, _)| (lo, hi))
+            .collect();
         if let Some(extra) = extra_bands {
             bands.extend(extra);
         }
@@ -203,8 +210,7 @@ impl RFIFilter {
         if candidate.bandwidth <= MAX_NARROWBAND_BW {
             0.0
         } else {
-            ((candidate.bandwidth - MAX_NARROWBAND_BW) / MAX_NARROWBAND_BW)
-                .min(1.0)
+            ((candidate.bandwidth - MAX_NARROWBAND_BW) / MAX_NARROWBAND_BW).min(1.0)
         }
     }
 

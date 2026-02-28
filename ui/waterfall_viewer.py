@@ -12,28 +12,35 @@ Spectrogram / waterfall display with:
 from __future__ import annotations
 
 import io
-import numpy as np
-
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QComboBox, QCheckBox, QSplitter, QScrollArea,
-    QFileDialog, QSizePolicy, QGridLayout,
-)
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QPixmap, QImage
 
 import matplotlib
-matplotlib.use("Qt5Agg")
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar,
+import numpy as np
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
-from matplotlib.figure import Figure
-from matplotlib.colors import LinearSegmentedColormap
 
+matplotlib.use("Qt5Agg")
 from pathlib import Path as _Path
 
-from .theme import COLORS, create_glass_card, create_glow_button
+from matplotlib.backends.backend_qt5agg import (
+    FigureCanvasQTAgg as FigureCanvas,
+)
+from matplotlib.backends.backend_qt5agg import (
+    NavigationToolbar2QT as NavigationToolbar,
+)
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.figure import Figure
 
 _ARTIFACTS_DIR = _Path(__file__).parent.parent.parent / "mitraseti_artifacts"
 _FILTERBANK_DIR = _ARTIFACTS_DIR / "data" / "filterbank"
@@ -50,12 +57,11 @@ _SETI_CMAP_COLORS = [
     (0.8, "#00b0e0"),
     (1.0, "#00ffff"),
 ]
-_seti_cmap = LinearSegmentedColormap.from_list(
-    "seti", [(v, c) for v, c in _SETI_CMAP_COLORS]
-)
+_seti_cmap = LinearSegmentedColormap.from_list("seti", [(v, c) for v, c in _SETI_CMAP_COLORS])
 
 
 # ── Synthetic demo data generator ────────────────────────────────────────────
+
 
 def generate_demo_waterfall(
     n_time: int = 512,
@@ -104,21 +110,24 @@ def generate_demo_waterfall(
                 f_hi = min(n_freq, f_center + width + 1)
                 data[t, f_lo:f_hi] += snr * noise_level
 
-        signals.append({
-            "id": i,
-            "snr": round(float(snr), 2),
-            "drift_rate": round(float(drift_rate), 4),
-            "start_freq": float(start_freq),
-            "width": int(width),
-            "rfi_score": round(float(rfi_score), 3),
-            "classification": classification,
-            "confidence": round(float(confidence), 3),
-        })
+        signals.append(
+            {
+                "id": i,
+                "snr": round(float(snr), 2),
+                "drift_rate": round(float(drift_rate), 4),
+                "start_freq": float(start_freq),
+                "width": int(width),
+                "rfi_score": round(float(rfi_score), 3),
+                "classification": classification,
+                "confidence": round(float(confidence), 3),
+            }
+        )
 
     return data, signals
 
 
 # ── Signal detail side panel ─────────────────────────────────────────────────
+
 
 class SignalDetailPanel(QFrame):
     """Right-side panel showing selected signal parameters."""
@@ -126,11 +135,11 @@ class SignalDetailPanel(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(300)
-        self.setStyleSheet(f"""
-            QFrame {{
+        self.setStyleSheet("""
+            QFrame {
                 background: rgba(12, 20, 38, 0.9);
                 border-left: 1px solid rgba(100, 180, 255, 0.08);
-            }}
+            }
         """)
 
         layout = QVBoxLayout(self)
@@ -139,8 +148,7 @@ class SignalDetailPanel(QFrame):
 
         title = QLabel("Signal Details")
         title.setStyleSheet(
-            "font-size: 15px; font-weight: 600; color: #4da6ff;"
-            "letter-spacing: 0.5px;"
+            "font-size: 15px; font-weight: 600; color: #4da6ff;letter-spacing: 0.5px;"
         )
         layout.addWidget(title)
 
@@ -163,9 +171,7 @@ class SignalDetailPanel(QFrame):
         for display_name, key in param_defs:
             row = QHBoxLayout()
             lbl = QLabel(display_name)
-            lbl.setStyleSheet(
-                "font-size: 11px; color: rgba(200,215,235,0.5); font-weight: 500;"
-            )
+            lbl.setStyleSheet("font-size: 11px; color: rgba(200,215,235,0.5); font-weight: 500;")
             row.addWidget(lbl)
             row.addStretch()
             val = QLabel("—")
@@ -237,6 +243,7 @@ class SignalDetailPanel(QFrame):
 
 # ── Main Waterfall Viewer ────────────────────────────────────────────────────
 
+
 class WaterfallViewer(QWidget):
     """Hero panel — spectrogram / waterfall display."""
 
@@ -279,9 +286,7 @@ class WaterfallViewer(QWidget):
         tb_layout.setSpacing(12)
 
         title = QLabel("📡  Waterfall Viewer")
-        title.setStyleSheet(
-            "font-size: 16px; font-weight: 600; color: #e0e8f0; border: none;"
-        )
+        title.setStyleSheet("font-size: 16px; font-weight: 600; color: #e0e8f0; border: none;")
         tb_layout.addWidget(title)
         tb_layout.addSpacing(24)
 
@@ -321,9 +326,7 @@ class WaterfallViewer(QWidget):
 
         # Colormap
         cmap_lbl = QLabel("Colormap:")
-        cmap_lbl.setStyleSheet(
-            "font-size: 12px; color: rgba(200,215,235,0.5); border:none;"
-        )
+        cmap_lbl.setStyleSheet("font-size: 12px; color: rgba(200,215,235,0.5); border:none;")
         tb_layout.addWidget(cmap_lbl)
 
         self._cmap_combo = QComboBox()
@@ -355,9 +358,7 @@ class WaterfallViewer(QWidget):
 
         # File name display
         self._file_label = QLabel("demo_waterfall.fil")
-        self._file_label.setStyleSheet(
-            "font-size: 11px; color: rgba(0,212,255,0.6); border:none;"
-        )
+        self._file_label.setStyleSheet("font-size: 11px; color: rgba(0,212,255,0.6); border:none;")
         tb_layout.addWidget(self._file_label)
 
         root.addWidget(toolbar)
@@ -421,10 +422,13 @@ class WaterfallViewer(QWidget):
         """)
         # Invert toolbar icons for dark theme visibility
         from PyQt5.QtWidgets import QToolButton as _QTB
+
         for btn in self._mpl_toolbar.findChildren(_QTB):
             icon = btn.icon()
             if not icon.isNull():
-                from PyQt5.QtGui import QIcon, QPixmap as _QP
+                from PyQt5.QtGui import QIcon
+                from PyQt5.QtGui import QPixmap as _QP
+
                 sizes = icon.availableSizes()
                 if sizes:
                     pm = icon.pixmap(sizes[0])
@@ -508,9 +512,9 @@ class WaterfallViewer(QWidget):
 
         if _FILTERBANK_DIR.exists():
             files = sorted(
-                list(_FILTERBANK_DIR.glob("*.fil")) +
-                list(_FILTERBANK_DIR.glob("*.h5")) +
-                list(_FILTERBANK_DIR.glob("*.hdf5")),
+                list(_FILTERBANK_DIR.glob("*.fil"))
+                + list(_FILTERBANK_DIR.glob("*.h5"))
+                + list(_FILTERBANK_DIR.glob("*.hdf5")),
                 key=lambda f: f.stat().st_mtime,
                 reverse=True,
             )
@@ -522,9 +526,9 @@ class WaterfallViewer(QWidget):
 
         if _BL_DATA_DIR.exists():
             bl_files = sorted(
-                list(_BL_DATA_DIR.glob("*.fil")) +
-                list(_BL_DATA_DIR.glob("*.h5")) +
-                list(_BL_DATA_DIR.glob("*.hdf5")),
+                list(_BL_DATA_DIR.glob("*.fil"))
+                + list(_BL_DATA_DIR.glob("*.h5"))
+                + list(_BL_DATA_DIR.glob("*.hdf5")),
                 key=lambda f: f.name,
             )
             for f in bl_files:
@@ -552,7 +556,7 @@ class WaterfallViewer(QWidget):
                 target_path = candidate
                 break
         if target_path is None:
-            for i, fp in enumerate(self._file_paths):
+            for _i, fp in enumerate(self._file_paths):
                 if fp and fp.name == filename:
                     target_path = fp
                     break
@@ -593,9 +597,7 @@ class WaterfallViewer(QWidget):
             self._render()
         except Exception as e:
             self._file_label.setText(f"{filepath.name} (error: {e})")
-            self._data, self._signals = generate_demo_waterfall(
-                seed=hash(str(filepath)) % 2**31
-            )
+            self._data, self._signals = generate_demo_waterfall(seed=hash(str(filepath)) % 2**31)
             self._render()
 
     @staticmethod
@@ -608,8 +610,7 @@ class WaterfallViewer(QWidget):
             nt_trim = (nt // step_t) * step_t
             nf_trim = (nf // step_f) * step_f
             trimmed = arr[:nt_trim, :nf_trim]
-            reshaped = trimmed.reshape(nt_trim // step_t, step_t,
-                                       nf_trim // step_f, step_f)
+            reshaped = trimmed.reshape(nt_trim // step_t, step_t, nf_trim // step_f, step_f)
             return reshaped.mean(axis=(1, 3))
         return arr
 
@@ -617,6 +618,7 @@ class WaterfallViewer(QWidget):
         """Load HDF5 filterbank data with subsampling for large files."""
         try:
             import h5py
+
             with h5py.File(str(filepath), "r") as f:
                 if "data" in f:
                     ds = f["data"]
@@ -644,16 +646,14 @@ class WaterfallViewer(QWidget):
                     raw = np.array(ds[::step_t, ::step_f], dtype=np.float32)
                 elif len(shape) == 1:
                     side = int(np.sqrt(ds.size))
-                    raw = np.array(ds[:side * side], dtype=np.float32).reshape(side, side)
+                    raw = np.array(ds[: side * side], dtype=np.float32).reshape(side, side)
                 else:
                     raw = np.zeros((256, 64), dtype=np.float32)
 
             self._data = raw
             self._signals = []
         except ImportError:
-            self._data, self._signals = generate_demo_waterfall(
-                seed=hash(str(filepath)) % 2**31
-            )
+            self._data, self._signals = generate_demo_waterfall(seed=hash(str(filepath)) % 2**31)
 
     def _load_fil(self, filepath):
         """Load Sigproc .fil filterbank data with subsampling."""
@@ -681,24 +681,22 @@ class WaterfallViewer(QWidget):
 
             n_time = n_elements // n_freq
 
-            arr = np.memmap(filepath, dtype=np.float32, mode='r',
-                            offset=data_start, shape=(n_time, n_freq))
-
-            self._data = self._downsample_2d(
-                arr, self._MAX_DISPLAY_TIME, self._MAX_DISPLAY_FREQ
+            arr = np.memmap(
+                filepath, dtype=np.float32, mode="r", offset=data_start, shape=(n_time, n_freq)
             )
+
+            self._data = self._downsample_2d(arr, self._MAX_DISPLAY_TIME, self._MAX_DISPLAY_FREQ)
             del arr
 
             self._signals = []
         except Exception:
-            self._data, self._signals = generate_demo_waterfall(
-                seed=hash(str(filepath)) % 2**31
-            )
+            self._data, self._signals = generate_demo_waterfall(seed=hash(str(filepath)) % 2**31)
 
     def _open_file(self):
         start_dir = str(_FILTERBANK_DIR) if _FILTERBANK_DIR.exists() else ""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Open Filterbank / HDF5",
+            self,
+            "Open Filterbank / HDF5",
             start_dir,
             "SETI Data (*.fil *.h5 *.hdf5);;All Files (*)",
         )
@@ -795,8 +793,11 @@ class WaterfallViewer(QWidget):
                     else "#fbbf24"
                 )
                 self._ax.plot(
-                    f, t,
-                    color=color, linewidth=1.2, alpha=0.7,
+                    f,
+                    t,
+                    color=color,
+                    linewidth=1.2,
+                    alpha=0.7,
                     linestyle="--",
                 )
 
@@ -819,7 +820,9 @@ class WaterfallViewer(QWidget):
             self._ax_off.set_ylabel("Time Step", color="#e0e8f0", fontsize=10)
             self._ax_off.set_title(
                 "OFF Source (Reference)",
-                color="#f87171", fontsize=12, fontweight="bold",
+                color="#f87171",
+                fontsize=12,
+                fontweight="bold",
             )
             self._ax_off.tick_params(colors="#8ca5c8", labelsize=8)
             self._ax_off.set_facecolor("#080c14")
@@ -878,8 +881,11 @@ class WaterfallViewer(QWidget):
         fig = Figure(figsize=(width / 72, height / 72), dpi=72)
         ax = fig.add_subplot(111)
         ax.imshow(
-            self._data, aspect="auto", origin="lower",
-            cmap=self._get_cmap(), interpolation="nearest",
+            self._data,
+            aspect="auto",
+            origin="lower",
+            cmap=self._get_cmap(),
+            interpolation="nearest",
         )
         ax.axis("off")
         fig.subplots_adjust(left=0, right=1, top=1, bottom=0)

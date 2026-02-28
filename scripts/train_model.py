@@ -25,14 +25,13 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
 # Add project root to path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from inference.signal_classifier import _build_model, SIGNAL_LABELS
+from inference.signal_classifier import SIGNAL_LABELS, _build_model
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +44,15 @@ N_CLASSES = len(CLASS_NAMES)
 # Device setup
 # ---------------------------------------------------------------------------
 
+
 def get_device() -> torch.device:
     """Select the best available training device.
-    
+
     Note: MPS has known numerical issues with some operations.
     Set MITRASETI_DEVICE=cpu to force CPU.
     """
     import os
+
     forced = os.environ.get("MITRASETI_DEVICE", "").lower()
     if forced == "cpu":
         logger.info("Using CPU (forced via MITRASETI_DEVICE)")
@@ -72,6 +73,7 @@ def get_device() -> torch.device:
 # Data loading
 # ---------------------------------------------------------------------------
 
+
 def load_data(
     data_dir: Path,
     val_split: float = 0.2,
@@ -87,15 +89,16 @@ def load_data(
 
     if not spec_path.exists() or not labels_path.exists():
         raise FileNotFoundError(
-            f"Training data not found at {data_dir}. "
-            "Run scripts/generate_training_data.py first."
+            f"Training data not found at {data_dir}. Run scripts/generate_training_data.py first."
         )
 
     specs = np.load(spec_path)
     labels = np.load(labels_path)
 
     logger.info(f"Loaded {specs.shape[0]} spectrograms, shape={specs.shape[1:]}")
-    logger.info(f"Class distribution: {dict(zip(*np.unique(labels, return_counts=True)))}")
+    logger.info(
+        f"Class distribution: {dict(zip(*np.unique(labels, return_counts=True), strict=False))}"
+    )
 
     rng = np.random.default_rng(seed)
     indices = rng.permutation(len(specs))
@@ -128,6 +131,7 @@ def load_data(
 # ---------------------------------------------------------------------------
 # Training loop
 # ---------------------------------------------------------------------------
+
 
 def train_one_epoch(
     model: nn.Module,
@@ -212,6 +216,7 @@ def evaluate(
 # Per-class metrics
 # ---------------------------------------------------------------------------
 
+
 @torch.no_grad()
 def compute_per_class_metrics(
     model: nn.Module,
@@ -258,6 +263,7 @@ def compute_per_class_metrics(
 # Embedding extraction and OOD calibration
 # ---------------------------------------------------------------------------
 
+
 @torch.no_grad()
 def extract_embeddings(
     model: nn.Module,
@@ -276,10 +282,7 @@ def extract_embeddings(
 
     mean = specs.mean()
     std = specs.std()
-    if std > 0:
-        specs_norm = (specs - mean) / std
-    else:
-        specs_norm = specs - mean
+    specs_norm = (specs - mean) / std if std > 0 else specs - mean
 
     for i in range(0, n, batch_size):
         batch = torch.from_numpy(specs_norm[i : i + batch_size]).float().to(device)
@@ -349,14 +352,21 @@ def compute_ood_calibration(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Train MitraSETI signal classifier model."
+    parser = argparse.ArgumentParser(description="Train MitraSETI signal classifier model.")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/training",
+        help="Directory containing spectrograms.npy and labels.npy",
     )
-    parser.add_argument("--data-dir", type=str, default="data/training",
-                        help="Directory containing spectrograms.npy and labels.npy")
-    parser.add_argument("--output-dir", type=str, default="models",
-                        help="Directory for model weights and calibration output")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="models",
+        help="Directory for model weights and calibration output",
+    )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -407,12 +417,8 @@ def main() -> None:
     logger.info(f"Model parameters: {param_count:,} total, {trainable:,} trainable")
 
     # Optimizer and scheduler
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr, weight_decay=0.01
-    )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=args.epochs
-    )
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     criterion = nn.CrossEntropyLoss()
 
     use_amp = device.type == "cuda"
@@ -424,7 +430,7 @@ def main() -> None:
     best_epoch = 0
     history = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": [], "lr": []}
 
-    print(f"\nMitraSETI Model Training")
+    print("\nMitraSETI Model Training")
     print(f"  Device:     {device}")
     print(f"  Model:      CNN + Transformer ({param_count:,} params)")
     print(f"  Data:       {len(train_ds)} train / {len(val_ds)} val")
@@ -476,21 +482,25 @@ def main() -> None:
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
 
     # Per-class metrics on validation set
-    print(f"\nPer-class metrics (validation):")
+    print("\nPer-class metrics (validation):")
     print(f"{'Class':25s} {'Prec':>8s} {'Recall':>8s} {'F1':>8s} {'Support':>8s}")
     print("-" * 60)
     per_class = compute_per_class_metrics(model, val_loader, device, N_CLASSES)
     for name, m in per_class.items():
-        print(f"{name:25s} {m['precision']:8.4f} {m['recall']:8.4f} {m['f1']:8.4f} {m['support']:8d}")
+        print(
+            f"{name:25s} {m['precision']:8.4f} {m['recall']:8.4f} {m['f1']:8.4f} {m['support']:8d}"
+        )
 
     # Extract embeddings for OOD calibration
-    print(f"\nExtracting embeddings for OOD calibration...")
-    embeddings = extract_embeddings(model, full_specs, full_labels, device, batch_size=args.batch_size)
+    print("\nExtracting embeddings for OOD calibration...")
+    embeddings = extract_embeddings(
+        model, full_specs, full_labels, device, batch_size=args.batch_size
+    )
     emb_path = output_dir / "training_embeddings.npy"
     np.save(emb_path, embeddings)
     logger.info(f"Embeddings saved: {embeddings.shape} → {emb_path}")
 
-    print(f"Computing OOD calibration (per-class Mahalanobis)...")
+    print("Computing OOD calibration (per-class Mahalanobis)...")
     calibration = compute_ood_calibration(embeddings, full_labels, N_CLASSES)
     calibration["training_info"] = {
         "epochs": args.epochs,
@@ -513,7 +523,7 @@ def main() -> None:
     with open(hist_path, "w") as f:
         json.dump(history, f, indent=2)
 
-    print(f"\nOutputs:")
+    print("\nOutputs:")
     print(f"  Model weights:     {model_path}")
     print(f"  Embeddings:        {emb_path}")
     print(f"  OOD calibration:   {cal_path}")

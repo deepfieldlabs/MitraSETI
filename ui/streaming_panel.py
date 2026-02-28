@@ -12,6 +12,7 @@ Controls continuous SETI signal processing with:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -21,16 +22,24 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QScrollArea, QGridLayout, QProgressBar, QTextEdit,
-    QSpinBox, QComboBox, QGroupBox, QSizePolicy,
-)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QColor, QPainter, QBrush
+from PyQt5.QtGui import QBrush, QColor, QPainter
+from PyQt5.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .theme import COLORS, make_stat_card, create_glow_button
-
+from .theme import COLORS, create_glow_button, make_stat_card
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -42,6 +51,7 @@ _REPORTS_DIR = _ARTIFACTS_DIR / "streaming_reports" / "daily"
 
 
 # ── Pulsing status dot ───────────────────────────────────────────────────────
+
 
 class _LiveDot(QFrame):
     """Animated status dot with crystalline glow."""
@@ -65,6 +75,7 @@ class _LiveDot(QFrame):
 
 
 # ── Streaming Panel ──────────────────────────────────────────────────────────
+
 
 class StreamingPanel(QWidget):
     """Continuous SETI observation monitor — crystalline glass theme."""
@@ -100,9 +111,7 @@ class StreamingPanel(QWidget):
         self._status_dot = _LiveDot(size=10)
         title_row.addWidget(self._status_dot)
         title_label = QLabel("📶  Streaming Monitor")
-        title_label.setStyleSheet(
-            "font-size: 20px; font-weight: 600; color: #e0e8f0;"
-        )
+        title_label.setStyleSheet("font-size: 20px; font-weight: 600; color: #e0e8f0;")
         title_row.addWidget(title_label)
         title_row.addStretch()
         title_col.addLayout(title_row)
@@ -132,9 +141,7 @@ class StreamingPanel(QWidget):
 
         # Duration
         dur_lbl = QLabel("Duration:")
-        dur_lbl.setStyleSheet(
-            f"font-size: 12px; color: {COLORS['text_secondary']}; border: none;"
-        )
+        dur_lbl.setStyleSheet(f"font-size: 12px; color: {COLORS['text_secondary']}; border: none;")
         ctrl_layout.addWidget(dur_lbl)
 
         self._days_spin = QSpinBox()
@@ -158,9 +165,7 @@ class StreamingPanel(QWidget):
 
         # Mode
         mode_lbl = QLabel("Mode:")
-        mode_lbl.setStyleSheet(
-            f"font-size: 12px; color: {COLORS['text_secondary']}; border: none;"
-        )
+        mode_lbl.setStyleSheet(f"font-size: 12px; color: {COLORS['text_secondary']}; border: none;")
         ctrl_layout.addWidget(mode_lbl)
 
         self._mode_combo = QComboBox()
@@ -286,17 +291,15 @@ class StreamingPanel(QWidget):
             self._stat_cards[key] = card
 
         cadence_btn = create_glow_button("Run Cadence Analysis", "#7c3aed")
-        cadence_btn.setToolTip(
-            "Run ON-OFF cadence filter on available observation pairs"
-        )
+        cadence_btn.setToolTip("Run ON-OFF cadence filter on available observation pairs")
         cadence_btn.clicked.connect(self._run_cadence)
         stats_grid.addWidget(cadence_btn, 1, 2, 1, 2)
 
         layout.addLayout(stats_grid)
 
         # ── Live log viewer ───────────────────────────────────────────────
-        _group_ss = f"""
-            QGroupBox {{
+        _group_ss = """
+            QGroupBox {
                 font-size: 13px;
                 font-weight: 600;
                 color: #e0e8f0;
@@ -305,15 +308,15 @@ class StreamingPanel(QWidget):
                 padding-top: 26px;
                 margin-top: 8px;
                 background: rgba(15, 25, 45, 0.35);
-            }}
-            QGroupBox::title {{
+            }
+            QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 14px;
                 padding: 0 8px;
                 color: rgba(0, 212, 255, 0.7);
                 font-size: 11px;
                 letter-spacing: 0.5px;
-            }}
+            }
         """
         _mono_ss = """
             QTextEdit {
@@ -377,20 +380,22 @@ class StreamingPanel(QWidget):
         """Kill any orphaned streaming_observation.py processes."""
         try:
             import signal as _sig
+
             result = subprocess.run(
                 ["pgrep", "-f", "streaming_observation.py"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             for line in result.stdout.strip().split("\n"):
                 pid = line.strip()
                 if pid and pid.isdigit():
                     pid_int = int(pid)
-                    try:
+                    with contextlib.suppress(OSError):
                         os.kill(pid_int, _sig.SIGTERM)
-                    except OSError:
-                        pass
             if result.stdout.strip():
                 import time
+
                 time.sleep(1)
         except Exception:
             pass
@@ -448,6 +453,7 @@ class StreamingPanel(QWidget):
     def _stop_streaming(self):
         if self._process and self._process.poll() is None:
             import signal as _sig
+
             try:
                 self._process.send_signal(_sig.SIGTERM)
             except OSError:
@@ -459,10 +465,8 @@ class StreamingPanel(QWidget):
 
         self._process = None
         if hasattr(self, "_log_handle") and self._log_handle:
-            try:
+            with contextlib.suppress(Exception):
                 self._log_handle.close()
-            except Exception:
-                pass
             self._log_handle = None
         self._start_btn.setText("▶  Start Streaming")
         self._start_btn.setStyleSheet("""
@@ -514,7 +518,8 @@ class StreamingPanel(QWidget):
 
         self._update_stat("files", str(files_done))
         self._update_stat(
-            "candidates", str(candidates),
+            "candidates",
+            str(candidates),
             "#34d399" if candidates > 0 else "#4da6ff",
         )
 
@@ -539,8 +544,7 @@ class StreamingPanel(QWidget):
         # Cadence analysis stats
         cadence_p = state.get("cadence_passed", 0)
         cadence_r = state.get("cadence_rfi_rejected", 0)
-        self._update_stat("cadence_passed", str(cadence_p),
-                          "#34d399" if cadence_p > 0 else "")
+        self._update_stat("cadence_passed", str(cadence_p), "#34d399" if cadence_p > 0 else "")
         self._update_stat("cadence_rfi", str(cadence_r))
 
         # Elapsed -- compute from started_at if not explicitly stored
@@ -548,6 +552,7 @@ class StreamingPanel(QWidget):
         if not elapsed_str and state.get("started_at"):
             try:
                 from datetime import datetime as _dt
+
                 started = _dt.fromisoformat(state["started_at"])
                 delta = _dt.now() - started
                 hours, remainder = divmod(int(delta.total_seconds()), 3600)
@@ -574,7 +579,7 @@ class StreamingPanel(QWidget):
                 return
 
             read_from = max(0, file_size - 8192)
-            with open(_STREAMING_LOG, "r", errors="replace") as f:
+            with open(_STREAMING_LOG, errors="replace") as f:
                 f.seek(read_from)
                 if read_from > 0:
                     f.readline()
@@ -609,6 +614,7 @@ class StreamingPanel(QWidget):
             webbrowser.open(f"file://{reports[0]}")
         else:
             import platform
+
             if platform.system() == "Darwin":
                 subprocess.Popen(["open", str(_REPORTS_DIR)])
             elif platform.system() == "Linux":
@@ -629,7 +635,8 @@ class StreamingPanel(QWidget):
                     sys.path.insert(0, sys_path_entry)
 
                 from scripts.cadence_analysis import (
-                    discover_on_off_pairs, run_cadence_filter,
+                    discover_on_off_pairs,
+                    run_cadence_filter,
                     save_cadence_results,
                 )
 
@@ -640,10 +647,13 @@ class StreamingPanel(QWidget):
 
                 result = run_cadence_filter(groups)
                 save_cadence_results(result)
-                self._update_stat("cadence_passed", str(result.cadence_passed),
-                                  "#34d399" if result.cadence_passed else "#4da6ff")
+                self._update_stat(
+                    "cadence_passed",
+                    str(result.cadence_passed),
+                    "#34d399" if result.cadence_passed else "#4da6ff",
+                )
                 self._update_stat("cadence_rfi", str(result.rfi_rejected))
-            except Exception as e:
+            except Exception:
                 self._update_stat("cadence_passed", "error", "#f87171")
 
         threading.Thread(target=_worker, daemon=True).start()

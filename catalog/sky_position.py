@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -32,6 +32,7 @@ _ASTROLENS_ARTIFACTS = Path(
 # Data classes
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class SkyPosition:
     """
@@ -41,8 +42,8 @@ class SkyPosition:
     are computed automatically, or supply them explicitly.
     """
 
-    ra: float          # Right ascension  (degrees, J2000)
-    dec: float         # Declination      (degrees, J2000)
+    ra: float  # Right ascension  (degrees, J2000)
+    dec: float  # Declination      (degrees, J2000)
     gal_l: float = 0.0  # Galactic longitude (degrees)
     gal_b: float = 0.0  # Galactic latitude  (degrees)
 
@@ -69,16 +70,14 @@ class SkyPosition:
         dec_gp = math.radians(27.12825)
         l_omega = math.radians(32.93192)
 
-        sin_b = (
-            math.sin(dec) * math.sin(dec_gp)
-            + math.cos(dec) * math.cos(dec_gp) * math.cos(ra - ra_gp)
+        sin_b = math.sin(dec) * math.sin(dec_gp) + math.cos(dec) * math.cos(dec_gp) * math.cos(
+            ra - ra_gp
         )
         b = math.asin(max(-1.0, min(1.0, sin_b)))
 
         num = math.sin(ra - ra_gp) * math.cos(dec)
-        den = (
-            math.cos(dec) * math.sin(dec_gp) * math.cos(ra - ra_gp)
-            - math.sin(dec) * math.cos(dec_gp)
+        den = math.cos(dec) * math.sin(dec_gp) * math.cos(ra - ra_gp) - math.sin(dec) * math.cos(
+            dec_gp
         )
         lon = l_omega - math.atan2(num, den)
         lon_deg = math.degrees(lon) % 360.0
@@ -95,16 +94,14 @@ class SkyPosition:
         dec_gp = math.radians(27.12825)
         l_omega = math.radians(32.93192)
 
-        sin_dec = (
-            math.sin(b_rad) * math.sin(dec_gp)
-            + math.cos(b_rad) * math.cos(dec_gp) * math.sin(l_rad - l_omega)
-        )
+        sin_dec = math.sin(b_rad) * math.sin(dec_gp) + math.cos(b_rad) * math.cos(
+            dec_gp
+        ) * math.sin(l_rad - l_omega)
         dec = math.asin(max(-1.0, min(1.0, sin_dec)))
 
         num = math.cos(b_rad) * math.cos(l_rad - l_omega)
-        den = (
-            math.sin(b_rad) * math.cos(dec_gp)
-            - math.cos(b_rad) * math.sin(dec_gp) * math.sin(l_rad - l_omega)
+        den = math.sin(b_rad) * math.cos(dec_gp) - math.cos(b_rad) * math.sin(dec_gp) * math.sin(
+            l_rad - l_omega
         )
         ra = ra_gp + math.atan2(num, den)
         ra_deg = math.degrees(ra) % 360.0
@@ -112,7 +109,7 @@ class SkyPosition:
         return round(ra_deg, 6), round(math.degrees(dec), 6)
 
     @classmethod
-    def from_galactic(cls, l_deg: float, b_deg: float) -> "SkyPosition":
+    def from_galactic(cls, l_deg: float, b_deg: float) -> SkyPosition:
         """Create a SkyPosition from galactic coordinates."""
         ra, dec = cls._galactic_to_equatorial(l_deg, b_deg)
         return cls(ra=ra, dec=dec, gal_l=l_deg, gal_b=b_deg)
@@ -123,13 +120,14 @@ class CrossMatchResult:
     """Result of cross-matching a radio position with AstroLens optical anomalies."""
 
     astrolens_candidate: Dict[str, Any]
-    angular_sep: float         # degrees
+    angular_sep: float  # degrees
     has_optical_anomaly: bool
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Angular separation (Vincenty formula)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def angular_separation(
     ra1: float,
@@ -149,14 +147,11 @@ def angular_separation(
 
     numerator = math.sqrt(
         (math.cos(dec2r) * math.sin(dra)) ** 2
-        + (
-            math.cos(dec1r) * math.sin(dec2r)
-            - math.sin(dec1r) * math.cos(dec2r) * math.cos(dra)
-        ) ** 2
+        + (math.cos(dec1r) * math.sin(dec2r) - math.sin(dec1r) * math.cos(dec2r) * math.cos(dra))
+        ** 2
     )
-    denominator = (
-        math.sin(dec1r) * math.sin(dec2r)
-        + math.cos(dec1r) * math.cos(dec2r) * math.cos(dra)
+    denominator = math.sin(dec1r) * math.sin(dec2r) + math.cos(dec1r) * math.cos(dec2r) * math.cos(
+        dra
     )
     return math.degrees(math.atan2(numerator, denominator))
 
@@ -164,6 +159,7 @@ def angular_separation(
 # ─────────────────────────────────────────────────────────────────────────────
 # AstroLens cross-reference
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _load_astrolens_candidates(path: Optional[Path] = None) -> List[Dict[str, Any]]:
     """Load the AstroLens anomaly_candidates.json file."""
@@ -175,7 +171,7 @@ def _load_astrolens_candidates(path: Optional[Path] = None) -> List[Dict[str, An
         )
         return []
     try:
-        with open(fpath, "r") as f:
+        with open(fpath) as f:
             data = json.load(f)
         # Support both a bare list and a {"candidates": [...]} wrapper
         if isinstance(data, list):

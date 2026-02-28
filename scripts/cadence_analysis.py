@@ -19,20 +19,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import sys
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
-import numpy as np
+from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from paths import DATA_DIR, FILTERBANK_DIR, CANDIDATES_DIR
+from paths import CANDIDATES_DIR, FILTERBANK_DIR
 
 logger = logging.getLogger("cadence_analysis")
 
@@ -44,6 +40,7 @@ _SNR_FLOOR = 8.0
 @dataclass
 class Signal:
     """A detected signal with frequency and drift."""
+
     frequency_mhz: float
     drift_rate: float
     snr: float
@@ -56,6 +53,7 @@ class Signal:
 @dataclass
 class CadenceGroup:
     """A group of ON/OFF observations for one target."""
+
     target: str
     on_files: List[Path] = field(default_factory=list)
     off_files: List[Path] = field(default_factory=list)
@@ -68,6 +66,7 @@ class CadenceGroup:
 @dataclass
 class CadenceResult:
     """Complete results of cadence analysis."""
+
     groups: List[CadenceGroup] = field(default_factory=list)
     total_on_signals: int = 0
     total_off_signals: int = 0
@@ -92,7 +91,8 @@ def discover_on_off_pairs(data_dir: Optional[Path] = None) -> List[CadenceGroup]
 
     extensions = {".fil", ".h5"}
     all_files = sorted(
-        f for f in data_dir.iterdir()
+        f
+        for f in data_dir.iterdir()
         if f.suffix.lower() in extensions and f.stat().st_size > 1_000_000
     )
 
@@ -136,8 +136,7 @@ def discover_on_off_pairs(data_dir: Optional[Path] = None) -> List[CadenceGroup]
     valid.sort(key=lambda g: g.target)
 
     logger.info(
-        f"Found {len(valid)} targets with ON-OFF pairs "
-        f"(out of {len(groups_map)} total targets)"
+        f"Found {len(valid)} targets with ON-OFF pairs (out of {len(groups_map)} total targets)"
     )
     for g in valid:
         logger.info(f"  {g.target}: {len(g.on_files)} ON, {len(g.off_files)} OFF")
@@ -165,9 +164,12 @@ def _extract_signals(result: dict, filepath: Path) -> List[Signal]:
     return signals
 
 
-def _signals_match(a: Signal, b: Signal,
-                   freq_tol: float = _FREQ_TOLERANCE_MHZ,
-                   drift_tol: float = _DRIFT_TOLERANCE_HZ_S) -> bool:
+def _signals_match(
+    a: Signal,
+    b: Signal,
+    freq_tol: float = _FREQ_TOLERANCE_MHZ,
+    drift_tol: float = _DRIFT_TOLERANCE_HZ_S,
+) -> bool:
     """Check if two signals are the same (within tolerance)."""
     freq_match = abs(a.frequency_mhz - b.frequency_mhz) < freq_tol
     drift_match = abs(a.drift_rate - b.drift_rate) < drift_tol
@@ -190,12 +192,13 @@ def run_cadence_filter(
     """
     if pipeline is None:
         from pipeline import MitraSETIPipeline
+
         pipeline = MitraSETIPipeline()
 
     result = CadenceResult(timestamp=datetime.now().isoformat())
 
     for group in groups:
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info(f"Cadence analysis: {group.target}")
         logger.info(f"  ON files: {len(group.on_files)}")
         logger.info(f"  OFF files: {len(group.off_files)}")
@@ -235,8 +238,7 @@ def run_cadence_filter(
 
         for on_sig in all_on_sigs:
             in_off = any(
-                _signals_match(on_sig, off_sig, freq_tolerance)
-                for off_sig in all_off_sigs
+                _signals_match(on_sig, off_sig, freq_tolerance) for off_sig in all_off_sigs
             )
             if in_off:
                 group.rejected_rfi += 1
@@ -246,8 +248,9 @@ def run_cadence_filter(
         result.cadence_passed += len(group.passed)
         result.rfi_rejected += group.rejected_rfi
 
-        logger.info(f"  Result: {len(group.passed)} passed cadence, "
-                     f"{group.rejected_rfi} rejected as RFI")
+        logger.info(
+            f"  Result: {len(group.passed)} passed cadence, {group.rejected_rfi} rejected as RFI"
+        )
 
         if group.passed:
             logger.info("  Cadence-passing signals:")
@@ -327,8 +330,12 @@ def print_summary(result: CadenceResult):
     for g in result.groups:
         status = "✓ HITS" if g.passed else "· clean"
         print(f"\n  {g.target} [{status}]")
-        print(f"    ON files:  {len(g.on_files)}  ({sum(len(s) for s in g.on_signals.values())} signals)")
-        print(f"    OFF files: {len(g.off_files)}  ({sum(len(s) for s in g.off_signals.values())} signals)")
+        print(
+            f"    ON files:  {len(g.on_files)}  ({sum(len(s) for s in g.on_signals.values())} signals)"
+        )
+        print(
+            f"    OFF files: {len(g.off_files)}  ({sum(len(s) for s in g.off_signals.values())} signals)"
+        )
         print(f"    Passed:    {len(g.passed)}  |  RFI: {g.rejected_rfi}")
 
         if g.passed:
@@ -346,23 +353,29 @@ def print_summary(result: CadenceResult):
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="MitraSETI ON-OFF Cadence Analysis"
-    )
+    parser = argparse.ArgumentParser(description="MitraSETI ON-OFF Cadence Analysis")
     parser.add_argument(
-        "--target", type=str, default=None,
+        "--target",
+        type=str,
+        default=None,
         help="Analyze only this target (e.g., TRAPPIST1, GJ699)",
     )
     parser.add_argument(
-        "--freq-tolerance", type=float, default=_FREQ_TOLERANCE_MHZ,
+        "--freq-tolerance",
+        type=float,
+        default=_FREQ_TOLERANCE_MHZ,
         help=f"Frequency matching tolerance in MHz (default: {_FREQ_TOLERANCE_MHZ})",
     )
     parser.add_argument(
-        "--data-dir", type=str, default=None,
+        "--data-dir",
+        type=str,
+        default=None,
         help="Override data directory path",
     )
     parser.add_argument(
-        "--verbose", "-v", action="store_true",
+        "--verbose",
+        "-v",
+        action="store_true",
         help="Enable verbose logging",
     )
     args = parser.parse_args()

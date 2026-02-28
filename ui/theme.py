@@ -5,9 +5,8 @@ Frosted glass panels, translucent effects, blue-cyan glow accents.
 Designed to evoke deep-space observation and alien signal detection.
 """
 
-from PyQt5.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore import Qt
-
+from PyQt5.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # COLOR PALETTE
@@ -20,24 +19,20 @@ COLORS = {
     "surface_solid": "#0e1626",
     "elevated": "rgba(18, 30, 50, 0.78)",
     "hover": "rgba(22, 38, 62, 0.55)",
-
     # Glass effects — subtle, not glowing
     "glass_border": "rgba(80, 140, 200, 0.12)",
     "glass_border_hover": "rgba(80, 140, 200, 0.25)",
     "glass_highlight": "rgba(100, 160, 220, 0.06)",
-
     # Primary accent — steel blue (professional, observatory feel)
     "primary": "#4da6ff",
     "primary_dim": "rgba(77, 166, 255, 0.55)",
     "primary_bg": "rgba(77, 166, 255, 0.07)",
     "primary_border": "rgba(77, 166, 255, 0.20)",
-
     # Secondary — muted indigo
     "secondary": "#6366f1",
     "secondary_dim": "rgba(99, 102, 241, 0.55)",
     "secondary_bg": "rgba(99, 102, 241, 0.08)",
     "secondary_border": "rgba(99, 102, 241, 0.22)",
-
     # Semantic — desaturated for professionalism
     "success": "#34d399",
     "success_bg": "rgba(52, 211, 153, 0.07)",
@@ -48,13 +43,11 @@ COLORS = {
     "danger": "#f87171",
     "danger_bg": "rgba(248, 113, 113, 0.07)",
     "danger_border": "rgba(248, 113, 113, 0.20)",
-
     # Text hierarchy
     "text_primary": "#e2e8f0",
     "text_secondary": "rgba(196, 210, 230, 0.68)",
     "text_tertiary": "rgba(140, 160, 190, 0.42)",
     "text_accent": "#4da6ff",
-
     # Glow — very subtle
     "glow_cyan": "rgba(77, 166, 255, 0.18)",
     "glow_purple": "rgba(99, 102, 241, 0.18)",
@@ -65,6 +58,7 @@ COLORS = {
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN QSS STYLESHEET
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def get_stylesheet() -> str:
     """Return the complete crystalline glass QSS stylesheet."""
@@ -468,6 +462,7 @@ QSplitter::handle:hover {
 # HELPER FUNCTIONS — Reusable glass component styles
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def create_glass_card(
     parent=None,
     border_color="rgba(100, 180, 255, 0.12)",
@@ -559,9 +554,7 @@ def make_stat_card(
     value_lbl = QLabel(value)
     value_lbl.setObjectName("value")
     value_lbl.setAlignment(Qt.AlignCenter)
-    value_lbl.setStyleSheet(
-        f"font-size: 26px; font-weight: 700; color: {accent}; border: none;"
-    )
+    value_lbl.setStyleSheet(f"font-size: 26px; font-weight: 700; color: {accent}; border: none;")
     layout.addWidget(value_lbl)
 
     name_lbl = QLabel(label)

@@ -107,8 +107,8 @@ class MitraSETIPipeline:
     ) -> None:
         """Initialize ML components (classifier, feature extractor, OOD detector)."""
         from inference.feature_extractor import FeatureExtractor
-        from inference.signal_classifier import SignalClassifier, SIGNAL_LABELS
         from inference.ood_detector import RadioOODDetector
+        from inference.signal_classifier import SIGNAL_LABELS, SignalClassifier
 
         self._feature_extractor = FeatureExtractor()
         self._signal_labels = SIGNAL_LABELS
@@ -124,7 +124,7 @@ class MitraSETIPipeline:
         self._ood_detector = RadioOODDetector()
         if ood_calibration_path and Path(ood_calibration_path).exists():
             try:
-                with open(ood_calibration_path, "r") as f:
+                with open(ood_calibration_path) as f:
                     cal = json.load(f)
                 if "spectral_threshold" in cal:
                     self._ood_detector.spectral_threshold = cal["spectral_threshold"]
@@ -201,7 +201,9 @@ class MitraSETIPipeline:
             }
 
             if isinstance(header_dict["source_name"], bytes):
-                header_dict["source_name"] = header_dict["source_name"].decode("utf-8", errors="replace")
+                header_dict["source_name"] = header_dict["source_name"].decode(
+                    "utf-8", errors="replace"
+                )
 
         return {
             "header": header_dict,
@@ -308,9 +310,7 @@ class MitraSETIPipeline:
     # Processing stages
     # ------------------------------------------------------------------
 
-    def _run_dedoppler(
-        self, file_info: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    def _run_dedoppler(self, file_info: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Run de-Doppler search using the Rust engine.
 
         Returns a list of candidate dicts with freq, drift_rate, snr.
@@ -324,11 +324,16 @@ class MitraSETIPipeline:
 
         h = header_dict
         rust_header = self._core.FilterbankHeader(
-            nchans=h["nchans"], nifs=h.get("nifs", 1), nbits=h.get("nbits", 32),
-            tsamp=h["tsamp"], fch1=h["fch1"], foff=h["foff"],
+            nchans=h["nchans"],
+            nifs=h.get("nifs", 1),
+            nbits=h.get("nbits", 32),
+            tsamp=h["tsamp"],
+            fch1=h["fch1"],
+            foff=h["foff"],
             tstart=h.get("tstart", 59000.0),
             source_name=h.get("source_name", "unknown"),
-            ra=h.get("ra", 0.0), dec=h.get("dec", 0.0),
+            ra=h.get("ra", 0.0),
+            dec=h.get("dec", 0.0),
         )
 
         # Tighter limit for files with very few time integrations (e.g. gpuspec
@@ -352,34 +357,44 @@ class MitraSETIPipeline:
             h["foff"] = h["foff"] * factor
             file_info["n_chans"] = data.shape[1]
             rust_header = self._core.FilterbankHeader(
-                nchans=h["nchans"], nifs=h.get("nifs", 1), nbits=h.get("nbits", 32),
-                tsamp=h["tsamp"], fch1=h["fch1"], foff=h["foff"],
+                nchans=h["nchans"],
+                nifs=h.get("nifs", 1),
+                nbits=h.get("nbits", 32),
+                tsamp=h["tsamp"],
+                fch1=h["fch1"],
+                foff=h["foff"],
                 tstart=h.get("tstart", 59000.0),
                 source_name=h.get("source_name", "unknown"),
-                ra=h.get("ra", 0.0), dec=h.get("dec", 0.0),
+                ra=h.get("ra", 0.0),
+                dec=h.get("dec", 0.0),
             )
 
         data_flat = data.astype(np.float32).ravel().tolist()
         search_result = self._dedoppler.search(
-            data_flat, file_info["n_times"], file_info["n_chans"], rust_header,
+            data_flat,
+            file_info["n_times"],
+            file_info["n_chans"],
+            rust_header,
         )
 
         self._last_header = rust_header
 
         candidates = []
         for c in search_result.candidates:
-            candidates.append({
-                "frequency_hz": c.frequency_hz,
-                "frequency_mhz": c.frequency_hz / 1e6 if c.frequency_hz > 1e6 else c.frequency_hz,
-                "drift_rate": c.drift_rate,
-                "snr": c.snr,
-            })
+            candidates.append(
+                {
+                    "frequency_hz": c.frequency_hz,
+                    "frequency_mhz": c.frequency_hz / 1e6
+                    if c.frequency_hz > 1e6
+                    else c.frequency_hz,
+                    "drift_rate": c.drift_rate,
+                    "snr": c.snr,
+                }
+            )
 
         return candidates
 
-    def _run_rfi_filter(
-        self, candidates: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _run_rfi_filter(self, candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Apply RFI filtering using the Rust engine."""
         if not self._rust_available or not candidates:
             return candidates
@@ -387,8 +402,12 @@ class MitraSETIPipeline:
         rust_candidates = []
         for c in candidates:
             sc = self._core.SignalCandidate(
-                frequency_hz=c["frequency_hz"], drift_rate=c["drift_rate"],
-                snr=c["snr"], start_time=0.0, end_time=0.0, bandwidth=0.0,
+                frequency_hz=c["frequency_hz"],
+                drift_rate=c["drift_rate"],
+                snr=c["snr"],
+                start_time=0.0,
+                end_time=0.0,
+                bandwidth=0.0,
             )
             rust_candidates.append(sc)
 
@@ -400,11 +419,13 @@ class MitraSETIPipeline:
 
         result = []
         for c in filtered:
-            result.append({
-                "frequency_hz": c.frequency_hz,
-                "drift_rate": c.drift_rate,
-                "snr": c.snr,
-            })
+            result.append(
+                {
+                    "frequency_hz": c.frequency_hz,
+                    "drift_rate": c.drift_rate,
+                    "snr": c.snr,
+                }
+            )
 
         return result
 
@@ -432,6 +453,7 @@ class MitraSETIPipeline:
 
         if snippet.shape != (n_freq, n_time):
             from scipy.ndimage import zoom
+
             zoom_f = (n_freq / snippet.shape[0], n_time / snippet.shape[1])
             snippet = zoom(snippet, zoom_f, order=1)
 
@@ -458,10 +480,7 @@ class MitraSETIPipeline:
         foff = abs(header.get("foff", 0.00028))
 
         for c in candidates:
-            c["_chan_idx"] = (
-                int((fch1 - c["frequency_hz"] / 1e6) / foff)
-                if foff > 0 else 0
-            )
+            c["_chan_idx"] = int((fch1 - c["frequency_hz"] / 1e6) / foff) if foff > 0 else 0
 
         candidates.sort(key=lambda c: c["_chan_idx"])
 
@@ -470,14 +489,8 @@ class MitraSETIPipeline:
 
         for c in candidates[1:]:
             prev = current_cluster[-1]
-            freq_close = (
-                abs(c["_chan_idx"] - prev["_chan_idx"])
-                <= self._CLUSTER_FREQ_TOL_CHANNELS
-            )
-            drift_close = (
-                abs(c["drift_rate"] - prev["drift_rate"])
-                <= self._CLUSTER_DRIFT_TOL
-            )
+            freq_close = abs(c["_chan_idx"] - prev["_chan_idx"]) <= self._CLUSTER_FREQ_TOL_CHANNELS
+            drift_close = abs(c["drift_rate"] - prev["drift_rate"]) <= self._CLUSTER_DRIFT_TOL
             if freq_close and drift_close:
                 current_cluster.append(c)
             else:
@@ -499,6 +512,7 @@ class MitraSETIPipeline:
     # Directory where spectrograms are cached for later retraining.
     # Must match the path used by streaming_observation.py (from paths.py).
     from paths import DATA_DIR as _DATA_DIR
+
     _SPECTROGRAM_CACHE_DIR = _DATA_DIR / "spectrogram_cache"
 
     def _classify_candidates(
@@ -533,18 +547,16 @@ class MitraSETIPipeline:
             rfi_like = (drift < 0.001 and snr_val > 50) or at_drift_boundary
 
             cand["classification"] = (
-                "rfi_stationary" if rfi_like
-                else "narrowband_drifting" if drift > 0.01
+                "rfi_stationary"
+                if rfi_like
+                else "narrowband_drifting"
+                if drift > 0.01
                 else "narrowband_stationary"
             )
             cand["confidence"] = 1.0 - 1.0 / (1.0 + snr_val / 50.0)
-            cand["rfi_probability"] = (
-                0.9 if rfi_like else (0.3 if drift < 0.01 else 0.1)
-            )
+            cand["rfi_probability"] = 0.9 if rfi_like else (0.3 if drift < 0.01 else 0.1)
             cand["all_scores"] = {}
-            cand["is_candidate"] = (
-                has_meaningful_drift and high_snr and not rfi_like
-            )
+            cand["is_candidate"] = has_meaningful_drift and high_snr and not rfi_like
             cand["ood_score"] = 0.0
             cand["is_anomaly"] = exceptional_snr and has_meaningful_drift
             cand["ood_method_scores"] = {}
@@ -560,6 +572,7 @@ class MitraSETIPipeline:
 
         # -- Cache random rejected signals for training diversity --
         import random as _rng
+
         _CACHE_SAMPLE_PER_FILE = 5
         cache_dir = self._SPECTROGRAM_CACHE_DIR
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -579,28 +592,30 @@ class MitraSETIPipeline:
                     continue
                 cls_name = cand.get("classification", "rfi_stationary")
                 label_map = {
-                    "rfi_stationary": 0, "narrowband_stationary": 3,
+                    "rfi_stationary": 0,
+                    "narrowband_stationary": 3,
                     "narrowband_drifting": 4,
                 }
                 label = label_map.get(cls_name, 0)
                 cache_file = cache_dir / f"spec_{hash((cand.get('frequency_hz', 0), idx)):016x}.npz"
                 if not cache_file.exists():
                     np.savez_compressed(
-                        cache_file, spectrogram=spec, label=label,
-                        snr=cand.get("snr", 0), drift=cand.get("drift_rate", 0),
+                        cache_file,
+                        spectrogram=spec,
+                        label=label,
+                        snr=cand.get("snr", 0),
+                        drift=cand.get("drift_rate", 0),
                     )
             except Exception:
                 pass
 
         # -- Stage 2: Batch ML inference on rule-based survivors ----
-        _MAX_ML_CANDIDATES = 500   # only classify the strongest by SNR
-        _ML_BATCH_SIZE = 128       # sub-batch to avoid OOM on large files
+        _MAX_ML_CANDIDATES = 500  # only classify the strongest by SNR
+        _ML_BATCH_SIZE = 128  # sub-batch to avoid OOM on large files
 
         if self._model_loaded and ml_queue:
             # Sort ML queue by SNR descending and cap at _MAX_ML_CANDIDATES
-            ml_queue.sort(
-                key=lambda idx: candidates[idx].get("snr", 0), reverse=True
-            )
+            ml_queue.sort(key=lambda idx: candidates[idx].get("snr", 0), reverse=True)
             if len(ml_queue) > _MAX_ML_CANDIDATES:
                 logger.info(
                     f"  Stage 2 (ML): capping {len(ml_queue)} → "
@@ -622,9 +637,9 @@ class MitraSETIPipeline:
                 cand = candidates[idx]
                 freq_hz = cand["frequency_hz"]
                 if foff > 0:
-                    freq_idx = int(
-                        (fch1 - freq_hz / 1e6) / foff
-                    ) if fch1 > freq_hz / 1e6 else n_chans // 2
+                    freq_idx = (
+                        int((fch1 - freq_hz / 1e6) / foff) if fch1 > freq_hz / 1e6 else n_chans // 2
+                    )
                 else:
                     freq_idx = n_chans // 2
                 freq_idx = max(0, min(freq_idx, n_chans - 1))
@@ -632,9 +647,7 @@ class MitraSETIPipeline:
 
             # 2b. Feature extraction (per-signal, lightweight)
             for i, idx in enumerate(ml_queue):
-                features = self._feature_extractor.extract(
-                    spectrograms[i], header
-                )
+                features = self._feature_extractor.extract(spectrograms[i], header)
                 candidates[idx]["features"] = asdict(features)
 
             # 2c. Batch classification in sub-batches to avoid OOM
@@ -668,9 +681,7 @@ class MitraSETIPipeline:
                 cand["confidence"] = cls_result.confidence
                 cand["rfi_probability"] = cls_result.rfi_probability
                 cand["all_scores"] = cls_result.all_scores
-                cand["is_candidate"] = self._classifier.is_candidate(
-                    cls_result
-                )
+                cand["is_candidate"] = self._classifier.is_candidate(cls_result)
 
                 ood_result = self._ood_detector.detect_from_scores(
                     spectrograms[i], cls_result.all_scores
@@ -682,9 +693,7 @@ class MitraSETIPipeline:
                 # Cache spectrogram + label for future retraining
                 try:
                     label = cls_result.signal_type.value
-                    cache_file = (
-                        cache_dir / f"spec_{hash(cand['frequency_hz']):016x}.npz"
-                    )
+                    cache_file = cache_dir / f"spec_{hash(cand['frequency_hz']):016x}.npz"
                     if not cache_file.exists():
                         np.savez_compressed(
                             cache_file,
@@ -744,13 +753,12 @@ class MitraSETIPipeline:
         data = file_info["data"]
 
         # Stage 2: De-Doppler search
-        logger.info(f"  [2/4] Running de-Doppler search…")
+        logger.info("  [2/4] Running de-Doppler search…")
         t0 = time.perf_counter()
         raw_candidates = self._run_dedoppler(file_info)
         timings["dedoppler_search"] = time.perf_counter() - t0
         logger.info(
-            f"  [2/4] De-Doppler: {len(raw_candidates)} hits "
-            f"({timings['dedoppler_search']:.1f}s)"
+            f"  [2/4] De-Doppler: {len(raw_candidates)} hits ({timings['dedoppler_search']:.1f}s)"
         )
 
         # Stage 3a: RFI filter
@@ -778,19 +786,14 @@ class MitraSETIPipeline:
             )
 
         # Stage 4: Two-stage classification (rule-based on ALL, ML on survivors)
-        logger.info(
-            f"  [4/4] Classifying {len(filtered_candidates)} signals…"
-        )
+        logger.info(f"  [4/4] Classifying {len(filtered_candidates)} signals…")
         t0 = time.perf_counter()
         classified = self._classify_candidates(filtered_candidates, data, header)
         timings["ml_inference"] = time.perf_counter() - t0
 
         timings["total"] = sum(timings.values())
 
-        n_rfi = sum(
-            1 for c in classified
-            if c.get("classification", "").startswith("rfi_")
-        )
+        n_rfi = sum(1 for c in classified if c.get("classification", "").startswith("rfi_"))
         n_candidates = sum(1 for c in classified if c.get("is_candidate", False))
         n_anomalies = sum(1 for c in classified if c.get("is_anomaly", False))
 
@@ -816,9 +819,9 @@ class MitraSETIPipeline:
                 "raw_crossings": len(raw_candidates),
                 "after_rfi_filter": n_after_rfi,
                 "after_clustering": n_filtered,
-                "clustering_reduction": round(
-                    1 - n_filtered / max(n_after_rfi, 1), 3
-                ) if n_after_rfi > 0 else 0,
+                "clustering_reduction": round(1 - n_filtered / max(n_after_rfi, 1), 3)
+                if n_after_rfi > 0
+                else 0,
                 "rfi_rejected": len(raw_candidates) - n_after_rfi,
                 "algorithm": "brute_force",
             },
@@ -826,24 +829,16 @@ class MitraSETIPipeline:
                 "model_trained": self._model_loaded,
                 "using_rule_based": not self._model_loaded,
                 "signals_classified": n_filtered,
-                "throughput_sig_per_s": round(
-                    n_filtered / ml_time, 1
-                ) if ml_time > 0 else 0,
+                "throughput_sig_per_s": round(n_filtered / ml_time, 1) if ml_time > 0 else 0,
                 "classification_dist": cls_dist,
-                "candidate_rate": round(
-                    n_candidates / max(n_filtered, 1), 4
-                ),
-                "confidence_mean": round(
-                    np.mean(conf_values), 3
-                ) if conf_values else 0,
+                "candidate_rate": round(n_candidates / max(n_filtered, 1), 4),
+                "confidence_mean": round(np.mean(conf_values), 3) if conf_values else 0,
                 "confidence_min": round(min(conf_values), 3) if conf_values else 0,
             },
             "ood_detector": {
                 "calibrated": self._ood_calibrated,
                 "anomalies_flagged": n_anomalies,
-                "anomaly_rate": round(
-                    n_anomalies / max(n_filtered, 1), 4
-                ),
+                "anomaly_rate": round(n_anomalies / max(n_filtered, 1), 4),
             },
             "snr_stats": {
                 "max": round(max(snr_values), 2) if snr_values else 0,
@@ -854,9 +849,7 @@ class MitraSETIPipeline:
             },
             "drift_stats": {
                 "max": round(max(drift_values), 4) if drift_values else 0,
-                "in_candidate_range": sum(
-                    1 for d in drift_values if 0.05 <= d <= 10.0
-                ),
+                "in_candidate_range": sum(1 for d in drift_values if 0.05 <= d <= 10.0),
                 "total_with_drift": sum(1 for d in drift_values if d > 0.01),
             },
         }
@@ -925,18 +918,26 @@ class MitraSETIPipeline:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Run MitraSETI processing pipeline")
     parser.add_argument("files", nargs="+", help="Filterbank (.fil) or HDF5 (.h5) files")
-    parser.add_argument("--model", type=str, default="models/signal_classifier_v1.pt",
-                        help="Path to classifier model weights")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="models/signal_classifier_v1.pt",
+        help="Path to classifier model weights",
+    )
     parser.add_argument("--db", type=str, default=None, help="Path to SQLite database")
-    parser.add_argument("--ood-cal", type=str, default="models/ood_calibration.json",
-                        help="Path to OOD calibration JSON")
-    parser.add_argument("--json-output", type=str, default=None,
-                        help="Write results to JSON file")
+    parser.add_argument(
+        "--ood-cal",
+        type=str,
+        default="models/ood_calibration.json",
+        help="Path to OOD calibration JSON",
+    )
+    parser.add_argument("--json-output", type=str, default=None, help="Write results to JSON file")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -967,7 +968,7 @@ def main() -> None:
         print(f"  Time:       {t.get('total', 0):.3f}s")
 
         if r["candidates"]:
-            print(f"\n  Top candidates:")
+            print("\n  Top candidates:")
             for c in sorted(r["candidates"], key=lambda x: x.get("snr", 0), reverse=True)[:5]:
                 print(
                     f"    freq={c['frequency_hz']:.6f} Hz  "

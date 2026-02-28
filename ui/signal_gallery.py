@@ -8,24 +8,28 @@ and batch actions. Each card shows a mini spectrogram + signal info.
 from __future__ import annotations
 
 import io
-import numpy as np
-
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QComboBox, QScrollArea, QGridLayout, QSizePolicy,
-    QLayout,
-)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QRect, QPoint
-from PyQt5.QtGui import QPixmap, QImage
 
 import matplotlib
+import numpy as np
+from PyQt5.QtCore import QPoint, QRect, QSize, Qt, pyqtSignal
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+
 matplotlib.use("Qt5Agg")
 from matplotlib.figure import Figure
 
-from .theme import COLORS, create_stat_card_style
-
-
 # ── Flow Layout (responsive grid) ────────────────────────────────────────────
+
 
 class FlowLayout(QLayout):
     """Layout that arranges widgets left-to-right, wrapping to next row."""
@@ -102,6 +106,7 @@ class FlowLayout(QLayout):
 
 # ── Signal thumbnail card ────────────────────────────────────────────────────
 
+
 class SignalCard(QFrame):
     """A single card showing a mini spectrogram + signal summary."""
 
@@ -145,9 +150,7 @@ class SignalCard(QFrame):
         self._thumb = QLabel()
         self._thumb.setFixedSize(190, 110)
         self._thumb.setAlignment(Qt.AlignCenter)
-        self._thumb.setStyleSheet(
-            "background: rgba(8, 12, 20, 0.8); border-radius: 8px;"
-        )
+        self._thumb.setStyleSheet("background: rgba(8, 12, 20, 0.8); border-radius: 8px;")
         layout.addWidget(self._thumb)
         self._generate_thumbnail()
 
@@ -199,9 +202,7 @@ class SignalCard(QFrame):
 
         bar_bg = QFrame()
         bar_bg.setFixedHeight(4)
-        bar_bg.setStyleSheet(
-            "background: rgba(8,12,20,0.6); border-radius: 2px;"
-        )
+        bar_bg.setStyleSheet("background: rgba(8,12,20,0.6); border-radius: 2px;")
         bar_bg.setMinimumWidth(100)
 
         bar_fill = QFrame(bar_bg)
@@ -209,18 +210,14 @@ class SignalCard(QFrame):
         bar_fill.setFixedSize(fill_width, 4)
         bar_fill.move(0, 0)
         fill_color = "#f87171" if rfi > 0.7 else "#fbbf24" if rfi > 0.3 else "#34d399"
-        bar_fill.setStyleSheet(
-            f"background: {fill_color}; border-radius: 2px;"
-        )
+        bar_fill.setStyleSheet(f"background: {fill_color}; border-radius: 2px;")
 
         rfi_row.addWidget(bar_bg, 1)
         layout.addLayout(rfi_row)
 
     def _generate_thumbnail(self):
         """Render a tiny spectrogram thumbnail from signal params."""
-        rng = np.random.default_rng(
-            int(abs(self.signal_data.get("start_freq", 42)))
-        )
+        rng = np.random.default_rng(int(abs(self.signal_data.get("start_freq", 42))))
 
         n_t, n_f = 32, 64
         data = rng.normal(0, 1, (n_t, n_f)).astype(np.float32)
@@ -232,7 +229,7 @@ class SignalCard(QFrame):
         for t in range(n_t):
             fc = int(f0 + drift * t / n_t * 10)
             if 0 <= fc < n_f:
-                data[t, max(0, fc - 1):min(n_f, fc + 2)] += snr * 0.5
+                data[t, max(0, fc - 1) : min(n_f, fc + 2)] += snr * 0.5
 
         fig = Figure(figsize=(190 / 72, 110 / 72), dpi=72)
         ax = fig.add_subplot(111)
@@ -263,6 +260,7 @@ class SignalCard(QFrame):
 
 
 # ── Signal Gallery Panel ─────────────────────────────────────────────────────
+
 
 class SignalGallery(QWidget):
     """Grid gallery of detected signal cards with filtering and sorting."""
@@ -378,9 +376,7 @@ class SignalGallery(QWidget):
         # ── Scrollable grid ───────────────────────────────────────────────
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
-        self._scroll.setStyleSheet(
-            "QScrollArea { border: none; background: transparent; }"
-        )
+        self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         self._grid_widget = QWidget()
         self._grid_widget.setStyleSheet("background: transparent;")
@@ -464,7 +460,6 @@ class SignalGallery(QWidget):
     def _load_candidates(self):
         """Load verified candidates and streaming signals on startup."""
         import json
-        from pathlib import Path
 
         try:
             from paths import CANDIDATES_DIR, DATA_DIR
@@ -478,22 +473,24 @@ class SignalGallery(QWidget):
                 with open(cand_file) as f:
                     candidates = json.load(f)
                 for i, c in enumerate(candidates):
-                    loaded.append({
-                        "id": f"vc_{i}",
-                        "frequency_hz": c.get("frequency_hz", 0),
-                        "snr": c.get("snr", 0),
-                        "drift_rate": c.get("drift_rate", 0),
-                        "classification": c.get("classification", "unknown"),
-                        "confidence": c.get("confidence", 0),
-                        "rfi_score": c.get("rfi_probability", 0),
-                        "ood_score": c.get("ood_score", 0),
-                        "is_anomaly": c.get("is_anomaly", False),
-                        "verified": True,
-                        "target": c.get("target_name", ""),
-                        "category": c.get("category", ""),
-                        "file": c.get("file_name", ""),
-                        "processed_at": c.get("processed_at", ""),
-                    })
+                    loaded.append(
+                        {
+                            "id": f"vc_{i}",
+                            "frequency_hz": c.get("frequency_hz", 0),
+                            "snr": c.get("snr", 0),
+                            "drift_rate": c.get("drift_rate", 0),
+                            "classification": c.get("classification", "unknown"),
+                            "confidence": c.get("confidence", 0),
+                            "rfi_score": c.get("rfi_probability", 0),
+                            "ood_score": c.get("ood_score", 0),
+                            "is_anomaly": c.get("is_anomaly", False),
+                            "verified": True,
+                            "target": c.get("target_name", ""),
+                            "category": c.get("category", ""),
+                            "file": c.get("file_name", ""),
+                            "processed_at": c.get("processed_at", ""),
+                        }
+                    )
             except Exception:
                 pass
 
@@ -507,19 +504,21 @@ class SignalGallery(QWidget):
                     if stats.get("candidates", 0) > 0 and not any(
                         s.get("category") == cat for s in loaded
                     ):
-                        loaded.append({
-                            "id": f"cat_{cat}",
-                            "frequency_hz": 0,
-                            "snr": stats.get("signals", 0),
-                            "drift_rate": 0,
-                            "classification": f"{cat} summary",
-                            "confidence": 0,
-                            "rfi_score": 0,
-                            "verified": False,
-                            "target": cat,
-                            "category": cat,
-                            "file": f"{stats.get('files', 0)} files",
-                        })
+                        loaded.append(
+                            {
+                                "id": f"cat_{cat}",
+                                "frequency_hz": 0,
+                                "snr": stats.get("signals", 0),
+                                "drift_rate": 0,
+                                "classification": f"{cat} summary",
+                                "confidence": 0,
+                                "rfi_score": 0,
+                                "verified": False,
+                                "target": cat,
+                                "category": cat,
+                                "file": f"{stats.get('files', 0)} files",
+                            }
+                        )
             except Exception:
                 pass
 
@@ -614,7 +613,5 @@ class SignalGallery(QWidget):
         self._rebuild_grid()
 
     def _reject_all_rfi(self):
-        self._signals = [
-            s for s in self._signals if "rfi" not in s.get("classification", "")
-        ]
+        self._signals = [s for s in self._signals if "rfi" not in s.get("classification", "")]
         self._rebuild_grid()

@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class SignalType(enum.Enum):
     """Types of radio signals encountered in SETI observations."""
+
     NARROWBAND_DRIFTING = 0
     NARROWBAND_STATIONARY = 1
     BROADBAND = 2
@@ -56,6 +57,7 @@ CANDIDATE_CLASSES = {SignalType.CANDIDATE_ET, SignalType.NARROWBAND_DRIFTING}
 @dataclass
 class ClassificationResult:
     """Output of signal classification."""
+
     signal_type: SignalType
     confidence: float
     rfi_probability: float
@@ -114,10 +116,10 @@ def _build_model(num_classes: int = 9, freq_bins: int = 256, time_steps: int = 6
             batch, T, F = x.shape
             # Process each time step through the CNN
             x = x.reshape(batch * T, 1, F)  # (batch*T, 1, freq_bins)
-            x = self.conv_layers(x)          # (batch*T, 128, 16)
-            x = x.flatten(1)                 # (batch*T, 128*16)
-            x = self.proj(x)                 # (batch*T, embed_dim)
-            x = x.reshape(batch, T, -1)      # (batch, T, embed_dim)
+            x = self.conv_layers(x)  # (batch*T, 128, 16)
+            x = x.flatten(1)  # (batch*T, 128*16)
+            x = self.proj(x)  # (batch*T, embed_dim)
+            x = x.reshape(batch, T, -1)  # (batch, T, embed_dim)
             return x
 
     class PositionalEncoding(nn.Module):
@@ -178,9 +180,7 @@ def _build_model(num_classes: int = 9, freq_bins: int = 256, time_steps: int = 6
                 activation="gelu",
                 batch_first=True,
             )
-            self.transformer = nn.TransformerEncoder(
-                encoder_layer, num_layers=n_layers
-            )
+            self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
 
             # Classification head
             self.classifier = nn.Sequential(
@@ -316,9 +316,7 @@ class SignalClassifier:
         if model_path and Path(model_path).exists():
             logger.info(f"Loading pre-trained model from {model_path}")
             try:
-                state_dict = torch.load(
-                    model_path, map_location=self.device, weights_only=True
-                )
+                state_dict = torch.load(model_path, map_location=self.device, weights_only=True)
                 self.model.load_state_dict(state_dict)
                 logger.info("Model weights loaded successfully")
             except Exception as e:
@@ -326,9 +324,7 @@ class SignalClassifier:
                 logger.warning("Continuing with untrained model")
         else:
             if model_path:
-                logger.warning(
-                    f"Model path not found: {model_path}. Using untrained model."
-                )
+                logger.warning(f"Model path not found: {model_path}. Using untrained model.")
             else:
                 logger.info("No model path provided. Created untrained model.")
 
@@ -336,9 +332,7 @@ class SignalClassifier:
         try:
             self.model.to(self.device)
         except Exception as e:
-            logger.warning(
-                f"Failed to move model to {self.device}: {e}, falling back to CPU"
-            )
+            logger.warning(f"Failed to move model to {self.device}: {e}, falling back to CPU")
             self.device = "cpu"
             self.model.to(self.device)
 
@@ -348,7 +342,7 @@ class SignalClassifier:
             f"({self.num_classes} classes, {self.freq_bins}x{self.time_steps} input)"
         )
 
-    def _preprocess(self, spectrogram: np.ndarray) -> "torch.Tensor":
+    def _preprocess(self, spectrogram: np.ndarray) -> torch.Tensor:
         """
         Preprocess a spectrogram for model input.
 
@@ -382,10 +376,7 @@ class SignalClassifier:
         spec = spectrogram.astype(np.float32)
         mean = spec.mean()
         std = spec.std()
-        if std > 0:
-            spec = (spec - mean) / std
-        else:
-            spec = spec - mean
+        spec = (spec - mean) / std if std > 0 else spec - mean
 
         # Convert to tensor: (1, freq_bins, time_steps)
         tensor = torch.from_numpy(spec).unsqueeze(0).to(self.device)
@@ -437,14 +428,11 @@ class SignalClassifier:
 
         # Compute RFI probability (sum of RFI class probabilities)
         rfi_prob = float(
-            prob_np[SignalType.RFI_TERRESTRIAL.value]
-            + prob_np[SignalType.RFI_SATELLITE.value]
+            prob_np[SignalType.RFI_TERRESTRIAL.value] + prob_np[SignalType.RFI_SATELLITE.value]
         )
 
         # Build per-class score dictionary
-        all_scores = {
-            st.name.lower(): float(prob_np[st.value]) for st in SignalType
-        }
+        all_scores = {st.name.lower(): float(prob_np[st.value]) for st in SignalType}
 
         return ClassificationResult(
             signal_type=SignalType(top_idx),
@@ -454,9 +442,7 @@ class SignalClassifier:
             all_scores=all_scores,
         )
 
-    def classify_batch(
-        self, spectrograms: List[np.ndarray]
-    ) -> List[ClassificationResult]:
+    def classify_batch(self, spectrograms: List[np.ndarray]) -> List[ClassificationResult]:
         """
         Classify multiple spectrograms in a batch (more efficient).
 
@@ -487,12 +473,9 @@ class SignalClassifier:
             top_idx = int(prob_np.argmax())
 
             rfi_prob = float(
-                prob_np[SignalType.RFI_TERRESTRIAL.value]
-                + prob_np[SignalType.RFI_SATELLITE.value]
+                prob_np[SignalType.RFI_TERRESTRIAL.value] + prob_np[SignalType.RFI_SATELLITE.value]
             )
-            all_scores = {
-                st.name.lower(): float(prob_np[st.value]) for st in SignalType
-            }
+            all_scores = {st.name.lower(): float(prob_np[st.value]) for st in SignalType}
 
             results.append(
                 ClassificationResult(
@@ -520,9 +503,7 @@ class SignalClassifier:
         return result.signal_type in RFI_CLASSES
 
     @staticmethod
-    def is_candidate(
-        result: ClassificationResult, rfi_threshold: float = 0.3
-    ) -> bool:
+    def is_candidate(result: ClassificationResult, rfi_threshold: float = 0.3) -> bool:
         """
         Check if a classification result is a scientifically interesting candidate.
 
@@ -540,9 +521,7 @@ class SignalClassifier:
         """
         if result.signal_type == SignalType.CANDIDATE_ET:
             return True
-        if (
+        return bool(
             result.signal_type == SignalType.NARROWBAND_DRIFTING
             and result.rfi_probability < rfi_threshold
-        ):
-            return True
-        return False
+        )

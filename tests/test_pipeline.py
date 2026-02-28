@@ -6,9 +6,10 @@ and gracefully skip when optional dependencies (Rust core, model weights,
 running API server) are not present.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -17,9 +18,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Rust Core
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestRustCore:
     def test_import(self):
         import mitraseti_core
+
         assert hasattr(mitraseti_core, "DedopplerEngine")
 
     def test_filterbank_reader(self):
@@ -42,6 +45,7 @@ class TestRustCore:
 
     def test_rfi_filter_exists(self):
         import mitraseti_core
+
         assert hasattr(mitraseti_core, "RFIFilter")
 
     def test_dedoppler_engine_creation(self):
@@ -55,6 +59,7 @@ class TestRustCore:
 # ─────────────────────────────────────────────────────────────────────────────
 # Pipeline
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestPipeline:
     def test_pipeline_init(self):
@@ -121,6 +126,7 @@ class TestPipeline:
 # ML Models
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestMLModels:
     def test_classifier_import(self):
         from inference.signal_classifier import SignalClassifier
@@ -130,6 +136,7 @@ class TestMLModels:
 
     def test_feature_extractor(self):
         import numpy as np
+
         from inference.feature_extractor import FeatureExtractor
 
         fe = FeatureExtractor()
@@ -157,6 +164,7 @@ class TestMLModels:
 # ─────────────────────────────────────────────────────────────────────────────
 # API
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestAPI:
     def test_health_endpoint(self):

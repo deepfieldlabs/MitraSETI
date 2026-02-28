@@ -11,20 +11,29 @@ from __future__ import annotations
 import json
 import math
 import time
-from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSizePolicy, QComboBox, QToolTip,
-)
-from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF
+from PyQt5.QtCore import QPointF, Qt, QTimer
 from PyQt5.QtGui import (
-    QPainter, QPen, QColor, QRadialGradient, QConicalGradient,
-    QLinearGradient, QFont, QFontMetrics, QPainterPath, QBrush,
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetrics,
+    QPainter,
+    QPen,
+    QRadialGradient,
 )
-
+from PyQt5.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QToolTip,
+    QVBoxLayout,
+    QWidget,
+)
 
 _BG_COLOR = QColor(8, 12, 24)
 _GRID_COLOR = QColor(30, 70, 50, 45)
@@ -50,10 +59,20 @@ _FPS = 30
 
 class _TargetBlip:
     """A single target on the radar."""
+
     __slots__ = (
-        "name", "ra_deg", "dec_deg", "angle", "radius",
-        "n_signals", "n_candidates", "category", "last_swept",
-        "frequency_mhz", "snr", "classification",
+        "name",
+        "ra_deg",
+        "dec_deg",
+        "angle",
+        "radius",
+        "n_signals",
+        "n_candidates",
+        "category",
+        "last_swept",
+        "frequency_mhz",
+        "snr",
+        "classification",
     )
 
     def __init__(self, obs: Dict):
@@ -196,8 +215,18 @@ class RadarWidget(QWidget):
                 if brightness > 0.5:
                     glow_r = dot_r * 3.0 * brightness
                     glow = QRadialGradient(bx, by, glow_r)
-                    glow.setColorAt(0.0, QColor(base_color.red(), base_color.green(), base_color.blue(), int(60 * brightness)))
-                    glow.setColorAt(1.0, QColor(base_color.red(), base_color.green(), base_color.blue(), 0))
+                    glow.setColorAt(
+                        0.0,
+                        QColor(
+                            base_color.red(),
+                            base_color.green(),
+                            base_color.blue(),
+                            int(60 * brightness),
+                        ),
+                    )
+                    glow.setColorAt(
+                        1.0, QColor(base_color.red(), base_color.green(), base_color.blue(), 0)
+                    )
                     p.setBrush(QBrush(glow))
                     p.setPen(Qt.NoPen)
                     p.drawEllipse(QPointF(bx, by), glow_r, glow_r)
@@ -221,7 +250,11 @@ class RadarWidget(QWidget):
 
             else:
                 dim_alpha = 25 if blip.category == "observation" else 45
-                p.setBrush(QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), dim_alpha)))
+                p.setBrush(
+                    QBrush(
+                        QColor(base_color.red(), base_color.green(), base_color.blue(), dim_alpha)
+                    )
+                )
                 p.setPen(Qt.NoPen)
                 p.drawEllipse(QPointF(bx, by), 2.0, 2.0)
 
@@ -308,26 +341,22 @@ class SkyMapPanel(QWidget):
 
         header = QHBoxLayout()
         title = QLabel("Space Radar")
-        title.setStyleSheet(
-            "font-size: 20px; font-weight: 600; color: #34d399;"
-        )
+        title.setStyleSheet("font-size: 20px; font-weight: 600; color: #34d399;")
         header.addWidget(title)
 
-        subtitle = QLabel(
-            "Live sweep of observed targets — RA/Dec polar projection"
-        )
-        subtitle.setStyleSheet(
-            "font-size: 12px; color: rgba(100,180,130,0.5); margin-left: 12px;"
-        )
+        subtitle = QLabel("Live sweep of observed targets — RA/Dec polar projection")
+        subtitle.setStyleSheet("font-size: 12px; color: rgba(100,180,130,0.5); margin-left: 12px;")
         header.addWidget(subtitle)
         header.addStretch()
 
         self.filter_combo = QComboBox()
-        self.filter_combo.addItems([
-            "All Targets",
-            "With Signals",
-            "Candidates Only",
-        ])
+        self.filter_combo.addItems(
+            [
+                "All Targets",
+                "With Signals",
+                "Candidates Only",
+            ]
+        )
         self.filter_combo.currentIndexChanged.connect(self._apply_filter)
         self.filter_combo.setFixedWidth(160)
         header.addWidget(self.filter_combo)
@@ -346,21 +375,15 @@ class SkyMapPanel(QWidget):
         stats_bar.setSpacing(24)
 
         self.obs_count_lbl = QLabel("Targets: 0")
-        self.obs_count_lbl.setStyleSheet(
-            "font-size: 12px; color: rgba(100,180,130,0.6);"
-        )
+        self.obs_count_lbl.setStyleSheet("font-size: 12px; color: rgba(100,180,130,0.6);")
         stats_bar.addWidget(self.obs_count_lbl)
 
         self.signal_count_lbl = QLabel("Signals: 0")
-        self.signal_count_lbl.setStyleSheet(
-            "font-size: 12px; color: rgba(77,166,255,0.8);"
-        )
+        self.signal_count_lbl.setStyleSheet("font-size: 12px; color: rgba(77,166,255,0.8);")
         stats_bar.addWidget(self.signal_count_lbl)
 
         self.candidate_count_lbl = QLabel("Candidates: 0")
-        self.candidate_count_lbl.setStyleSheet(
-            "font-size: 12px; color: rgba(52,211,153,0.8);"
-        )
+        self.candidate_count_lbl.setStyleSheet("font-size: 12px; color: rgba(52,211,153,0.8);")
         stats_bar.addWidget(self.candidate_count_lbl)
 
         stats_bar.addStretch()
@@ -381,7 +404,7 @@ class SkyMapPanel(QWidget):
         """Load observation data from streaming state and verified candidates."""
         self._observations = []
 
-        from paths import DATA_DIR, CANDIDATES_DIR
+        from paths import CANDIDATES_DIR, DATA_DIR
 
         state_file = DATA_DIR / "streaming_state.json"
         if state_file.exists():
@@ -391,13 +414,15 @@ class SkyMapPanel(QWidget):
                 cats = state.get("categories", {})
                 for cat_name, cat_data in cats.items():
                     if isinstance(cat_data, dict) and cat_data.get("files_processed", 0) > 0:
-                        self._observations.append({
-                            "name": cat_name,
-                            "ra": hash(cat_name) % 360,
-                            "dec": (hash(cat_name + "d") % 120) - 60,
-                            "signals": cat_data.get("signals_detected", 0),
-                            "candidates": cat_data.get("verified_candidates", 0),
-                        })
+                        self._observations.append(
+                            {
+                                "name": cat_name,
+                                "ra": hash(cat_name) % 360,
+                                "dec": (hash(cat_name + "d") % 120) - 60,
+                                "signals": cat_data.get("signals_detected", 0),
+                                "candidates": cat_data.get("verified_candidates", 0),
+                            }
+                        )
             except Exception:
                 pass
 
@@ -412,16 +437,18 @@ class SkyMapPanel(QWidget):
                     seed_str = f"{target}_{freq_mhz:.4f}_{i}"
                     ra = float(c.get("ra", (hash(seed_str) % 3600) / 10.0))
                     dec = float(c.get("dec", (hash(seed_str + "d") % 1200 - 600) / 10.0))
-                    self._observations.append({
-                        "name": target,
-                        "ra": ra,
-                        "dec": dec,
-                        "signals": 1,
-                        "candidates": 1,
-                        "frequency_mhz": freq_mhz,
-                        "snr": c.get("snr", 0),
-                        "classification": c.get("classification", ""),
-                    })
+                    self._observations.append(
+                        {
+                            "name": target,
+                            "ra": ra,
+                            "dec": dec,
+                            "signals": 1,
+                            "candidates": 1,
+                            "frequency_mhz": freq_mhz,
+                            "snr": c.get("snr", 0),
+                            "classification": c.get("classification", ""),
+                        }
+                    )
             except Exception:
                 pass
 
@@ -435,7 +462,13 @@ class SkyMapPanel(QWidget):
         rng = np.random.default_rng(42)
 
         targets = [
-            {"name": "Proxima Centauri", "ra": 217.43, "dec": -62.68, "signals": 3, "candidates": 0},
+            {
+                "name": "Proxima Centauri",
+                "ra": 217.43,
+                "dec": -62.68,
+                "signals": 3,
+                "candidates": 0,
+            },
             {"name": "TRAPPIST-1", "ra": 346.62, "dec": -5.04, "signals": 7, "candidates": 1},
             {"name": "Kepler-160", "ra": 291.41, "dec": 42.31, "signals": 2, "candidates": 0},
             {"name": "GJ 887", "ra": 344.78, "dec": -35.85, "signals": 5, "candidates": 0},
@@ -449,13 +482,15 @@ class SkyMapPanel(QWidget):
         ]
 
         for i in range(30):
-            targets.append({
-                "name": f"GBT-{i+1:03d}",
-                "ra": float(rng.uniform(0, 360)),
-                "dec": float(rng.uniform(-60, 70)),
-                "signals": int(rng.integers(0, 15)),
-                "candidates": int(rng.integers(0, 2)),
-            })
+            targets.append(
+                {
+                    "name": f"GBT-{i + 1:03d}",
+                    "ra": float(rng.uniform(0, 360)),
+                    "dec": float(rng.uniform(-60, 70)),
+                    "signals": int(rng.integers(0, 15)),
+                    "candidates": int(rng.integers(0, 2)),
+                }
+            )
 
         self._observations = targets
 

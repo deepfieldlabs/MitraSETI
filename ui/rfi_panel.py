@@ -12,23 +12,29 @@ Radio Frequency Interference rejection dashboard:
 
 from __future__ import annotations
 
-import numpy as np
-
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGridLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QScrollArea, QSizePolicy, QAbstractItemView,
-)
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor
-
 import matplotlib
+import numpy as np
+from PyQt5.QtCore import QTimer
+from PyQt5.QtGui import QColor
+from PyQt5.QtWidgets import (
+    QAbstractItemView,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
 matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from .theme import COLORS, make_stat_card, create_stat_card_style
-
+from .theme import make_stat_card
 
 # ── Known RFI bands table data ───────────────────────────────────────────────
 
@@ -85,13 +91,48 @@ class RFIPanel(QWidget):
         }
 
         self._false_positive_log = [
-            {"id": "FP-001", "freq": "1420.8 MHz", "reason": "Drift rate matched known pulsar", "status": "Resolved"},
-            {"id": "FP-002", "freq": "1575.4 MHz", "reason": "GPS sidelobe mis-classified", "status": "Resolved"},
-            {"id": "FP-003", "freq": "850.2 MHz", "reason": "Broadband transient", "status": "Under Review"},
-            {"id": "FP-004", "freq": "1665.0 MHz", "reason": "OH maser false hit", "status": "Resolved"},
-            {"id": "FP-005", "freq": "2401.5 MHz", "reason": "WiFi edge spillover", "status": "Under Review"},
-            {"id": "FP-006", "freq": "408.0 MHz", "reason": "TV broadcast harmonic", "status": "Resolved"},
-            {"id": "FP-007", "freq": "1176.5 MHz", "reason": "GPS L5 sidelobe", "status": "Under Review"},
+            {
+                "id": "FP-001",
+                "freq": "1420.8 MHz",
+                "reason": "Drift rate matched known pulsar",
+                "status": "Resolved",
+            },
+            {
+                "id": "FP-002",
+                "freq": "1575.4 MHz",
+                "reason": "GPS sidelobe mis-classified",
+                "status": "Resolved",
+            },
+            {
+                "id": "FP-003",
+                "freq": "850.2 MHz",
+                "reason": "Broadband transient",
+                "status": "Under Review",
+            },
+            {
+                "id": "FP-004",
+                "freq": "1665.0 MHz",
+                "reason": "OH maser false hit",
+                "status": "Resolved",
+            },
+            {
+                "id": "FP-005",
+                "freq": "2401.5 MHz",
+                "reason": "WiFi edge spillover",
+                "status": "Under Review",
+            },
+            {
+                "id": "FP-006",
+                "freq": "408.0 MHz",
+                "reason": "TV broadcast harmonic",
+                "status": "Resolved",
+            },
+            {
+                "id": "FP-007",
+                "freq": "1176.5 MHz",
+                "reason": "GPS L5 sidelobe",
+                "status": "Under Review",
+            },
         ]
 
     # ── UI ────────────────────────────────────────────────────────────────
@@ -125,10 +166,14 @@ class RFIPanel(QWidget):
         stats_grid.setSpacing(12)
 
         self._stat_total = make_stat_card("Total Signals", str(self._total_signals), "#4da6ff")
-        pct = f"{self._rfi_rejected} ({self._rfi_rejected / max(self._total_signals, 1) * 100:.1f}%)"
+        pct = (
+            f"{self._rfi_rejected} ({self._rfi_rejected / max(self._total_signals, 1) * 100:.1f}%)"
+        )
         self._stat_rejected = make_stat_card("RFI Rejected", pct, "#f87171")
         self._stat_fp = make_stat_card("False Positives", str(self._false_positives), "#fbbf24")
-        self._stat_candidates = make_stat_card("True Candidates", str(self._true_candidates), "#34d399")
+        self._stat_candidates = make_stat_card(
+            "True Candidates", str(self._true_candidates), "#34d399"
+        )
 
         stats_grid.addWidget(self._stat_total, 0, 0)
         stats_grid.addWidget(self._stat_rejected, 0, 1)
@@ -153,9 +198,7 @@ class RFIPanel(QWidget):
         pie_layout.setContentsMargins(16, 16, 16, 16)
 
         pie_title = QLabel("Classification Distribution")
-        pie_title.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
-        )
+        pie_title.setStyleSheet("font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);")
         pie_layout.addWidget(pie_title)
 
         self._pie_fig = Figure(figsize=(4, 3.5), dpi=100, facecolor="#080c14")
@@ -178,9 +221,7 @@ class RFIPanel(QWidget):
         bar_layout.setContentsMargins(16, 16, 16, 16)
 
         bar_title = QLabel("RFI by Type")
-        bar_title.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
-        )
+        bar_title.setStyleSheet("font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);")
         bar_layout.addWidget(bar_title)
 
         self._bar_fig = Figure(figsize=(4, 3.5), dpi=100, facecolor="#080c14")
@@ -206,9 +247,7 @@ class RFIPanel(QWidget):
         ba_layout.setSpacing(12)
 
         ba_title = QLabel("Before / After ML Filtering")
-        ba_title.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
-        )
+        ba_title.setStyleSheet("font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);")
         ba_layout.addWidget(ba_title)
 
         self._ba_fig = Figure(figsize=(8, 2.5), dpi=100, facecolor="#080c14")
@@ -267,9 +306,7 @@ class RFIPanel(QWidget):
         fp_layout.setContentsMargins(16, 16, 16, 16)
 
         fp_title = QLabel("False Positive Tracker")
-        fp_title.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
-        )
+        fp_title.setStyleSheet("font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);")
         fp_layout.addWidget(fp_title)
 
         self._fp_table = QTableWidget()
@@ -312,8 +349,11 @@ class RFIPanel(QWidget):
         colors = ["#34d399", "#f87171", "#ff6644", "#fbbf24", "#cc6600", "#7c3aed"]
 
         wedges, texts, autotexts = ax.pie(
-            sizes, labels=labels, colors=colors[:len(labels)],
-            autopct="%1.1f%%", startangle=140,
+            sizes,
+            labels=labels,
+            colors=colors[: len(labels)],
+            autopct="%1.1f%%",
+            startangle=140,
             textprops={"color": "#e0e8f0", "fontsize": 8},
             pctdistance=0.75,
             wedgeprops={"linewidth": 1, "edgecolor": "#080c14"},
@@ -337,13 +377,18 @@ class RFIPanel(QWidget):
         counts = list(self._rfi_by_type.values())
         colors = ["#f87171", "#ff6644", "#fbbf24", "#cc6600"]
 
-        bars = ax.barh(types, counts, color=colors[:len(types)], height=0.6, edgecolor="#080c14")
+        bars = ax.barh(types, counts, color=colors[: len(types)], height=0.6, edgecolor="#080c14")
 
-        for bar, count in zip(bars, counts):
+        for bar, count in zip(bars, counts, strict=False):
             ax.text(
-                bar.get_width() + 1, bar.get_y() + bar.get_height() / 2,
+                bar.get_width() + 1,
+                bar.get_y() + bar.get_height() / 2,
                 str(count),
-                va="center", ha="left", color="#e0e8f0", fontsize=10, fontweight="bold",
+                va="center",
+                ha="left",
+                color="#e0e8f0",
+                fontsize=10,
+                fontweight="bold",
             )
 
         ax.set_facecolor("#080c14")
@@ -363,16 +408,25 @@ class RFIPanel(QWidget):
         ax = self._ba_fig.add_subplot(111)
 
         categories = ["Total\nDetections", "After ML\nFiltering", "Final\nCandidates"]
-        before_vals = [self._total_signals, self._total_signals - self._rfi_rejected, self._true_candidates]
+        before_vals = [
+            self._total_signals,
+            self._total_signals - self._rfi_rejected,
+            self._true_candidates,
+        ]
         colors = ["#4da6ff", "#7c3aed", "#34d399"]
 
         bars = ax.bar(categories, before_vals, color=colors, width=0.5, edgecolor="#080c14")
 
-        for bar, val in zip(bars, before_vals):
+        for bar, val in zip(bars, before_vals, strict=False):
             ax.text(
-                bar.get_x() + bar.get_width() / 2, bar.get_height() + 2,
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 2,
                 str(val),
-                ha="center", va="bottom", color="#e0e8f0", fontsize=12, fontweight="bold",
+                ha="center",
+                va="bottom",
+                color="#e0e8f0",
+                fontsize=12,
+                fontweight="bold",
             )
 
         ax.set_facecolor("#080c14")
@@ -385,8 +439,12 @@ class RFIPanel(QWidget):
 
         # Reduction arrows
         ax.annotate(
-            f"−{self._rfi_rejected}", xy=(1, before_vals[1] + 5),
-            fontsize=10, color="#f87171", fontweight="bold", ha="center",
+            f"−{self._rfi_rejected}",
+            xy=(1, before_vals[1] + 5),
+            fontsize=10,
+            color="#f87171",
+            fontweight="bold",
+            ha="center",
         )
 
         self._ba_fig.set_facecolor("#080c14")

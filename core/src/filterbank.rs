@@ -223,7 +223,9 @@ pub struct Hdf5Reader;
 impl FilterbankIO for Hdf5Reader {
     fn read(&self, path: &str) -> Result<(FilterbankHeader, Array2<f32>), FilterbankError> {
         let file = hdf5::File::open(path).map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
-        let root = file.group("/").map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
+        let root = file
+            .group("/")
+            .map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
 
         let nchans = read_attr_usize(&root, "nchans")?;
         let nifs = read_attr_usize(&root, "nifs").unwrap_or(1);
@@ -236,17 +238,39 @@ impl FilterbankIO for Hdf5Reader {
         let ra = read_attr_f64(&root, "src_raj").unwrap_or(0.0);
         let dec = read_attr_f64(&root, "src_dej").unwrap_or(0.0);
 
-        let header = FilterbankHeader { nchans, nifs, nbits, tsamp, fch1, foff, tstart, source_name, ra, dec };
+        let header = FilterbankHeader {
+            nchans,
+            nifs,
+            nbits,
+            tsamp,
+            fch1,
+            foff,
+            tstart,
+            source_name,
+            ra,
+            dec,
+        };
 
-        let dataset = file.dataset("data").map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
-        let flat: Vec<f32> = dataset.read_raw().map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
+        let dataset = file
+            .dataset("data")
+            .map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
+        let flat: Vec<f32> = dataset
+            .read_raw()
+            .map_err(|e| FilterbankError::Hdf5(e.to_string()))?;
         let n_times = flat.len() / (nifs * nchans);
-        let data: Vec<f32> = if nifs == 1 { flat } else {
-            flat.chunks(nifs * nchans).flat_map(|frame| frame[..nchans].iter().copied()).collect()
+        let data: Vec<f32> = if nifs == 1 {
+            flat
+        } else {
+            flat.chunks(nifs * nchans)
+                .flat_map(|frame| frame[..nchans].iter().copied())
+                .collect()
         };
 
         let array = Array2::from_shape_vec((n_times, nchans), data).map_err(|e| {
-            FilterbankError::ShapeMismatch { expected: format!("({}, {})", n_times, nchans), actual: e.to_string() }
+            FilterbankError::ShapeMismatch {
+                expected: format!("({}, {})", n_times, nchans),
+                actual: e.to_string(),
+            }
         })?;
         Ok((header, array))
     }
@@ -254,8 +278,11 @@ impl FilterbankIO for Hdf5Reader {
 
 #[cfg(feature = "hdf5-support")]
 fn read_attr_f64(group: &hdf5::Group, name: &str) -> Result<f64, FilterbankError> {
-    let attr = group.attr(name).map_err(|e| FilterbankError::Hdf5(format!("missing attribute '{}': {}", name, e)))?;
-    attr.read_scalar::<f64>().map_err(|e| FilterbankError::Hdf5(format!("cannot read '{}' as f64: {}", name, e)))
+    let attr = group
+        .attr(name)
+        .map_err(|e| FilterbankError::Hdf5(format!("missing attribute '{}': {}", name, e)))?;
+    attr.read_scalar::<f64>()
+        .map_err(|e| FilterbankError::Hdf5(format!("cannot read '{}' as f64: {}", name, e)))
 }
 
 #[cfg(feature = "hdf5-support")]
@@ -270,10 +297,15 @@ fn read_attr_u32(group: &hdf5::Group, name: &str) -> Result<u32, FilterbankError
 
 #[cfg(feature = "hdf5-support")]
 fn read_attr_string(group: &hdf5::Group, name: &str) -> Result<String, FilterbankError> {
-    let attr = group.attr(name).map_err(|e| FilterbankError::Hdf5(format!("missing attribute '{}': {}", name, e)))?;
+    let attr = group
+        .attr(name)
+        .map_err(|e| FilterbankError::Hdf5(format!("missing attribute '{}': {}", name, e)))?;
     attr.read_scalar::<hdf5::types::VarLenUnicode>()
         .map(|s| s.to_string())
-        .or_else(|_| attr.read_scalar::<hdf5::types::FixedUnicode<256>>().map(|s| s.to_string()))
+        .or_else(|_| {
+            attr.read_scalar::<hdf5::types::FixedUnicode<256>>()
+                .map(|s| s.to_string())
+        })
         .map_err(|e| FilterbankError::Hdf5(format!("cannot read '{}' as string: {}", name, e)))
 }
 
@@ -302,10 +334,7 @@ impl FilterbankReader {
     /// The spectrogram is returned as a flat `Vec<f32>` in row-major order
     /// so it can easily be reshaped on the Python side with numpy.
     #[pyo3(name = "read")]
-    pub fn py_read(
-        &self,
-        path: &str,
-    ) -> PyResult<(FilterbankHeader, Vec<f32>, usize, usize)> {
+    pub fn py_read(&self, path: &str) -> PyResult<(FilterbankHeader, Vec<f32>, usize, usize)> {
         let (header, array) = self
             .read(path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;

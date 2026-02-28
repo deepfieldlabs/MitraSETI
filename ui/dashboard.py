@@ -8,27 +8,35 @@ system health indicators, and mini waterfall preview.
 from __future__ import annotations
 
 import io
-import numpy as np
-
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGridLayout, QScrollArea, QSizePolicy, QMessageBox,
-)
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QLinearGradient
-
-import subprocess, sys, webbrowser
+import subprocess
+import sys
+import webbrowser
 from pathlib import Path
 
 import matplotlib
+import numpy as np
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QBrush, QColor, QImage, QPainter, QPixmap
+from PyQt5.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
 matplotlib.use("Qt5Agg")
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-from .theme import COLORS, make_stat_card, create_glass_card, create_glow_button
-
+from .theme import COLORS, make_stat_card
 
 # ── Health indicator dot ──────────────────────────────────────────────────────
+
 
 class _HealthDot(QFrame):
     """Tiny colored dot for system health."""
@@ -52,12 +60,18 @@ class _HealthDot(QFrame):
 
 # ── Dashboard Panel ──────────────────────────────────────────────────────────
 
+
 class DashboardPanel(QWidget):
     """Main dashboard — the landing page of MitraSETI."""
 
     navigate_to = pyqtSignal(int)  # Emit panel index to switch to
 
-    _STATE_FILE = Path(__file__).parent.parent.parent / "mitraseti_artifacts" / "data" / "streaming_state.json"
+    _STATE_FILE = (
+        Path(__file__).parent.parent.parent
+        / "mitraseti_artifacts"
+        / "data"
+        / "streaming_state.json"
+    )
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -140,8 +154,7 @@ class DashboardPanel(QWidget):
         # ══════════════════════════════════════════════════════════════════
         stats_label = QLabel("OVERVIEW")
         stats_label.setStyleSheet(
-            "font-size: 10px; font-weight: 600; color: rgba(0,212,255,0.5); "
-            "letter-spacing: 2px;"
+            "font-size: 10px; font-weight: 600; color: rgba(0,212,255,0.5); letter-spacing: 2px;"
         )
         layout.addWidget(stats_label)
 
@@ -171,8 +184,7 @@ class DashboardPanel(QWidget):
         # ══════════════════════════════════════════════════════════════════
         actions_label = QLabel("QUICK ACTIONS")
         actions_label.setStyleSheet(
-            "font-size: 10px; font-weight: 600; color: rgba(0,212,255,0.5); "
-            "letter-spacing: 2px;"
+            "font-size: 10px; font-weight: 600; color: rgba(0,212,255,0.5); letter-spacing: 2px;"
         )
         layout.addWidget(actions_label)
 
@@ -180,29 +192,27 @@ class DashboardPanel(QWidget):
         actions_row.setSpacing(12)
 
         load_btn = self._make_action_btn(
-            "📡  Waterfall Viewer", "#4da6ff",
-            "Open the spectrogram viewer to inspect filterbank (.fil) or HDF5 (.h5) files"
+            "📡  Waterfall Viewer",
+            "#4da6ff",
+            "Open the spectrogram viewer to inspect filterbank (.fil) or HDF5 (.h5) files",
         )
         load_btn.clicked.connect(lambda: self.navigate_to.emit(1))
         actions_row.addWidget(load_btn)
 
         stream_btn = self._make_action_btn(
-            "📶  Start Streaming", "#34d399",
-            "Begin continuous observation processing"
+            "📶  Start Streaming", "#34d399", "Begin continuous observation processing"
         )
         stream_btn.clicked.connect(lambda: self.navigate_to.emit(5))
         actions_row.addWidget(stream_btn)
 
         candidates_btn = self._make_action_btn(
-            "🔬  View Candidates", "#7c3aed",
-            "Browse candidate signals in gallery"
+            "🔬  View Candidates", "#7c3aed", "Browse candidate signals in gallery"
         )
         candidates_btn.clicked.connect(lambda: self.navigate_to.emit(2))
         actions_row.addWidget(candidates_btn)
 
         report_btn = self._make_action_btn(
-            "📊  Generate Report", "#fbbf24",
-            "Export analysis summary"
+            "📊  Generate Report", "#fbbf24", "Export analysis summary"
         )
         report_btn.clicked.connect(self._generate_report)
         actions_row.addWidget(report_btn)
@@ -214,15 +224,13 @@ class DashboardPanel(QWidget):
         actions_row2.setSpacing(12)
 
         bench_btn = self._make_action_btn(
-            "⚡  Run Benchmark", "#f87171",
-            "Compare MitraSETI vs turboSETI performance"
+            "⚡  Run Benchmark", "#f87171", "Compare MitraSETI vs turboSETI performance"
         )
         bench_btn.clicked.connect(self._run_benchmark)
         actions_row2.addWidget(bench_btn)
 
         download_btn = self._make_action_btn(
-            "📥  Download BL Data", "#7c3aed",
-            "Download real Breakthrough Listen observation files"
+            "📥  Download BL Data", "#7c3aed", "Download real Breakthrough Listen observation files"
         )
         download_btn.clicked.connect(self._download_bl_data)
         actions_row2.addWidget(download_btn)
@@ -250,9 +258,7 @@ class DashboardPanel(QWidget):
         activity_layout.setSpacing(8)
 
         act_title = QLabel("Recent Activity")
-        act_title.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
-        )
+        act_title.setStyleSheet("font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);")
         activity_layout.addWidget(act_title)
 
         # Demo activity items
@@ -317,9 +323,7 @@ class DashboardPanel(QWidget):
         health_layout.setSpacing(10)
 
         health_title = QLabel("System Health")
-        health_title.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
-        )
+        health_title.setStyleSheet("font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);")
         health_layout.addWidget(health_title)
 
         self._health_items = {}
@@ -365,17 +369,13 @@ class DashboardPanel(QWidget):
         wf_layout.setSpacing(8)
 
         wf_title = QLabel("Latest Spectrogram")
-        wf_title.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);"
-        )
+        wf_title.setStyleSheet("font-size: 13px; font-weight: 600; color: rgba(0,212,255,0.8);")
         wf_layout.addWidget(wf_title)
 
         self._mini_waterfall = QLabel()
         self._mini_waterfall.setFixedSize(320, 180)
         self._mini_waterfall.setAlignment(Qt.AlignCenter)
-        self._mini_waterfall.setStyleSheet(
-            "background: rgba(8,12,20,0.8); border-radius: 10px;"
-        )
+        self._mini_waterfall.setStyleSheet("background: rgba(8,12,20,0.8); border-radius: 10px;")
         self._mini_waterfall.setText("Generating preview…")
         self._mini_waterfall.setStyleSheet(
             "background: rgba(8,12,20,0.8); border-radius: 10px; "
@@ -478,9 +478,10 @@ class DashboardPanel(QWidget):
 
         if not state and not candidates:
             QMessageBox.information(
-                self, "No Data",
+                self,
+                "No Data",
                 "No streaming data or candidates found.\n"
-                "Run the streaming pipeline first to generate results."
+                "Run the streaming pipeline first to generate results.",
             )
             return
 
@@ -500,12 +501,12 @@ class DashboardPanel(QWidget):
         for i, c in enumerate(candidates[:20], 1):
             cand_rows += f"""<tr>
                 <td>{i}</td>
-                <td>{c.get('target_name', c.get('category', 'Unknown'))}</td>
-                <td>{c.get('frequency_hz', 0)/1e6:.4f}</td>
-                <td>{c.get('snr', 0):.1f}</td>
-                <td>{c.get('drift_rate', 0):.4f}</td>
-                <td>{c.get('classification', 'N/A')}</td>
-                <td>{c.get('file', 'N/A')}</td>
+                <td>{c.get("target_name", c.get("category", "Unknown"))}</td>
+                <td>{c.get("frequency_hz", 0) / 1e6:.4f}</td>
+                <td>{c.get("snr", 0):.1f}</td>
+                <td>{c.get("drift_rate", 0):.4f}</td>
+                <td>{c.get("classification", "N/A")}</td>
+                <td>{c.get("file", "N/A")}</td>
             </tr>"""
 
         html = f"""<!DOCTYPE html>
@@ -540,7 +541,7 @@ tr:hover td {{ background: rgba(0,212,255,0.03); }}
   <div class="stat"><div class="val">{runtime_h:.1f}h</div><div class="lbl">Total Runtime</div></div>
   <div class="stat"><div class="val">{total_rfi:,}</div><div class="lbl">RFI Rejected</div></div>
   <div class="stat"><div class="val">{total_candidates}</div><div class="lbl">ML Candidates</div></div>
-  <div class="stat"><div class="val">{state.get('cadence_passed', 0)}</div><div class="lbl">Cadence Passed</div></div>
+  <div class="stat"><div class="val">{state.get("cadence_passed", 0)}</div><div class="lbl">Cadence Passed</div></div>
 </div>
 
 <h2>Top Verified Candidates</h2>
@@ -556,8 +557,9 @@ tr:hover td {{ background: rgba(0,212,255,0.03); }}
             report_path.write_text(html, encoding="utf-8")
             webbrowser.open(f"file://{report_path}")
             QMessageBox.information(
-                self, "Report Generated",
-                f"Summary report saved and opened in browser:\n{report_path}"
+                self,
+                "Report Generated",
+                f"Summary report saved and opened in browser:\n{report_path}",
             )
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to generate report:\n{e}")
@@ -571,16 +573,26 @@ tr:hover td {{ background: rgba(0,212,255,0.03); }}
         artifacts.mkdir(parents=True, exist_ok=True)
         try:
             self._bench_proc = subprocess.Popen(
-                [sys.executable, str(script), "--sizes", "tiny", "small", "medium",
-                 "--output-dir", str(artifacts)],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                [
+                    sys.executable,
+                    str(script),
+                    "--sizes",
+                    "tiny",
+                    "small",
+                    "medium",
+                    "--output-dir",
+                    str(artifacts),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
             )
             QMessageBox.information(
-                self, "Benchmark Started",
+                self,
+                "Benchmark Started",
                 "Benchmark is running in the background.\n"
                 "An HTML report will be generated in:\n"
                 f"{artifacts}\n\n"
-                "This may take 1-3 minutes depending on your system."
+                "This may take 1-3 minutes depending on your system.",
             )
             QTimer.singleShot(3000, self._check_benchmark_done)
         except Exception as e:
@@ -589,7 +601,9 @@ tr:hover td {{ background: rgba(0,212,255,0.03); }}
     def _check_benchmark_done(self):
         if hasattr(self, "_bench_proc") and self._bench_proc:
             if self._bench_proc.poll() is not None:
-                artifacts = Path(__file__).parent.parent.parent / "mitraseti_artifacts" / "benchmarks"
+                artifacts = (
+                    Path(__file__).parent.parent.parent / "mitraseti_artifacts" / "benchmarks"
+                )
                 reports = sorted(artifacts.glob("benchmark_report_*.html"), reverse=True)
                 if reports:
                     webbrowser.open(f"file://{reports[0]}")
@@ -603,14 +617,16 @@ tr:hover td {{ background: rgba(0,212,255,0.03); }}
         try:
             self._dl_proc = subprocess.Popen(
                 [sys.executable, str(script), "--count", "5"],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
             )
             QMessageBox.information(
-                self, "Download Started",
+                self,
+                "Download Started",
                 "Downloading Breakthrough Listen sample data (5 files).\n"
                 "Files include: Voyager-1, TRAPPIST-1, Proxima Centauri, etc.\n\n"
                 "This may take a few minutes depending on your connection.\n"
-                "Files will appear in the Waterfall Viewer when complete."
+                "Files will appear in the Waterfall Viewer when complete.",
             )
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to start download:\n{e}")
@@ -628,23 +644,34 @@ tr:hover td {{ background: rgba(0,212,255,0.03); }}
             for t in range(n_t):
                 fc = int(f0 + dr * t / n_t * 30)
                 if 0 <= fc < n_f:
-                    data[t, max(0, fc - 1):min(n_f, fc + 2)] += snr
+                    data[t, max(0, fc - 1) : min(n_f, fc + 2)] += snr
 
         fig = Figure(figsize=(320 / 72, 180 / 72), dpi=72)
         ax = fig.add_subplot(111)
         from matplotlib.colors import LinearSegmentedColormap
-        seti_cmap = LinearSegmentedColormap.from_list("seti", [
-            (0.0, "#020810"), (0.2, "#081838"), (0.4, "#0a3060"),
-            (0.6, "#0060a0"), (0.8, "#00b0e0"), (1.0, "#00ffff"),
-        ])
+
+        seti_cmap = LinearSegmentedColormap.from_list(
+            "seti",
+            [
+                (0.0, "#020810"),
+                (0.2, "#081838"),
+                (0.4, "#0a3060"),
+                (0.6, "#0060a0"),
+                (0.8, "#00b0e0"),
+                (1.0, "#00ffff"),
+            ],
+        )
         ax.imshow(data, aspect="auto", origin="lower", cmap=seti_cmap, interpolation="nearest")
         ax.axis("off")
         fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
         buf = io.BytesIO()
         fig.savefig(
-            buf, format="png", facecolor="#080c14",
-            bbox_inches="tight", pad_inches=0,
+            buf,
+            format="png",
+            facecolor="#080c14",
+            bbox_inches="tight",
+            pad_inches=0,
         )
         buf.seek(0)
 
@@ -663,6 +690,7 @@ tr:hover td {{ background: rgba(0,212,255,0.03); }}
     def _refresh_stats(self):
         """Read streaming state and update dashboard stat cards."""
         import json
+
         if not self._STATE_FILE.exists():
             return
         try:
@@ -679,10 +707,7 @@ tr:hover td {{ background: rgba(0,212,255,0.03); }}
 
         # RFI rejection rate as percentage
         total_classified = rfi + signals
-        rfi_pct = (
-            f"{rfi / total_classified * 100:.1f}%"
-            if total_classified > 0 else "0%"
-        )
+        rfi_pct = f"{rfi / total_classified * 100:.1f}%" if total_classified > 0 else "0%"
 
         # Processing speed as avg seconds per file
         if files > 0 and runtime_hrs > 0:

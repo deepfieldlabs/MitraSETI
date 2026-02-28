@@ -33,13 +33,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RadioFeatures:
     """Physical and statistical features of a radio signal."""
+
     snr: float
-    drift_rate: float           # Hz/s
-    bandwidth: float            # Hz
-    central_freq: float         # Hz
-    duration: float             # seconds
+    drift_rate: float  # Hz/s
+    bandwidth: float  # Hz
+    central_freq: float  # Hz
+    duration: float  # seconds
     spectral_index: float
-    polarization_ratio: float   # 0–1 (1 = fully polarised)
+    polarization_ratio: float  # 0–1 (1 = fully polarised)
     modulation_index: float
     kurtosis: float
     skewness: float
@@ -60,8 +61,8 @@ class FeatureExtractor:
 
     # Default observing parameters (used when the header is missing keys)
     DEFAULT_FREQ_RESOLUTION: float = 2.7939677238464355  # Hz per channel (BL default)
-    DEFAULT_TIME_RESOLUTION: float = 18.253611008       # seconds per time step
-    DEFAULT_REF_FREQ: float = 1420.405751e6             # Hydrogen line (Hz)
+    DEFAULT_TIME_RESOLUTION: float = 18.253611008  # seconds per time step
+    DEFAULT_REF_FREQ: float = 1420.405751e6  # Hydrogen line (Hz)
 
     def __init__(self) -> None:
         """Initialise the feature extractor."""
@@ -233,9 +234,7 @@ class FeatureExtractor:
         return float(bw_channels * freq_res)
 
     @staticmethod
-    def compute_central_freq(
-        spectrogram: np.ndarray, freq_res: float, ref_freq: float
-    ) -> float:
+    def compute_central_freq(spectrogram: np.ndarray, freq_res: float, ref_freq: float) -> float:
         """
         Compute the central frequency of the signal.
 
@@ -284,9 +283,7 @@ class FeatureExtractor:
         return float(duration_steps * time_res)
 
     @staticmethod
-    def compute_spectral_index(
-        spectrogram: np.ndarray, freq_res: float, ref_freq: float
-    ) -> float:
+    def compute_spectral_index(spectrogram: np.ndarray, freq_res: float, ref_freq: float) -> float:
         """
         Estimate the spectral index (power-law slope).
 

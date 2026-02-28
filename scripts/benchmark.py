@@ -32,8 +32,7 @@ import os
 import sys
 import tempfile
 import time
-import traceback
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -43,11 +42,12 @@ import numpy as np
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from paths import DATA_DIR, ARTIFACTS_DIR
+from paths import ARTIFACTS_DIR, DATA_DIR
 
 # Ensure HDF5 plugins (bitshuffle) are available for compressed BL data
 try:
     import hdf5plugin
+
     os.environ.setdefault("HDF5_PLUGIN_PATH", hdf5plugin.PLUGINS_PATH)
 except ImportError:
     pass
@@ -75,9 +75,11 @@ _BL_DATA_DIR = DATA_DIR / "breakthrough_listen_data_files"
 # Data classes
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class BenchmarkResult:
     """Result for a single benchmark run."""
+
     size_label: str
     nchans: int
     ntime: int
@@ -104,6 +106,7 @@ class BenchmarkResult:
 @dataclass
 class BenchmarkSuite:
     """Full benchmark suite results."""
+
     results: List[dict] = field(default_factory=list)
     turboseti_available: bool = False
     started_at: str = ""
@@ -115,6 +118,7 @@ class BenchmarkSuite:
 # ─────────────────────────────────────────────────────────────────────────────
 # Synthetic data generation
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def generate_synthetic_filterbank(
     nchans: int = 256,
@@ -143,7 +147,7 @@ def generate_synthetic_filterbank(
     injected = {"signals": [], "rfi": [], "candidates": []}
 
     # Inject narrowband drifting signals
-    for i in range(n_signals):
+    for _i in range(n_signals):
         snr = rng.uniform(8, 30)
         drift_rate = rng.uniform(-2, 2)  # Hz/s
         start_chan = rng.integers(20, nchans - 20)
@@ -155,38 +159,44 @@ def generate_synthetic_filterbank(
             hi = min(nchans, chan + bw + 1)
             data[lo:hi, t] += snr * noise_level
 
-        injected["signals"].append({
-            "type": "narrowband_drifting",
-            "snr": float(snr),
-            "drift_rate": float(drift_rate),
-            "start_chan": int(start_chan),
-            "bandwidth_chans": int(bw),
-        })
+        injected["signals"].append(
+            {
+                "type": "narrowband_drifting",
+                "snr": float(snr),
+                "drift_rate": float(drift_rate),
+                "start_chan": int(start_chan),
+                "bandwidth_chans": int(bw),
+            }
+        )
 
     # Inject RFI (stationary, broadband)
-    for i in range(n_rfi):
+    for _i in range(n_rfi):
         rfi_type = rng.choice(["stationary", "broadband"])
 
         if rfi_type == "stationary":
             chan = rng.integers(0, nchans)
             strength = rng.uniform(15, 50) * noise_level
             data[chan, :] += strength
-            injected["rfi"].append({
-                "type": "rfi_stationary",
-                "channel": int(chan),
-                "strength": float(strength),
-            })
+            injected["rfi"].append(
+                {
+                    "type": "rfi_stationary",
+                    "channel": int(chan),
+                    "strength": float(strength),
+                }
+            )
         else:
             t_start = rng.integers(0, ntime - 5)
             t_end = min(ntime, t_start + rng.integers(3, 10))
             strength = rng.uniform(5, 20) * noise_level
             data[:, t_start:t_end] += strength
-            injected["rfi"].append({
-                "type": "rfi_broadband",
-                "time_start": int(t_start),
-                "time_end": int(t_end),
-                "strength": float(strength),
-            })
+            injected["rfi"].append(
+                {
+                    "type": "rfi_broadband",
+                    "time_start": int(t_start),
+                    "time_end": int(t_end),
+                    "strength": float(strength),
+                }
+            )
 
     # Inject one strong candidate (ET-like: narrowband, drifting, high SNR)
     candidate_snr = 40.0
@@ -196,12 +206,14 @@ def generate_synthetic_filterbank(
         chan = int(candidate_chan + candidate_drift * t / ntime * 30) % nchans
         data[chan, t] += candidate_snr * noise_level
 
-    injected["candidates"].append({
-        "type": "candidate_et",
-        "snr": candidate_snr,
-        "drift_rate": candidate_drift,
-        "channel": candidate_chan,
-    })
+    injected["candidates"].append(
+        {
+            "type": "candidate_et",
+            "snr": candidate_snr,
+            "drift_rate": candidate_drift,
+            "channel": candidate_chan,
+        }
+    )
 
     return data, injected
 
@@ -210,6 +222,7 @@ def save_synthetic_h5(data: np.ndarray, filepath: Path, metadata: dict):
     """Save synthetic data as filterbank-format HDF5 readable by blimpy/turboSETI."""
     try:
         import h5py
+
         ntime, nchans = data.shape
         with h5py.File(str(filepath), "w") as f:
             f.attrs["CLASS"] = "FILTERBANK"
@@ -218,9 +231,7 @@ def save_synthetic_h5(data: np.ndarray, filepath: Path, metadata: dict):
             fb_data = data.reshape(ntime, 1, nchans).astype(np.float32)
             ds = f.create_dataset("data", data=fb_data)
 
-            ds.attrs["DIMENSION_LABELS"] = np.array(
-                ["frequency", "feed_id", "time"], dtype=object
-            )
+            ds.attrs["DIMENSION_LABELS"] = np.array(["frequency", "feed_id", "time"], dtype=object)
             ds.attrs["source_name"] = "SYNTHETIC_BENCHMARK"
             ds.attrs["fch1"] = 1420.0
             ds.attrs["foff"] = -2.7939677238464355e-06
@@ -247,10 +258,12 @@ def save_synthetic_h5(data: np.ndarray, filepath: Path, metadata: dict):
 # Memory tracking
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def get_memory_mb() -> float:
     """Get current process memory usage in MB."""
     try:
         import resource
+
         # maxrss is in bytes on macOS, KB on Linux
         rusage = resource.getrusage(resource.RUSAGE_SELF)
         if sys.platform == "darwin":
@@ -264,6 +277,7 @@ def get_memory_mb() -> float:
 # ─────────────────────────────────────────────────────────────────────────────
 # Benchmark runners
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def benchmark_mitraseti(spectrogram: np.ndarray) -> dict:
     """
@@ -286,15 +300,15 @@ def benchmark_mitraseti(spectrogram: np.ndarray) -> dict:
 
     try:
         from inference.feature_extractor import FeatureExtractor
-        from inference.signal_classifier import SignalClassifier, RFI_CLASSES
         from inference.ood_detector import RadioOODDetector
+        from inference.signal_classifier import SignalClassifier
 
         extractor = FeatureExtractor()
         classifier = SignalClassifier()
         ood = RadioOODDetector()
 
         # Feature extraction
-        features = extractor.extract(spectrogram)
+        extractor.extract(spectrogram)
         result["signals"] = 1  # We're processing one spectrogram
 
         # Classification
@@ -338,6 +352,7 @@ def benchmark_turboseti(filepath: Path) -> dict:
 
     try:
         from turbo_seti.find_doppler.find_doppler import FindDoppler
+
         result["available"] = True
     except ImportError:
         return result
@@ -375,10 +390,9 @@ def benchmark_turboseti(filepath: Path) -> dict:
                     lines = dat.read_text().strip().split("\n")
                     hits = [l for l in lines if l.strip() and not l.startswith("#")]
                     result["signals"] = len(hits)
-                    result["candidates"] = sum(
-                        1 for h in hits
-                        if float(h.split()[1]) > 20
-                    ) if hits else 0
+                    result["candidates"] = (
+                        sum(1 for h in hits if float(h.split()[1]) > 20) if hits else 0
+                    )
 
                 # If .log has hit counts we can parse them as fallback
                 if result["signals"] == 0:
@@ -386,12 +400,11 @@ def benchmark_turboseti(filepath: Path) -> dict:
                     for logf in log_files:
                         content = logf.read_text()
                         import re
+
                         hits_found = re.findall(r"Top hit found!.*?SNR\s+([\d.]+)", content)
                         if hits_found:
                             result["signals"] = len(hits_found)
-                            result["candidates"] = sum(
-                                1 for s in hits_found if float(s) > 20
-                            )
+                            result["candidates"] = sum(1 for s in hits_found if float(s) > 20)
 
     except Exception as e:
         logger.warning(f"turboSETI benchmark error: {e}")
@@ -410,6 +423,7 @@ def benchmark_turboseti(filepath: Path) -> dict:
 # Main benchmark suite
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class Benchmark:
     """
     Run MitraSETI vs turboSETI benchmarks.
@@ -427,9 +441,7 @@ class Benchmark:
     ):
         self.sizes = sizes or DEFAULT_SIZES
         self.skip_turboseti = skip_turboseti
-        self.output_dir = Path(output_dir) if output_dir else (
-            ARTIFACTS_DIR / "benchmarks"
-        )
+        self.output_dir = Path(output_dir) if output_dir else (ARTIFACTS_DIR / "benchmarks")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.runs_per_size = runs_per_size
 
@@ -437,7 +449,8 @@ class Benchmark:
         self.turboseti_available = False
         if not skip_turboseti:
             try:
-                import turbo_seti
+                import turbo_seti  # noqa: F401
+
                 self.turboseti_available = True
             except ImportError:
                 pass
@@ -445,6 +458,7 @@ class Benchmark:
     def _get_system_info(self) -> dict:
         """Collect system information for the report."""
         import platform
+
         info = {
             "platform": platform.platform(),
             "python": platform.python_version(),
@@ -453,6 +467,7 @@ class Benchmark:
         }
         try:
             import torch
+
             info["pytorch"] = torch.__version__
             info["cuda"] = str(torch.cuda.is_available())
             if hasattr(torch.backends, "mps"):
@@ -462,6 +477,7 @@ class Benchmark:
 
         try:
             import turbo_seti
+
             info["turbo_seti"] = getattr(turbo_seti, "__version__", "installed (version unknown)")
         except ImportError:
             info["turbo_seti"] = "not installed"
@@ -502,7 +518,8 @@ class Benchmark:
 
             # Generate synthetic data
             spectrogram, metadata = generate_synthetic_filterbank(
-                nchans=nchans, ntime=ntime,
+                nchans=nchans,
+                ntime=ntime,
             )
             file_size_mb = spectrogram.nbytes / (1024 * 1024)
 
@@ -513,7 +530,7 @@ class Benchmark:
             # Run MitraSETI benchmark (multiple runs, take median)
             astro_times = []
             astro_result = None
-            for run_idx in range(self.runs_per_size):
+            for _run_idx in range(self.runs_per_size):
                 r = benchmark_mitraseti(spectrogram)
                 astro_times.append(r["time_s"])
                 if astro_result is None:
@@ -522,12 +539,17 @@ class Benchmark:
             astro_median_time = float(np.median(astro_times))
 
             # Run turboSETI benchmark
-            turbo_result = {"time_s": 0, "signals": 0, "candidates": 0,
-                            "memory_mb": 0, "available": False}
+            turbo_result = {
+                "time_s": 0,
+                "signals": 0,
+                "candidates": 0,
+                "memory_mb": 0,
+                "available": False,
+            }
             turbo_median_time = 0.0
             if self.turboseti_available:
                 turbo_times = []
-                for run_idx in range(self.runs_per_size):
+                for _run_idx in range(self.runs_per_size):
                     r = benchmark_turboseti(h5_path)
                     turbo_times.append(r["time_s"])
                     if turbo_result.get("available") is False:
@@ -544,8 +566,13 @@ class Benchmark:
             # When turboSETI not available, ensure no stale values
             if not self.turboseti_available:
                 turbo_median_time = 0.0
-                turbo_result = {"time_s": 0, "signals": 0, "candidates": 0,
-                                "memory_mb": 0, "available": False}
+                turbo_result = {
+                    "time_s": 0,
+                    "signals": 0,
+                    "candidates": 0,
+                    "memory_mb": 0,
+                    "available": False,
+                }
 
             result = BenchmarkResult(
                 size_label=label,
@@ -560,35 +587,47 @@ class Benchmark:
                 mitraseti_throughput_mbs=round(
                     file_size_mb / astro_median_time if astro_median_time > 0 else 0, 2
                 ),
-                turboseti_time_s=0.0 if not self.turboseti_available else round(turbo_median_time, 4),
-                turboseti_signals=0 if not self.turboseti_available else turbo_result.get("signals", 0),
-                turboseti_candidates=0 if not self.turboseti_available else turbo_result.get("candidates", 0),
+                turboseti_time_s=0.0
+                if not self.turboseti_available
+                else round(turbo_median_time, 4),
+                turboseti_signals=0
+                if not self.turboseti_available
+                else turbo_result.get("signals", 0),
+                turboseti_candidates=0
+                if not self.turboseti_available
+                else turbo_result.get("candidates", 0),
                 turboseti_available=(
                     self.turboseti_available and turbo_result.get("available", False)
                 ),
-                turboseti_memory_mb=0.0 if not self.turboseti_available else turbo_result.get("memory_mb", 0),
-                turboseti_throughput_mbs=0.0 if not self.turboseti_available else round(
-                    file_size_mb / turbo_median_time if turbo_median_time > 0 else 0, 2
-                ),
+                turboseti_memory_mb=0.0
+                if not self.turboseti_available
+                else turbo_result.get("memory_mb", 0),
+                turboseti_throughput_mbs=0.0
+                if not self.turboseti_available
+                else round(file_size_mb / turbo_median_time if turbo_median_time > 0 else 0, 2),
                 speedup=0.0 if not self.turboseti_available else round(speedup, 2),
             )
 
             suite.results.append(asdict(result))
 
             # Print inline result
-            print(f"    MitraSETI:  {astro_median_time:.4f}s | "
-                  f"{result.mitraseti_throughput_mbs:.1f} MB/s | "
-                  f"signals={result.mitraseti_signals} | "
-                  f"candidates={result.mitraseti_candidates} | "
-                  f"RFI={result.mitraseti_rfi}")
+            print(
+                f"    MitraSETI:  {astro_median_time:.4f}s | "
+                f"{result.mitraseti_throughput_mbs:.1f} MB/s | "
+                f"signals={result.mitraseti_signals} | "
+                f"candidates={result.mitraseti_candidates} | "
+                f"RFI={result.mitraseti_rfi}"
+            )
             if self.turboseti_available:
-                print(f"    turboSETI:  {turbo_median_time:.4f}s | "
-                      f"{result.turboseti_throughput_mbs:.1f} MB/s | "
-                      f"signals={result.turboseti_signals} | "
-                      f"candidates={result.turboseti_candidates}")
+                print(
+                    f"    turboSETI:  {turbo_median_time:.4f}s | "
+                    f"{result.turboseti_throughput_mbs:.1f} MB/s | "
+                    f"signals={result.turboseti_signals} | "
+                    f"candidates={result.turboseti_candidates}"
+                )
                 print(f"    Speedup:    {speedup:.1f}x")
             else:
-                print(f"    turboSETI:  not installed")
+                print("    turboSETI:  not installed")
 
             # Clean up
             h5_path.unlink(missing_ok=True)
@@ -597,9 +636,7 @@ class Benchmark:
         suite.total_elapsed_s = round(time.time() - suite_start, 2)
 
         # Update turbo availability from actual results (may be False if FindDoppler failed)
-        suite.turboseti_available = any(
-            r.get("turboseti_available", False) for r in suite.results
-        )
+        suite.turboseti_available = any(r.get("turboseti_available", False) for r in suite.results)
 
         # Save results and generate reports
         self._save_json(suite)
@@ -648,12 +685,13 @@ class Benchmark:
             try:
                 if filepath.suffix in (".h5", ".hdf5"):
                     import h5py
+
                     with h5py.File(str(filepath), "r") as f:
                         ds = f.get("data")
                         if ds is None and "filterbank" in f:
                             ds = f["filterbank"].get("data")
                         if ds is None:
-                            print(f"    Skip (no data dataset)")
+                            print("    Skip (no data dataset)")
                             continue
                         shape = ds.shape
                         ntime = shape[0]
@@ -677,8 +715,13 @@ class Benchmark:
                             nchans = nf
                             break
                     ntime = n_elements // nchans
-                    arr = np.memmap(filepath, dtype=np.float32, mode='r',
-                                    offset=data_start, shape=(ntime, nchans))
+                    arr = np.memmap(
+                        filepath,
+                        dtype=np.float32,
+                        mode="r",
+                        offset=data_start,
+                        shape=(ntime, nchans),
+                    )
                     step_t = max(1, ntime // 256)
                     step_f = max(1, nchans // 256)
                     spec = np.array(arr[::step_t, ::step_f], dtype=np.float32)
@@ -693,16 +736,19 @@ class Benchmark:
             r_mitra = benchmark_mitraseti(spec)
 
             # turboSETI
-            r_turbo = {"time_s": 0, "signals": 0, "candidates": 0,
-                       "memory_mb": 0, "available": False}
+            r_turbo = {
+                "time_s": 0,
+                "signals": 0,
+                "candidates": 0,
+                "memory_mb": 0,
+                "available": False,
+            }
             if self.turboseti_available:
                 r_turbo = benchmark_turboseti(filepath)
 
             turbo_time = r_turbo["time_s"] if r_turbo.get("available") else 0.0
             speedup = (
-                turbo_time / r_mitra["time_s"]
-                if turbo_time > 0 and r_mitra["time_s"] > 0
-                else 0.0
+                turbo_time / r_mitra["time_s"] if turbo_time > 0 and r_mitra["time_s"] > 0 else 0.0
             )
 
             result = BenchmarkResult(
@@ -730,26 +776,28 @@ class Benchmark:
             )
             suite.results.append(asdict(result))
 
-            print(f"    MitraSETI:  {r_mitra['time_s']:.4f}s | "
-                  f"signals={r_mitra.get('signals', 0)} | "
-                  f"candidates={r_mitra.get('candidates', 0)} | "
-                  f"RFI={r_mitra.get('rfi', 0)}")
+            print(
+                f"    MitraSETI:  {r_mitra['time_s']:.4f}s | "
+                f"signals={r_mitra.get('signals', 0)} | "
+                f"candidates={r_mitra.get('candidates', 0)} | "
+                f"RFI={r_mitra.get('rfi', 0)}"
+            )
             if self.turboseti_available and r_turbo.get("available"):
-                print(f"    turboSETI:  {turbo_time:.4f}s | "
-                      f"signals={r_turbo.get('signals', 0)} | "
-                      f"candidates={r_turbo.get('candidates', 0)}")
+                print(
+                    f"    turboSETI:  {turbo_time:.4f}s | "
+                    f"signals={r_turbo.get('signals', 0)} | "
+                    f"candidates={r_turbo.get('candidates', 0)}"
+                )
                 print(f"    Speedup:    {speedup:.1f}x")
             elif self.turboseti_available:
                 err = r_turbo.get("error", "unknown error")
                 print(f"    turboSETI:  failed ({err})")
             else:
-                print(f"    turboSETI:  not installed")
+                print("    turboSETI:  not installed")
 
         suite.completed_at = datetime.now().isoformat()
         suite.total_elapsed_s = round(time.time() - suite_start, 2)
-        suite.turboseti_available = any(
-            r.get("turboseti_available", False) for r in suite.results
-        )
+        suite.turboseti_available = any(r.get("turboseti_available", False) for r in suite.results)
 
         self._save_json(suite)
         self._print_table(suite)
@@ -769,7 +817,7 @@ class Benchmark:
         results = suite.results
 
         print(f"\n{'=' * 90}")
-        print(f"  BENCHMARK RESULTS")
+        print("  BENCHMARK RESULTS")
         print(f"{'=' * 90}")
 
         # Header
@@ -780,8 +828,8 @@ class Benchmark:
                 f"{'Signals':>8} {'Cands':>6} {'RFI':>5}"
             )
             print(
-                f"  {'─'*20} {'─'*8} {'─'*10} {'─'*10} {'─'*8} "
-                f"{'─'*8} {'─'*6} {'─'*5}"
+                f"  {'─' * 20} {'─' * 8} {'─' * 10} {'─' * 10} {'─' * 8} "
+                f"{'─' * 8} {'─' * 6} {'─' * 5}"
             )
         else:
             print(
@@ -789,14 +837,11 @@ class Benchmark:
                 f"{'Time (s)':>10} {'MB/s':>8} "
                 f"{'Signals':>8} {'Cands':>6} {'RFI':>5}"
             )
-            print(
-                f"  {'─'*20} {'─'*8} {'─'*10} {'─'*8} "
-                f"{'─'*8} {'─'*6} {'─'*5}"
-            )
+            print(f"  {'─' * 20} {'─' * 8} {'─' * 10} {'─' * 8} {'─' * 8} {'─' * 6} {'─' * 5}")
 
         for r in results:
             if suite.turboseti_available:
-                speedup_str = f"{r['speedup']:.1f}x" if r['speedup'] > 0 else "N/A"
+                speedup_str = f"{r['speedup']:.1f}x" if r["speedup"] > 0 else "N/A"
                 print(
                     f"  {r['size_label']:<20} "
                     f"{r['file_size_mb']:>8.2f} "
@@ -847,15 +892,15 @@ class Benchmark:
                 turbo_cell = f"<span style='color:#94a3b8'>{turboseti_unavailable_msg}</span>"
             table_rows += f"""
             <tr>
-                <td>{r['size_label']}</td>
-                <td>{r['file_size_mb']:.2f}</td>
-                <td><strong>{r['mitraseti_time_s']:.4f}s</strong></td>
+                <td>{r["size_label"]}</td>
+                <td>{r["file_size_mb"]:.2f}</td>
+                <td><strong>{r["mitraseti_time_s"]:.4f}s</strong></td>
                 <td>{turbo_cell}</td>
                 <td>{speedup_html}</td>
-                <td>{r['mitraseti_throughput_mbs']:.1f}</td>
-                <td>{r['mitraseti_signals']}</td>
-                <td>{r['mitraseti_candidates']}</td>
-                <td>{r['mitraseti_rfi']}</td>
+                <td>{r["mitraseti_throughput_mbs"]:.1f}</td>
+                <td>{r["mitraseti_signals"]}</td>
+                <td>{r["mitraseti_candidates"]}</td>
+                <td>{r["mitraseti_rfi"]}</td>
             </tr>"""
 
         # Build chart
@@ -866,7 +911,7 @@ class Benchmark:
                 f'<div style="text-align:center;margin:24px 0">'
                 f'<img src="data:image/png;base64,{chart_b64}" '
                 f'alt="Benchmark Chart" style="max-width:100%;border-radius:8px">'
-                f'</div>'
+                f"</div>"
             )
 
         # System info
@@ -945,15 +990,19 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 
 <h1>MitraSETI Benchmark Report</h1>
 <div class="subtitle">
-    {datetime.now().strftime('%Y-%m-%d %H:%M')} |
-    turboSETI: {'available' if suite.turboseti_available else 'not installed'} |
+    {datetime.now().strftime("%Y-%m-%d %H:%M")} |
+    turboSETI: {"available" if suite.turboseti_available else "not installed"} |
     Total time: {suite.total_elapsed_s:.1f}s
 </div>
 
-{f'''<div class="highlight-box">
+{
+            f'''<div class="highlight-box">
     <div class="big">{max((r["speedup"] for r in results if r["speedup"] > 0), default=0):.1f}x</div>
     <div class="label">PEAK SPEEDUP vs turboSETI</div>
-</div>''' if suite.turboseti_available else ''}
+</div>'''
+            if suite.turboseti_available
+            else ""
+        }
 
 <h2>Results</h2>
 <div class="card">
@@ -989,7 +1038,9 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 </body>
 </html>"""
 
-        report_path = self.output_dir / f"benchmark_report_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
+        report_path = (
+            self.output_dir / f"benchmark_report_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
+        )
         report_path.write_text(html, encoding="utf-8")
         logger.info(f"HTML report saved to {report_path}")
 
@@ -998,6 +1049,7 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
         """Create a bar chart comparing MitraSETI vs turboSETI times."""
         try:
             import matplotlib
+
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
 
@@ -1013,15 +1065,22 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
             x = np.arange(len(labels))
             width = 0.35
 
-            bars1 = ax1.bar(
+            ax1.bar(
                 x - width / 2 if has_turbo else x,
-                astro_times, width if has_turbo else 0.6,
-                color="#38bdf8", alpha=0.8, label="MitraSETI",
+                astro_times,
+                width if has_turbo else 0.6,
+                color="#38bdf8",
+                alpha=0.8,
+                label="MitraSETI",
             )
             if has_turbo:
-                bars2 = ax1.bar(
-                    x + width / 2, turbo_times, width,
-                    color="#f87171", alpha=0.7, label="turboSETI",
+                ax1.bar(
+                    x + width / 2,
+                    turbo_times,
+                    width,
+                    color="#f87171",
+                    alpha=0.7,
+                    label="turboSETI",
                 )
 
             ax1.set_xticks(x)
@@ -1029,7 +1088,9 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
             ax1.set_ylabel("Time (seconds)", color="#94a3b8", fontsize=11)
             ax1.set_title(
                 "Processing Time Comparison",
-                color="#e2e8f0", fontsize=13, fontweight="bold",
+                color="#e2e8f0",
+                fontsize=13,
+                fontweight="bold",
             )
             ax1.tick_params(colors="#94a3b8")
             ax1.spines["bottom"].set_color("#1e293b")
@@ -1038,8 +1099,10 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
             ax1.spines["right"].set_visible(False)
             ax1.grid(True, alpha=0.15, color="#1e293b")
             ax1.legend(
-                facecolor="#111827", edgecolor="#1e293b",
-                labelcolor="#e2e8f0", fontsize=10,
+                facecolor="#111827",
+                edgecolor="#1e293b",
+                labelcolor="#e2e8f0",
+                fontsize=10,
             )
 
             # Throughput chart
@@ -1051,7 +1114,9 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
             ax2.set_ylabel("Throughput (MB/s)", color="#94a3b8", fontsize=11)
             ax2.set_title(
                 "MitraSETI Throughput",
-                color="#e2e8f0", fontsize=13, fontweight="bold",
+                color="#e2e8f0",
+                fontsize=13,
+                fontweight="bold",
             )
             ax2.tick_params(colors="#94a3b8")
             ax2.spines["bottom"].set_color("#1e293b")
@@ -1064,8 +1129,12 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 
             buf = io.BytesIO()
             fig.savefig(
-                buf, format="png", dpi=120, bbox_inches="tight",
-                facecolor="#0a0e17", edgecolor="none",
+                buf,
+                format="png",
+                dpi=120,
+                bbox_inches="tight",
+                facecolor="#0a0e17",
+                edgecolor="none",
             )
             buf.seek(0)
             b64 = base64.b64encode(buf.read()).decode("utf-8")
@@ -1080,6 +1149,7 @@ tr:hover td {{ background: rgba(56, 189, 248, 0.04); }}
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(

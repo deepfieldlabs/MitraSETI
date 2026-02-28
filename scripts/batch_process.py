@@ -30,14 +30,13 @@ import csv
 import json
 import logging
 import multiprocessing
-import os
 import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -46,10 +45,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from paths import (
     DATA_DIR,
-    ARTIFACTS_DIR,
     FILTERBANK_DIR,
-    MODELS_DIR,
-    CANDIDATES_DIR,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,9 +55,11 @@ logger = logging.getLogger(__name__)
 # Data classes
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class FileResult:
     """Result of processing a single filterbank file."""
+
     file_path: str
     file_name: str
     file_size_mb: float
@@ -85,6 +83,7 @@ class FileResult:
 @dataclass
 class BatchSummary:
     """Summary statistics for a batch run."""
+
     total_files: int = 0
     processed: int = 0
     errors: int = 0
@@ -109,6 +108,7 @@ class BatchSummary:
 # File processing (designed for multiprocessing)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _load_spectrogram(filepath: Path) -> Optional[np.ndarray]:
     """Load a filterbank / HDF5 file and return 2D spectrogram."""
     try:
@@ -117,6 +117,7 @@ def _load_spectrogram(filepath: Path) -> Optional[np.ndarray]:
         if suffix == ".h5":
             try:
                 import h5py
+
                 with h5py.File(str(filepath), "r") as f:
                     if "data" in f:
                         data = f["data"][:]
@@ -135,6 +136,7 @@ def _load_spectrogram(filepath: Path) -> Optional[np.ndarray]:
         elif suffix == ".fil":
             try:
                 import blimpy
+
                 wf = blimpy.Waterfall(str(filepath), load_data=True)
                 data = np.squeeze(wf.data)
                 if data.ndim == 3:
@@ -164,6 +166,7 @@ def _read_raw_filterbank(filepath: Path) -> Optional[np.ndarray]:
         idx = header.find(b"nchans")
         if idx >= 0:
             import struct
+
             nchans = struct.unpack("i", header[idx + 10 : idx + 14])[0]
 
         data = np.frombuffer(raw[data_start:], dtype=np.float32)
@@ -214,6 +217,7 @@ def process_single_file(
 
         # Feature extraction
         from inference.feature_extractor import FeatureExtractor
+
         extractor = FeatureExtractor()
         features = extractor.extract(spectrogram)
 
@@ -233,12 +237,14 @@ def process_single_file(
             return asdict(result)
 
         # Classification
-        from inference.signal_classifier import SignalClassifier, RFI_CLASSES
+        from inference.signal_classifier import SignalClassifier
+
         classifier = SignalClassifier()
         classification = classifier.classify(spectrogram)
 
         # OOD detection
         from inference.ood_detector import RadioOODDetector
+
         ood = RadioOODDetector()
         ood_result = ood.detect(spectrogram, classification.feature_vector)
 
@@ -269,6 +275,7 @@ def process_single_file(
 # ─────────────────────────────────────────────────────────────────────────────
 # Batch Processor
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class BatchProcessor:
     """
@@ -351,6 +358,7 @@ class BatchProcessor:
 
         try:
             from tqdm import tqdm
+
             has_tqdm = True
         except ImportError:
             has_tqdm = False
@@ -409,12 +417,8 @@ class BatchProcessor:
                 summary.skipped += 1
 
         if batch_elapsed > 0:
-            summary.throughput_files_per_min = round(
-                len(files) / (batch_elapsed / 60), 2
-            )
-            summary.throughput_mb_per_s = round(
-                summary.total_size_mb / batch_elapsed, 2
-            )
+            summary.throughput_files_per_min = round(len(files) / (batch_elapsed / 60), 2)
+            summary.throughput_mb_per_s = round(summary.total_size_mb / batch_elapsed, 2)
 
         # Save results
         self._save_results(results, summary)
@@ -440,10 +444,21 @@ class BatchProcessor:
         csv_path = self.output_dir / "batch_signals.csv"
 
         fieldnames = [
-            "file_name", "status", "signal_type", "confidence",
-            "rfi_probability", "is_rfi", "is_candidate", "snr",
-            "drift_rate", "bandwidth", "central_freq", "ood_score",
-            "is_ood_anomaly", "file_size_mb", "elapsed_s",
+            "file_name",
+            "status",
+            "signal_type",
+            "confidence",
+            "rfi_probability",
+            "is_rfi",
+            "is_candidate",
+            "snr",
+            "drift_rate",
+            "bandwidth",
+            "central_freq",
+            "ood_score",
+            "is_ood_anomaly",
+            "file_size_mb",
+            "elapsed_s",
         ]
 
         with open(csv_path, "w", newline="") as f:
@@ -476,7 +491,7 @@ class BatchProcessor:
         print(f"  OOD anomalies:   {summary.ood_anomalies}")
 
         if summary.classification_distribution:
-            print(f"\n  Classification Distribution:")
+            print("\n  Classification Distribution:")
             for sig_type, count in sorted(
                 summary.classification_distribution.items(),
                 key=lambda x: x[1],
@@ -486,7 +501,7 @@ class BatchProcessor:
                 print(f"    {sig_type:30s} {count:5d} ({pct:5.1f}%)")
 
         if self.benchmark:
-            print(f"\n  Benchmark Results:")
+            print("\n  Benchmark Results:")
             processed = [r for r in results if r.get("status") == "processed"]
             if processed:
                 times = [r["elapsed_s"] for r in processed]
@@ -499,7 +514,7 @@ class BatchProcessor:
 
                 # Per-file benchmark table
                 print(f"\n  {'File':<40} {'Size MB':>8} {'Time (s)':>10} {'MB/s':>8}")
-                print(f"  {'-'*40} {'-'*8} {'-'*10} {'-'*8}")
+                print(f"  {'-' * 40} {'-' * 8} {'-' * 10} {'-' * 8}")
                 for r in sorted(processed, key=lambda x: x["elapsed_s"], reverse=True):
                     speed = r["file_size_mb"] / r["elapsed_s"] if r["elapsed_s"] > 0 else 0
                     print(
@@ -516,6 +531,7 @@ class BatchProcessor:
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(

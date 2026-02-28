@@ -19,8 +19,7 @@ import json
 import logging
 import math
 import time
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote
@@ -42,16 +41,17 @@ _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # Data classes
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class CatalogResult:
     """A single match from a radio-astronomy catalog."""
 
     source_name: str
-    catalog: str               # SIMBAD, NVSS, FIRST, ATNF
-    ra: float                  # degrees (J2000)
-    dec: float                 # degrees (J2000)
-    distance_arcmin: float     # angular separation from query position
-    flux_density: Optional[float] = None   # mJy (when available)
+    catalog: str  # SIMBAD, NVSS, FIRST, ATNF
+    ra: float  # degrees (J2000)
+    dec: float  # degrees (J2000)
+    distance_arcmin: float  # angular separation from query position
+    flux_density: Optional[float] = None  # mJy (when available)
     spectral_type: Optional[str] = None
     notes: str = ""
     raw_data: Dict = field(default_factory=dict)
@@ -61,8 +61,12 @@ class CatalogResult:
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _angular_separation_deg(
-    ra1: float, dec1: float, ra2: float, dec2: float,
+    ra1: float,
+    dec1: float,
+    ra2: float,
+    dec2: float,
 ) -> float:
     """Vincenty angular separation in *degrees*."""
     ra1r, dec1r = math.radians(ra1), math.radians(dec1)
@@ -71,13 +75,10 @@ def _angular_separation_deg(
 
     num = math.sqrt(
         (math.cos(dec2r) * math.sin(dra)) ** 2
-        + (math.cos(dec1r) * math.sin(dec2r)
-           - math.sin(dec1r) * math.cos(dec2r) * math.cos(dra)) ** 2
+        + (math.cos(dec1r) * math.sin(dec2r) - math.sin(dec1r) * math.cos(dec2r) * math.cos(dra))
+        ** 2
     )
-    den = (
-        math.sin(dec1r) * math.sin(dec2r)
-        + math.cos(dec1r) * math.cos(dec2r) * math.cos(dra)
-    )
+    den = math.sin(dec1r) * math.sin(dec2r) + math.cos(dec1r) * math.cos(dec2r) * math.cos(dra)
     return math.degrees(math.atan2(num, den))
 
 
@@ -95,7 +96,7 @@ def _read_cache(key: str, max_age_hours: float = 24.0) -> Optional[List[Dict]]:
         age_hours = (time.time() - path.stat().st_mtime) / 3600.0
         if age_hours > max_age_hours:
             return None
-        with open(path, "r") as f:
+        with open(path) as f:
             return json.load(f)
     except Exception:
         return None
@@ -114,6 +115,7 @@ def _write_cache(key: str, data: List[Dict]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # RadioCatalogQuery
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class RadioCatalogQuery:
     """
@@ -190,16 +192,18 @@ class RadioCatalogQuery:
                     flux = row[5] if len(row) > 5 else None
 
                 sep = _angular_separation_deg(ra, dec, obj_ra, obj_dec) * 60.0
-                results.append(CatalogResult(
-                    source_name=name,
-                    catalog="SIMBAD",
-                    ra=obj_ra,
-                    dec=obj_dec,
-                    distance_arcmin=round(sep, 4),
-                    flux_density=float(flux) if flux is not None else None,
-                    spectral_type=otype,
-                    notes=f"https://simbad.u-strasbg.fr/simbad/sim-id?Ident={quote(str(name))}",
-                ))
+                results.append(
+                    CatalogResult(
+                        source_name=name,
+                        catalog="SIMBAD",
+                        ra=obj_ra,
+                        dec=obj_dec,
+                        distance_arcmin=round(sep, 4),
+                        flux_density=float(flux) if flux is not None else None,
+                        spectral_type=otype,
+                        notes=f"https://simbad.u-strasbg.fr/simbad/sim-id?Ident={quote(str(name))}",
+                    )
+                )
             except (ValueError, IndexError, TypeError) as exc:
                 logger.debug("Skipping SIMBAD row: %s", exc)
 
@@ -262,16 +266,18 @@ class RadioCatalogQuery:
                     flux = row[3] if len(row) > 3 else None
 
                 sep = _angular_separation_deg(ra, dec, obj_ra, obj_dec) * 60.0
-                results.append(CatalogResult(
-                    source_name=name,
-                    catalog="NVSS",
-                    ra=obj_ra,
-                    dec=obj_dec,
-                    distance_arcmin=round(sep, 4),
-                    flux_density=float(flux) if flux is not None else None,
-                    spectral_type="radio_continuum",
-                    notes="1.4 GHz NRAO VLA Sky Survey",
-                ))
+                results.append(
+                    CatalogResult(
+                        source_name=name,
+                        catalog="NVSS",
+                        ra=obj_ra,
+                        dec=obj_dec,
+                        distance_arcmin=round(sep, 4),
+                        flux_density=float(flux) if flux is not None else None,
+                        spectral_type="radio_continuum",
+                        notes="1.4 GHz NRAO VLA Sky Survey",
+                    )
+                )
             except (ValueError, IndexError, TypeError) as exc:
                 logger.debug("Skipping NVSS row: %s", exc)
 
@@ -334,16 +340,18 @@ class RadioCatalogQuery:
                     flux = row[3] if len(row) > 3 else None
 
                 sep = _angular_separation_deg(ra, dec, obj_ra, obj_dec) * 60.0
-                results.append(CatalogResult(
-                    source_name=name,
-                    catalog="FIRST",
-                    ra=obj_ra,
-                    dec=obj_dec,
-                    distance_arcmin=round(sep, 4),
-                    flux_density=float(flux) if flux is not None else None,
-                    spectral_type="radio_continuum",
-                    notes="1.4 GHz Faint Images of the Radio Sky at Twenty-cm",
-                ))
+                results.append(
+                    CatalogResult(
+                        source_name=name,
+                        catalog="FIRST",
+                        ra=obj_ra,
+                        dec=obj_dec,
+                        distance_arcmin=round(sep, 4),
+                        flux_density=float(flux) if flux is not None else None,
+                        spectral_type="radio_continuum",
+                        notes="1.4 GHz Faint Images of the Radio Sky at Twenty-cm",
+                    )
+                )
             except (ValueError, IndexError, TypeError) as exc:
                 logger.debug("Skipping FIRST row: %s", exc)
 
@@ -407,16 +415,18 @@ class RadioCatalogQuery:
                 flux = psr.get("S1400")
                 period = psr.get("P0", "")
 
-                results.append(CatalogResult(
-                    source_name=f"PSR {name}",
-                    catalog="ATNF",
-                    ra=psr_ra,
-                    dec=psr_dec,
-                    distance_arcmin=round(sep, 4),
-                    flux_density=float(flux) if flux else None,
-                    spectral_type="pulsar",
-                    notes=f"P0={period}s" if period else "",
-                ))
+                results.append(
+                    CatalogResult(
+                        source_name=f"PSR {name}",
+                        catalog="ATNF",
+                        ra=psr_ra,
+                        dec=psr_dec,
+                        distance_arcmin=round(sep, 4),
+                        flux_density=float(flux) if flux else None,
+                        spectral_type="pulsar",
+                        notes=f"P0={period}s" if period else "",
+                    )
+                )
             except (ValueError, KeyError, TypeError) as exc:
                 logger.debug("Skipping ATNF row: %s", exc)
 

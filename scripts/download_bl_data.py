@@ -26,12 +26,10 @@ import argparse
 import hashlib
 import json
 import logging
-import os
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
-from urllib.parse import urljoin
+from typing import List, Optional
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -176,6 +174,7 @@ _DOWNLOAD_CACHE_FILE = DATA_DIR / "bl_download_cache.json"
 # Downloader
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class BLDataDownloader:
     """
     Download sample data from the Breakthrough Listen Open Data Archive.
@@ -225,7 +224,8 @@ class BLDataDownloader:
             # Filter by target name (case-insensitive partial match)
             target_lower = self.target.lower().replace("-", "").replace(" ", "")
             catalog = [
-                entry for entry in catalog
+                entry
+                for entry in catalog
                 if target_lower in entry["target"].lower().replace("-", "").replace(" ", "")
             ]
             if not catalog:
@@ -244,10 +244,7 @@ class BLDataDownloader:
             return False
 
         cached = self.cache.get("downloaded", {}).get(entry["filename"])
-        if cached and dest.stat().st_size > 0:
-            return True
-
-        return False
+        return bool(cached and dest.stat().st_size > 0)
 
     def _download_file(self, entry: dict) -> bool:
         """
@@ -258,9 +255,7 @@ class BLDataDownloader:
         dest = self.output_dir / entry["filename"]
         url = entry["url"]
 
-        logger.info(
-            f"  Downloading: {entry['target']} ({entry['filename']})"
-        )
+        logger.info(f"  Downloading: {entry['target']} ({entry['filename']})")
         logger.info(f"    Source: {url}")
         logger.info(f"    Size: ~{entry['size_mb']:.0f} MB")
 
@@ -269,15 +264,14 @@ class BLDataDownloader:
 
             with httpx.stream("GET", url, timeout=120, follow_redirects=True) as resp:
                 if resp.status_code != 200:
-                    logger.error(
-                        f"    Download failed: HTTP {resp.status_code}"
-                    )
+                    logger.error(f"    Download failed: HTTP {resp.status_code}")
                     return False
 
                 total = int(resp.headers.get("content-length", 0))
 
                 try:
                     from tqdm import tqdm
+
                     progress = tqdm(
                         total=total if total > 0 else None,
                         unit="B",
@@ -324,16 +318,11 @@ class BLDataDownloader:
             }
             self._save_cache()
 
-            logger.info(
-                f"    Saved: {dest} ({dest.stat().st_size / (1024*1024):.1f} MB)"
-            )
+            logger.info(f"    Saved: {dest} ({dest.stat().st_size / (1024 * 1024):.1f} MB)")
             return True
 
         except ImportError:
-            logger.error(
-                "    httpx is required for downloading. "
-                "Install with: pip install httpx"
-            )
+            logger.error("    httpx is required for downloading. Install with: pip install httpx")
             return False
         except Exception as e:
             logger.error(f"    Download error: {e}")
@@ -452,9 +441,7 @@ class BLDataDownloader:
                 downloaded.append(dest)
             else:
                 # Fall back to synthetic data for testing
-                logger.info(
-                    f"    Download unavailable. Generating synthetic sample..."
-                )
+                logger.info("    Download unavailable. Generating synthetic sample...")
                 if self._generate_synthetic_sample(entry):
                     downloaded.append(dest)
 
@@ -464,7 +451,7 @@ class BLDataDownloader:
         print(f"  Output directory: {self.output_dir}")
         if downloaded:
             total_size = sum(f.stat().st_size for f in downloaded if f.exists())
-            print(f"  Total size: {total_size / (1024*1024):.1f} MB")
+            print(f"  Total size: {total_size / (1024 * 1024):.1f} MB")
         print(f"{'=' * 60}")
 
         return downloaded
@@ -472,10 +459,12 @@ class BLDataDownloader:
     def list_available(self):
         """List all available targets."""
         print(f"\n{'=' * 70}")
-        print(f"  Breakthrough Listen Open Data – Available Targets")
+        print("  Breakthrough Listen Open Data – Available Targets")
         print(f"{'=' * 70}")
-        print(f"  {'Target':<18} {'Telescope':<10} {'Freq (GHz)':<12} {'Size MB':<10} {'Description'}")
-        print(f"  {'-'*18} {'-'*10} {'-'*12} {'-'*10} {'-'*40}")
+        print(
+            f"  {'Target':<18} {'Telescope':<10} {'Freq (GHz)':<12} {'Size MB':<10} {'Description'}"
+        )
+        print(f"  {'-' * 18} {'-' * 10} {'-' * 12} {'-' * 10} {'-' * 40}")
         for entry in BL_SAMPLE_CATALOG:
             cached = " [cached]" if self._is_cached(entry) else ""
             print(
@@ -491,6 +480,7 @@ class BLDataDownloader:
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(

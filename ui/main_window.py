@@ -7,17 +7,24 @@ stacked content panels, and glowing status indicators.
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QLabel, QPushButton, QStatusBar, QFrame,
-)
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QPainter, QBrush
+from PyQt5.QtGui import QBrush, QColor, QPainter
+from PyQt5.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QStackedWidget,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .theme import get_stylesheet, COLORS
-
+from .theme import COLORS, get_stylesheet
 
 # ── Pulsing status dot ────────────────────────────────────────────────────────
+
 
 class _StatusDot(QFrame):
     """Small animated status indicator dot."""
@@ -41,6 +48,7 @@ class _StatusDot(QFrame):
 
 # ── Main Window ──────────────────────────────────────────────────────────────
 
+
 class MainWindow(QMainWindow):
     """MitraSETI main application window — crystalline glass design."""
 
@@ -49,10 +57,10 @@ class MainWindow(QMainWindow):
         ("\u2637", "Waterfall Viewer", 1),
         ("\u2609", "Signal Gallery", 2),
         ("\u2616", "RFI Dashboard", 3),
-        ("\u25CE", "Space Radar", 4),
-        ("\u25B6", "Streaming", 5),
+        ("\u25ce", "Space Radar", 4),
+        ("\u25b6", "Streaming", 5),
         ("\u2699", "Settings", 6),
-        ("\u24D8", "About", 7),
+        ("\u24d8", "About", 7),
     ]
 
     def __init__(self):
@@ -231,14 +239,14 @@ class MainWindow(QMainWindow):
 
     def _add_panels(self):
         """Import and add all content panels to the stack."""
-        from .dashboard import DashboardPanel
-        from .waterfall_viewer import WaterfallViewer
-        from .signal_gallery import SignalGallery
-        from .rfi_panel import RFIPanel
-        from .streaming_panel import StreamingPanel
-        from .sky_map_panel import SkyMapPanel
-        from .settings_panel import SettingsPanel
         from .about_panel import AboutPanel
+        from .dashboard import DashboardPanel
+        from .rfi_panel import RFIPanel
+        from .settings_panel import SettingsPanel
+        from .signal_gallery import SignalGallery
+        from .sky_map_panel import SkyMapPanel
+        from .streaming_panel import StreamingPanel
+        from .waterfall_viewer import WaterfallViewer
 
         self.dashboard = DashboardPanel()
         self.waterfall_viewer = WaterfallViewer()
@@ -249,20 +257,18 @@ class MainWindow(QMainWindow):
         self.settings_panel = SettingsPanel()
         self.about_panel = AboutPanel()
 
-        self.content_stack.addWidget(self.dashboard)        # 0
+        self.content_stack.addWidget(self.dashboard)  # 0
         self.content_stack.addWidget(self.waterfall_viewer)  # 1
-        self.content_stack.addWidget(self.signal_gallery)    # 2
-        self.content_stack.addWidget(self.rfi_panel)         # 3
-        self.content_stack.addWidget(self.sky_map)           # 4
-        self.content_stack.addWidget(self.streaming_panel)   # 5
-        self.content_stack.addWidget(self.settings_panel)    # 6
-        self.content_stack.addWidget(self.about_panel)       # 7
+        self.content_stack.addWidget(self.signal_gallery)  # 2
+        self.content_stack.addWidget(self.rfi_panel)  # 3
+        self.content_stack.addWidget(self.sky_map)  # 4
+        self.content_stack.addWidget(self.streaming_panel)  # 5
+        self.content_stack.addWidget(self.settings_panel)  # 6
+        self.content_stack.addWidget(self.about_panel)  # 7
 
         # Wire cross-panel signals
         self.dashboard.navigate_to.connect(self._on_nav_clicked)
-        self.waterfall_viewer.signal_detected.connect(
-            self.signal_gallery.add_signal
-        )
+        self.waterfall_viewer.signal_detected.connect(self.signal_gallery.add_signal)
         self.signal_gallery.open_in_viewer.connect(self._open_signal_in_viewer)
 
     def _open_signal_in_viewer(self, signal_data: dict):
@@ -322,9 +328,7 @@ class MainWindow(QMainWindow):
         """Update processing indicator in sidebar and status bar."""
         if active:
             self._processing_label.setText(f"⚡ {text or 'Processing…'}")
-            self._processing_label.setStyleSheet(
-                "font-size: 11px; color: #4da6ff; padding: 4px;"
-            )
+            self._processing_label.setStyleSheet("font-size: 11px; color: #4da6ff; padding: 4px;")
             self._proc_label.setText(text or "Processing…")
             self._proc_label.setStyleSheet("color: #4da6ff; font-size: 12px;")
         else:
@@ -333,6 +337,4 @@ class MainWindow(QMainWindow):
                 "font-size: 11px; color: rgba(140,165,200,0.4); padding: 4px;"
             )
             self._proc_label.setText("Idle")
-            self._proc_label.setStyleSheet(
-                "color: rgba(140,165,200,0.4); font-size: 12px;"
-            )
+            self._proc_label.setStyleSheet("color: rgba(140,165,200,0.4); font-size: 12px;")

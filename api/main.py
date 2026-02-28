@@ -8,13 +8,10 @@ Adapted from the AstroLens API pattern.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 import shutil
 import sys
-import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,19 +20,19 @@ from typing import Any, Dict, List, Optional, Set
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from .database import SignalDB
 from paths import (
-    FILTERBANK_DIR,
-    PLOTS_DIR,
-    MODELS_DIR,
     DB_PATH,
+    FILTERBANK_DIR,
+    MODELS_DIR,
     ensure_dirs,
 )
+
+from .database import SignalDB
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +59,7 @@ def get_catalog_query():
     global _catalog_query
     if _catalog_query is None:
         from catalog.radio_catalogs import RadioCatalogQuery
+
         _catalog_query = RadioCatalogQuery()
     return _catalog_query
 
@@ -71,6 +69,7 @@ def get_pipeline():
     global _pipeline
     if _pipeline is None:
         from pipeline import MitraSETIPipeline
+
         model_path = MODELS_DIR / "signal_classifier_v1.pt"
         ood_cal_path = MODELS_DIR / "ood_calibration.json"
         _pipeline = MitraSETIPipeline(
@@ -84,8 +83,10 @@ def get_pipeline():
 # Pydantic models
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class HealthResponse(BaseModel):
     """System health status."""
+
     status: str
     version: str
     gpu_available: bool
@@ -96,6 +97,7 @@ class HealthResponse(BaseModel):
 
 class SignalResponse(BaseModel):
     """A single detected signal."""
+
     id: int
     frequency_hz: float
     drift_rate: float
@@ -116,6 +118,7 @@ class SignalResponse(BaseModel):
 
 class SignalUpdate(BaseModel):
     """Allowed fields for PATCH /signals/{id}."""
+
     classification: Optional[str] = None
     confidence: Optional[float] = None
     rfi_score: Optional[float] = None
@@ -126,6 +129,7 @@ class SignalUpdate(BaseModel):
 
 class ProcessRequest(BaseModel):
     """Metadata to accompany a filterbank upload."""
+
     source_name: Optional[str] = None
     ra: Optional[float] = None
     dec: Optional[float] = None
@@ -133,6 +137,7 @@ class ProcessRequest(BaseModel):
 
 class ProcessResponse(BaseModel):
     """Result after processing a filterbank file."""
+
     observation_id: int
     file_path: str
     total_signals: int
@@ -142,6 +147,7 @@ class ProcessResponse(BaseModel):
 
 class StatsResponse(BaseModel):
     """Aggregate processing statistics."""
+
     total_signals: int
     total_candidates: int
     verified_signals: int
@@ -151,6 +157,7 @@ class StatsResponse(BaseModel):
 
 class CatalogCrossRefResponse(BaseModel):
     """Result of catalog cross-reference lookup."""
+
     ra: float
     dec: float
     is_known_source: bool
@@ -160,6 +167,7 @@ class CatalogCrossRefResponse(BaseModel):
 
 class AstroLensCrossRefResponse(BaseModel):
     """Result of AstroLens optical cross-reference."""
+
     ra: float
     dec: float
     matches_found: int
@@ -169,6 +177,7 @@ class AstroLensCrossRefResponse(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # Lifespan
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -208,6 +217,7 @@ app.add_middleware(
 # Root & Health
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/", include_in_schema=False)
 async def root():
     """Redirect to interactive docs."""
@@ -220,6 +230,7 @@ async def health_check():
     gpu_available = False
     try:
         from inference.gpu_utils import DeviceInfo
+
         info = DeviceInfo.detect()
         gpu_available = info.device_type != "cpu"
     except Exception:
@@ -228,7 +239,7 @@ async def health_check():
     models_loaded = any(MODELS_DIR.iterdir()) if MODELS_DIR.exists() else False
 
     disk = shutil.disk_usage(str(DB_PATH.parent))
-    disk_free_gb = round(disk.free / (1024 ** 3), 2)
+    disk_free_gb = round(disk.free / (1024**3), 2)
 
     return HealthResponse(
         status="ok",
@@ -243,6 +254,7 @@ async def health_check():
 # ─────────────────────────────────────────────────────────────────────────────
 # Processing
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @app.post("/process", response_model=ProcessResponse)
 async def process_filterbank(
@@ -276,13 +288,15 @@ async def process_filterbank(
 
     # Create observation record
     db = get_db()
-    obs_id = await db.add_observation({
-        "file_path": str(file_path),
-        "source_name": source_name or Path(file.filename or "").stem,
-        "ra": ra,
-        "dec": dec,
-        "status": "processing",
-    })
+    obs_id = await db.add_observation(
+        {
+            "file_path": str(file_path),
+            "source_name": source_name or Path(file.filename or "").stem,
+            "ra": ra,
+            "dec": dec,
+            "status": "processing",
+        }
+    )
 
     # ── Run pipeline ────────────────────────────────────────────────
     total_signals = 0
@@ -311,25 +325,33 @@ async def process_filterbank(
             }
             await db.add_signal(signal_data)
 
-        await db.update_observation(obs_id, {
-            "total_signals": total_signals,
-            "candidates_found": candidates_found,
-            "status": "complete",
-        })
+        await db.update_observation(
+            obs_id,
+            {
+                "total_signals": total_signals,
+                "candidates_found": candidates_found,
+                "status": "complete",
+            },
+        )
     except Exception as exc:
-        await db.update_observation(obs_id, {
-            "status": "error",
-            "error_message": str(exc),
-        })
+        await db.update_observation(
+            obs_id,
+            {
+                "status": "error",
+                "error_message": str(exc),
+            },
+        )
         raise HTTPException(500, f"Processing failed: {exc}")
 
     # Broadcast to live WebSocket clients
-    await _broadcast({
-        "type": "observation_complete",
-        "observation_id": obs_id,
-        "total_signals": total_signals,
-        "candidates_found": candidates_found,
-    })
+    await _broadcast(
+        {
+            "type": "observation_complete",
+            "observation_id": obs_id,
+            "total_signals": total_signals,
+            "candidates_found": candidates_found,
+        }
+    )
 
     return ProcessResponse(
         observation_id=obs_id,
@@ -343,6 +365,7 @@ async def process_filterbank(
 # ─────────────────────────────────────────────────────────────────────────────
 # Signals CRUD
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @app.get("/signals", response_model=List[SignalResponse])
 async def list_signals(
@@ -406,6 +429,7 @@ async def update_signal(signal_id: int, update: SignalUpdate):
 # Candidates
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/candidates", response_model=List[SignalResponse])
 async def list_candidates(
     limit: int = Query(100, ge=1, le=5000),
@@ -421,6 +445,7 @@ async def list_candidates(
 # Statistics
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/stats", response_model=StatsResponse)
 async def get_statistics():
     """Processing statistics across all observations."""
@@ -433,6 +458,7 @@ async def get_statistics():
 # Catalog Cross-Reference
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/catalog/crossref", response_model=CatalogCrossRefResponse)
 async def catalog_crossref(
     ra: float = Query(..., description="Right ascension (degrees, J2000)"),
@@ -443,8 +469,9 @@ async def catalog_crossref(
     Cross-reference a sky position against radio astronomy catalogs
     (SIMBAD, NVSS, FIRST, ATNF Pulsar Catalogue).
     """
-    from catalog.radio_catalogs import RadioCatalogQuery, CatalogResult
     from dataclasses import asdict
+
+    from catalog.radio_catalogs import CatalogResult
 
     query = get_catalog_query()
     is_known, description = query.is_known_source(ra, dec, freq_mhz=0, radius_arcmin=radius_arcmin)
@@ -469,6 +496,7 @@ async def catalog_crossref(
 # AstroLens Optical Cross-Reference
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/astrolens/crossref", response_model=AstroLensCrossRefResponse)
 async def astrolens_optical_crossref(
     ra: float = Query(..., description="Right ascension (degrees, J2000)"),
@@ -478,8 +506,9 @@ async def astrolens_optical_crossref(
     """
     Check if AstroLens has detected optical anomalies near this radio position.
     """
-    from catalog.sky_position import astrolens_crossref as _xref
     from dataclasses import asdict
+
+    from catalog.sky_position import astrolens_crossref as _xref
 
     matches = _xref(ra, dec, radius_arcmin=radius_arcmin)
     return AstroLensCrossRefResponse(
@@ -493,6 +522,7 @@ async def astrolens_optical_crossref(
 # ─────────────────────────────────────────────────────────────────────────────
 # WebSocket – Live Signal Stream
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @app.websocket("/ws/live")
 async def websocket_live(ws: WebSocket):
@@ -537,6 +567,7 @@ async def _broadcast(message: Dict[str, Any]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _bool_fields(row: Dict[str, Any]) -> Dict[str, Any]:
     """SQLite stores booleans as 0/1 – convert for Pydantic."""

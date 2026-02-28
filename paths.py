@@ -109,6 +109,7 @@ ASTROLENS_CANDIDATES_FILE = ASTROLENS_ARTIFACTS_DIR / "data" / "anomaly_candidat
 # Utility Functions
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def ensure_dirs() -> None:
     """Ensure all required directories exist."""
     for d in [DATA_DIR, FILTERBANK_DIR, PLOTS_DIR, MODELS_DIR, CANDIDATES_DIR]:

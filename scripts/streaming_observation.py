@@ -27,21 +27,19 @@ from __future__ import annotations
 
 import argparse
 import atexit
-import glob as globmod
 import json
 import logging
 import os
-import signal
+import re
 import shutil
+import signal
 import sys
 import time
 import traceback
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
-
-import re
 
 # Fix HDF5 plugin path before any HDF5 library is imported
 if "HDF5_PLUGIN_PATH" not in os.environ:
@@ -53,16 +51,14 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from paths import (
-    DATA_DIR,
     ARTIFACTS_DIR,
-    FILTERBANK_DIR,
-    PLOTS_DIR,
-    MODELS_DIR,
     CANDIDATES_DIR,
     CANDIDATES_FILE,
-    STREAMING_STATE,
+    DATA_DIR,
     DISCOVERY_STATE,
-    ASTROLENS_CANDIDATES_FILE,
+    FILTERBANK_DIR,
+    MODELS_DIR,
+    STREAMING_STATE,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -95,9 +91,11 @@ if not logger.handlers:
 # Data classes
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class DailySnapshot:
     """Snapshot of metrics at end of each observation day."""
+
     day: int = 0
     date: str = ""
     cycles_completed: int = 0
@@ -130,6 +128,7 @@ class DailySnapshot:
 @dataclass
 class StreamingState:
     """Persistent state for multi-day streaming observation."""
+
     started_at: str = ""
     target_days: float = 7
     current_day: int = 0
@@ -181,21 +180,21 @@ class StreamingState:
 
 _TARGET_CATEGORIES = [
     # (regex pattern on filename, category, description)
-    (re.compile(r"(?i)voyager"),                     "Voyager",       "Known spacecraft signal (benchmark)"),
-    (re.compile(r"(?i)KIC\d+"),                      "TabbyStar",     "Tabby's Star — anomalous dimming (KIC 8462852)"),
-    (re.compile(r"(?i)kepler[\-_]?\d+\w?"),           "Kepler",        "Kepler exoplanet host star"),
-    (re.compile(r"(?i)trappist"),                    "TRAPPIST",      "TRAPPIST-1 system (7 Earth-sized planets)"),
-    (re.compile(r"(?i)hip\d+"),                      "HIP",           "Nearby star from BL primary target list"),
-    (re.compile(r"(?i)gj[\-_]?\d+"),                 "GJ",            "Nearby red dwarf (Gliese catalog)"),
-    (re.compile(r"(?i)lhs[\-_]?\d+"),                "LHS",           "Nearby M-dwarf (LHS catalog)"),
-    (re.compile(r"(?i)hd[\-_]?\d+"),                 "HD",            "Star from Henry Draper catalog"),
-    (re.compile(r"(?i)(?:3c|diag_3c)\d+"),           "Calibrator",    "Radio calibrator source"),
-    (re.compile(r"(?i)ross"),                        "Ross",          "Nearby star (Ross catalog)"),
-    (re.compile(r"(?i)teegarden"),                   "Teegarden",     "Teegarden's Star"),
-    (re.compile(r"(?i)yz[\-_]?cet"),                 "YZ_Cet",        "YZ Ceti (active M-dwarf)"),
-    (re.compile(r"(?i)2mass"),                       "2MASS",         "2MASS infrared survey target"),
-    (re.compile(r"(?i)wise"),                        "WISE",          "WISE infrared survey target"),
-    (re.compile(r"(?i)synthetic"),                   "Synthetic",     "Synthetic training data"),
+    (re.compile(r"(?i)voyager"), "Voyager", "Known spacecraft signal (benchmark)"),
+    (re.compile(r"(?i)KIC\d+"), "TabbyStar", "Tabby's Star — anomalous dimming (KIC 8462852)"),
+    (re.compile(r"(?i)kepler[\-_]?\d+\w?"), "Kepler", "Kepler exoplanet host star"),
+    (re.compile(r"(?i)trappist"), "TRAPPIST", "TRAPPIST-1 system (7 Earth-sized planets)"),
+    (re.compile(r"(?i)hip\d+"), "HIP", "Nearby star from BL primary target list"),
+    (re.compile(r"(?i)gj[\-_]?\d+"), "GJ", "Nearby red dwarf (Gliese catalog)"),
+    (re.compile(r"(?i)lhs[\-_]?\d+"), "LHS", "Nearby M-dwarf (LHS catalog)"),
+    (re.compile(r"(?i)hd[\-_]?\d+"), "HD", "Star from Henry Draper catalog"),
+    (re.compile(r"(?i)(?:3c|diag_3c)\d+"), "Calibrator", "Radio calibrator source"),
+    (re.compile(r"(?i)ross"), "Ross", "Nearby star (Ross catalog)"),
+    (re.compile(r"(?i)teegarden"), "Teegarden", "Teegarden's Star"),
+    (re.compile(r"(?i)yz[\-_]?cet"), "YZ_Cet", "YZ Ceti (active M-dwarf)"),
+    (re.compile(r"(?i)2mass"), "2MASS", "2MASS infrared survey target"),
+    (re.compile(r"(?i)wise"), "WISE", "WISE infrared survey target"),
+    (re.compile(r"(?i)synthetic"), "Synthetic", "Synthetic training data"),
 ]
 
 
@@ -285,9 +284,7 @@ class StreamingObserver:
         if target_days > 0:
             self.state.target_days = target_days
         self.state.current_mode = mode or self.state.current_mode or "normal"
-        self.state.current_min_snr = self.MODE_SNR.get(
-            self.state.current_mode, 10.0
-        )
+        self.state.current_min_snr = self.MODE_SNR.get(self.state.current_mode, 10.0)
 
         # Track daily metrics for delta calculation
         self._day_start_metrics: Dict = {}
@@ -310,6 +307,7 @@ class StreamingObserver:
     def pipeline(self):
         if self._pipeline is None:
             from pipeline import MitraSETIPipeline
+
             model_path = MODELS_DIR / "signal_classifier_v1.pt"
             ood_cal_path = MODELS_DIR / "ood_calibration.json"
             self._pipeline = MitraSETIPipeline(
@@ -405,15 +403,11 @@ class StreamingObserver:
                     files.append(f)
 
         # Remove already-processed files
-        new_files = [
-            f for f in files if str(f) not in self._processed_files
-        ]
+        new_files = [f for f in files if str(f) not in self._processed_files]
 
         if not new_files and files:
             # All files processed; allow re-processing in next cycle
-            logger.info(
-                f"All {len(files)} files processed. Resetting for next cycle."
-            )
+            logger.info(f"All {len(files)} files processed. Resetting for next cycle.")
             self._processed_files.clear()
             new_files = list(files)
 
@@ -549,9 +543,7 @@ class StreamingObserver:
             return cycle_summary
 
         # Pick next file (or batch in turbo mode)
-        batch_size = {"normal": 1, "aggressive": 2, "turbo": 5}.get(
-            self.state.current_mode, 1
-        )
+        batch_size = {"normal": 1, "aggressive": 2, "turbo": 5}.get(self.state.current_mode, 1)
         batch = files[:batch_size]
 
         for filepath in batch:
@@ -568,8 +560,12 @@ class StreamingObserver:
             cat = result.get("category", "Other")
             if cat not in self.state.category_stats:
                 self.state.category_stats[cat] = {
-                    "files": 0, "signals": 0, "candidates": 0, "rfi": 0,
-                    "anomalies": 0, "target_name": result.get("target_name", ""),
+                    "files": 0,
+                    "signals": 0,
+                    "candidates": 0,
+                    "rfi": 0,
+                    "anomalies": 0,
+                    "target_name": result.get("target_name", ""),
                     "description": result.get("description", ""),
                 }
             self.state.category_stats[cat]["files"] += 1
@@ -639,19 +635,21 @@ class StreamingObserver:
         """Accumulate per-file pipeline metrics into running averages."""
         pm = self.state.pipeline_metrics
         if not pm:
-            pm.update({
-                "files_measured": 0,
-                "dd_throughput_sum": 0.0,
-                "dd_raw_crossings_sum": 0,
-                "dd_clustering_reduction_sum": 0.0,
-                "ml_throughput_sum": 0.0,
-                "ml_candidate_rate_sum": 0.0,
-                "snr_max_overall": 0.0,
-                "snr_above_25_sum": 0,
-                "snr_above_50_sum": 0,
-                "drift_in_range_sum": 0,
-                "total_data_points": 0,
-            })
+            pm.update(
+                {
+                    "files_measured": 0,
+                    "dd_throughput_sum": 0.0,
+                    "dd_raw_crossings_sum": 0,
+                    "dd_clustering_reduction_sum": 0.0,
+                    "ml_throughput_sum": 0.0,
+                    "ml_candidate_rate_sum": 0.0,
+                    "snr_max_overall": 0.0,
+                    "snr_above_25_sum": 0,
+                    "snr_above_50_sum": 0,
+                    "drift_in_range_sum": 0,
+                    "total_data_points": 0,
+                }
+            )
 
         dd = metrics.get("dedoppler", {})
         ml = metrics.get("ml_classifier", {})
@@ -659,15 +657,23 @@ class StreamingObserver:
         drift = metrics.get("drift_stats", {})
 
         pm["files_measured"] = pm.get("files_measured", 0) + 1
-        pm["dd_throughput_sum"] = pm.get("dd_throughput_sum", 0) + dd.get("throughput_mpts_per_s", 0)
+        pm["dd_throughput_sum"] = pm.get("dd_throughput_sum", 0) + dd.get(
+            "throughput_mpts_per_s", 0
+        )
         pm["dd_raw_crossings_sum"] = pm.get("dd_raw_crossings_sum", 0) + dd.get("raw_crossings", 0)
-        pm["dd_clustering_reduction_sum"] = pm.get("dd_clustering_reduction_sum", 0) + dd.get("clustering_reduction", 0)
+        pm["dd_clustering_reduction_sum"] = pm.get("dd_clustering_reduction_sum", 0) + dd.get(
+            "clustering_reduction", 0
+        )
         pm["ml_throughput_sum"] = pm.get("ml_throughput_sum", 0) + ml.get("throughput_sig_per_s", 0)
-        pm["ml_candidate_rate_sum"] = pm.get("ml_candidate_rate_sum", 0) + ml.get("candidate_rate", 0)
+        pm["ml_candidate_rate_sum"] = pm.get("ml_candidate_rate_sum", 0) + ml.get(
+            "candidate_rate", 0
+        )
         pm["snr_max_overall"] = max(pm.get("snr_max_overall", 0), snr.get("max", 0))
         pm["snr_above_25_sum"] = pm.get("snr_above_25_sum", 0) + snr.get("above_25", 0)
         pm["snr_above_50_sum"] = pm.get("snr_above_50_sum", 0) + snr.get("above_50", 0)
-        pm["drift_in_range_sum"] = pm.get("drift_in_range_sum", 0) + drift.get("in_candidate_range", 0)
+        pm["drift_in_range_sum"] = pm.get("drift_in_range_sum", 0) + drift.get(
+            "in_candidate_range", 0
+        )
         pm["total_data_points"] = pm.get("total_data_points", 0) + dd.get("data_points", 0)
         pm["model_trained"] = ml.get("model_trained", False)
         pm["ood_calibrated"] = metrics.get("ood_detector", {}).get("calibrated", False)
@@ -697,23 +703,23 @@ class StreamingObserver:
             "  ╠══════════════════════════════════════════════════════════╣\n"
             "  ║  DE-DOPPLER SEARCH (Rust, brute-force)                  ║\n"
             f"  ║    Throughput:           {avg_dd:>8.1f} Mpts/s              ║\n"
-            f"  ║    Avg raw crossings:    {pm.get('dd_raw_crossings_sum',0)/n:>8.0f}/file             ║\n"
-            f"  ║    Clustering reduction: {avg_cluster*100:>7.1f}%                  ║\n"
+            f"  ║    Avg raw crossings:    {pm.get('dd_raw_crossings_sum', 0) / n:>8.0f}/file             ║\n"
+            f"  ║    Clustering reduction: {avg_cluster * 100:>7.1f}%                  ║\n"
             f"  ║    Algorithm:            brute-force (Taylor tree TODO) ║\n"
             "  ╠══════════════════════════════════════════════════════════╣\n"
             "  ║  ML CLASSIFIER (CNN+Transformer, 729K params)           ║\n"
             f"  ║    Model trained:        {'YES' if pm.get('model_trained') else 'NO — using rules':>30}  ║\n"
             f"  ║    Throughput:           {avg_ml:>8.1f} signals/s           ║\n"
-            f"  ║    Candidate rate:       {avg_cand_rate*100:>7.2f}%                  ║\n"
+            f"  ║    Candidate rate:       {avg_cand_rate * 100:>7.2f}%                  ║\n"
             "  ╠══════════════════════════════════════════════════════════╣\n"
             "  ║  OOD ANOMALY DETECTOR (3-method ensemble)               ║\n"
             f"  ║    Calibrated:           {'YES' if pm.get('ood_calibrated') else 'NO — default thresholds':>30}  ║\n"
             "  ╠══════════════════════════════════════════════════════════╣\n"
             "  ║  SIGNAL QUALITY                                         ║\n"
-            f"  ║    Best SNR overall:     {pm.get('snr_max_overall',0):>8.1f}                    ║\n"
-            f"  ║    Signals SNR > 25:     {pm.get('snr_above_25_sum',0):>8}                    ║\n"
-            f"  ║    Signals SNR > 50:     {pm.get('snr_above_50_sum',0):>8}                    ║\n"
-            f"  ║    In candidate drift:   {pm.get('drift_in_range_sum',0):>8}                    ║\n"
+            f"  ║    Best SNR overall:     {pm.get('snr_max_overall', 0):>8.1f}                    ║\n"
+            f"  ║    Signals SNR > 25:     {pm.get('snr_above_25_sum', 0):>8}                    ║\n"
+            f"  ║    Signals SNR > 50:     {pm.get('snr_above_50_sum', 0):>8}                    ║\n"
+            f"  ║    In candidate drift:   {pm.get('drift_in_range_sum', 0):>8}                    ║\n"
             "  ╚══════════════════════════════════════════════════════════╝"
         )
 
@@ -755,8 +761,7 @@ class StreamingObserver:
             # keep only the new entry (which has the latest ML classification)
             dedup_key = (entry["file_name"], entry["target_name"])
             candidates = [
-                c for c in candidates
-                if (c.get("file_name"), c.get("target_name")) != dedup_key
+                c for c in candidates if (c.get("file_name"), c.get("target_name")) != dedup_key
             ]
             candidates.append(entry)
 
@@ -798,22 +803,17 @@ class StreamingObserver:
         delta_rfi = self.state.total_rfi_rejected - start.get("rfi_rejected", 0)
         delta_ood = self.state.total_ood_anomalies - start.get("ood_anomalies", 0)
 
-        candidate_rate = (
-            (delta_candidates / delta_signals * 100)
-            if delta_signals > 0
-            else 0.0
-        )
+        candidate_rate = (delta_candidates / delta_signals * 100) if delta_signals > 0 else 0.0
 
-        hours_elapsed = max(1, (datetime.now() - datetime.fromisoformat(
-            self.state.started_at
-        )).total_seconds() / 3600)
+        hours_elapsed = max(
+            1,
+            (datetime.now() - datetime.fromisoformat(self.state.started_at)).total_seconds() / 3600,
+        )
         files_per_hour = self.state.total_files_processed / hours_elapsed
 
         # Get best candidates
         best = self._load_candidates()
-        sorted_candidates = sorted(
-            best, key=lambda c: c.get("ood_score", 0), reverse=True
-        )[:10]
+        sorted_candidates = sorted(best, key=lambda c: c.get("ood_score", 0), reverse=True)[:10]
 
         # Self-correction
         corrections = self._self_correct(day_num, delta_signals, delta_candidates, delta_rfi)
@@ -829,9 +829,7 @@ class StreamingObserver:
             candidates_found=delta_candidates,
             rfi_rejected=delta_rfi,
             ood_anomalies=delta_ood,
-            highest_ood_score=max(
-                (c.get("ood_score", 0) for c in sorted_candidates), default=0.0
-            ),
+            highest_ood_score=max((c.get("ood_score", 0) for c in sorted_candidates), default=0.0),
             sensitivity_start=start.get("min_snr", 10.0),
             sensitivity_end=self.state.current_min_snr,
             top_candidates=sorted_candidates,
@@ -872,7 +870,8 @@ class StreamingObserver:
         """Run ON-OFF cadence analysis on available file pairs."""
         try:
             from scripts.cadence_analysis import (
-                discover_on_off_pairs, run_cadence_filter,
+                discover_on_off_pairs,
+                run_cadence_filter,
                 save_cadence_results,
             )
 
@@ -932,12 +931,12 @@ class StreamingObserver:
             specs, labels = self._build_training_set(needs_initial)
             if len(specs) < 20:
                 logger.warning(
-                    f"  Only {len(specs)} training samples — skipping "
-                    f"(need at least 20)"
+                    f"  Only {len(specs)} training samples — skipping (need at least 20)"
                 )
                 return
-            logger.info(f"  Training set: {len(specs)} samples, "
-                        f"{len(set(labels.tolist()))} classes")
+            logger.info(
+                f"  Training set: {len(specs)} samples, {len(set(labels.tolist()))} classes"
+            )
         except Exception as e:
             logger.warning(f"  Building training set failed: {e}")
             return
@@ -946,13 +945,18 @@ class StreamingObserver:
 
         logger.info(f"  Starting model training ({n_epochs} epochs)...")
         try:
-            from scripts.train_model import (
-                get_device, _build_model, train_one_epoch,
-                evaluate, extract_embeddings, compute_ood_calibration,
-                N_CLASSES,
-            )
             import torch
             from torch.utils.data import DataLoader, TensorDataset
+
+            from scripts.train_model import (
+                N_CLASSES,
+                _build_model,
+                compute_ood_calibration,
+                evaluate,
+                extract_embeddings,
+                get_device,
+                train_one_epoch,
+            )
 
             device = get_device()
 
@@ -975,11 +979,8 @@ class StreamingObserver:
                 time_steps=specs.shape[2],
             ).to(device)
 
-            loaded_existing = False
             if needs_finetune and model_path.exists():
-                state_dict = torch.load(
-                    model_path, map_location=device, weights_only=True
-                )
+                state_dict = torch.load(model_path, map_location=device, weights_only=True)
                 has_nan = any(
                     torch.isnan(v).any().item()
                     for v in state_dict.values()
@@ -987,26 +988,20 @@ class StreamingObserver:
                 )
                 if has_nan:
                     logger.warning(
-                        "  Existing model has NaN weights — discarding, "
-                        "training from scratch"
+                        "  Existing model has NaN weights — discarding, training from scratch"
                     )
                     model_path.unlink(missing_ok=True)
                     lr = 1e-3
                     n_epochs = 20
                 else:
                     model.load_state_dict(state_dict)
-                    loaded_existing = True
                     logger.info("  Loaded existing model for fine-tuning")
                     lr = 3e-4
             else:
                 lr = 1e-3
 
-            optimizer = torch.optim.AdamW(
-                model.parameters(), lr=lr, weight_decay=0.01
-            )
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=n_epochs
-            )
+            optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
             criterion = torch.nn.CrossEntropyLoss()
 
             best_acc = 0.0
@@ -1016,7 +1011,13 @@ class StreamingObserver:
 
             for epoch in range(1, n_epochs + 1):
                 t_loss, t_acc = train_one_epoch(
-                    model, train_loader, criterion, optimizer, device, None, False,
+                    model,
+                    train_loader,
+                    criterion,
+                    optimizer,
+                    device,
+                    None,
+                    False,
                 )
                 v_loss, v_acc = evaluate(model, val_loader, criterion, device)
                 scheduler.step()
@@ -1074,11 +1075,13 @@ class StreamingObserver:
 
             logger.info(f"  Training complete — best val accuracy: {best_acc:.4f}")
 
-            model.load_state_dict(
-                torch.load(model_path, map_location=device, weights_only=True)
-            )
+            model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
             embeddings = extract_embeddings(
-                model, specs, labels, device, batch_size=64,
+                model,
+                specs,
+                labels,
+                device,
+                batch_size=64,
             )
             calibration = compute_ood_calibration(embeddings, labels, N_CLASSES)
             cal_path = MODELS_DIR / "ood_calibration.json"
@@ -1089,12 +1092,15 @@ class StreamingObserver:
             self.state.last_trained_at_file = files_done
             self._pipeline = None
             _ = self.pipeline
-            logger.info(f"  Pipeline reloaded with {'fine-tuned' if needs_finetune else 'trained'} model")
+            logger.info(
+                f"  Pipeline reloaded with {'fine-tuned' if needs_finetune else 'trained'} model"
+            )
             logger.info("=" * 60)
 
         except Exception as e:
             logger.warning(f"  Auto-training failed: {e}")
             import traceback
+
             logger.warning(traceback.format_exc())
 
     def _count_cached_spectrograms(self) -> int:
@@ -1108,7 +1114,6 @@ class StreamingObserver:
 
         Returns (spectrograms, labels) as numpy arrays.
         """
-        import numpy as np
 
         specs_list = []
         labels_list = []
@@ -1152,7 +1157,9 @@ class StreamingObserver:
                 except Exception:
                     continue
             if label_corrections:
-                logger.info(f"  Relabeled {label_corrections}/{n_real} cached spectrograms using heuristics")
+                logger.info(
+                    f"  Relabeled {label_corrections}/{n_real} cached spectrograms using heuristics"
+                )
 
         # Always include synthetic data to ensure class diversity.
         # Real BL spectrograms are heavily skewed toward 1-2 classes;
@@ -1166,11 +1173,14 @@ class StreamingObserver:
                 logger.info("  Generating synthetic training data...")
                 try:
                     from scripts.generate_training_data import main as gen_main
+
                     old_argv = sys.argv
                     sys.argv = [
                         "generate_training_data",
-                        "--output-dir", str(self._TRAIN_DATA_DIR),
-                        "--count", "600",
+                        "--output-dir",
+                        str(self._TRAIN_DATA_DIR),
+                        "--count",
+                        "600",
                     ]
                     gen_main()
                     sys.argv = old_argv
@@ -1180,7 +1190,7 @@ class StreamingObserver:
             if synth_specs_path.exists():
                 synth_specs = np.load(synth_specs_path)
                 synth_labels = np.load(synth_labels_path)
-                for s, l in zip(synth_specs, synth_labels):
+                for s, l in zip(synth_specs, synth_labels, strict=False):
                     specs_list.append(s)
                     labels_list.append(int(l))
                     n_synthetic += 1
@@ -1199,7 +1209,7 @@ class StreamingObserver:
             rng = np.random.default_rng(42)
             real_specs = specs_list[:n_real]
             real_labels = labels_list[:n_real]
-            for s, l in zip(real_specs, real_labels):
+            for s, l in zip(real_specs, real_labels, strict=False):
                 # Augmentation 1: Gaussian noise
                 noisy = s + rng.normal(0, 0.1 * s.std(), s.shape).astype(s.dtype)
                 specs_list.append(noisy)
@@ -1213,11 +1223,9 @@ class StreamingObserver:
             logger.info(f"  Augmentation: {n_augmented} samples added from {n_real} real")
 
         target_shape = specs_list[0].shape
-        specs_arr = np.stack([
-            s if s.shape == target_shape
-            else np.resize(s, target_shape)
-            for s in specs_list
-        ])
+        specs_arr = np.stack(
+            [s if s.shape == target_shape else np.resize(s, target_shape) for s in specs_list]
+        )
         labels_arr = np.array(labels_list, dtype=np.int64)
         return specs_arr, labels_arr
 
@@ -1284,29 +1292,29 @@ class StreamingObserver:
             if self.state.current_mode == "normal":
                 self.state.current_mode = "aggressive"
                 self.state.current_min_snr = self.MODE_SNR["aggressive"]
-                corrections.append(
-                    "Escalated to AGGRESSIVE mode (0 candidates after 2 days)"
-                )
+                corrections.append("Escalated to AGGRESSIVE mode (0 candidates after 2 days)")
                 logger.info(f"  [SELF-CORRECT] {corrections[-1]}")
-                self.state.mode_history.append({
-                    "day": day_num,
-                    "from": "normal",
-                    "to": "aggressive",
-                    "reason": "Zero candidates after 2 days",
-                })
+                self.state.mode_history.append(
+                    {
+                        "day": day_num,
+                        "from": "normal",
+                        "to": "aggressive",
+                        "reason": "Zero candidates after 2 days",
+                    }
+                )
             elif day_num >= 3 and self.state.current_mode == "aggressive":
                 self.state.current_mode = "turbo"
                 self.state.current_min_snr = self.MODE_SNR["turbo"]
-                corrections.append(
-                    "Escalated to TURBO mode (0 candidates after 3 days)"
-                )
+                corrections.append("Escalated to TURBO mode (0 candidates after 3 days)")
                 logger.info(f"  [SELF-CORRECT] {corrections[-1]}")
-                self.state.mode_history.append({
-                    "day": day_num,
-                    "from": "aggressive",
-                    "to": "turbo",
-                    "reason": "Zero candidates after 3 days",
-                })
+                self.state.mode_history.append(
+                    {
+                        "day": day_num,
+                        "from": "aggressive",
+                        "to": "turbo",
+                        "reason": "Zero candidates after 3 days",
+                    }
+                )
 
         return corrections
 
@@ -1319,6 +1327,7 @@ class StreamingObserver:
         # 1. Check API
         try:
             import httpx
+
             resp = httpx.get("http://localhost:9000/health", timeout=5)
             if resp.status_code != 200:
                 issues.append(f"API returned status {resp.status_code}")
@@ -1328,7 +1337,7 @@ class StreamingObserver:
         # 2. Disk space
         try:
             usage = shutil.disk_usage(str(ARTIFACTS_DIR))
-            free_gb = usage.free / (1024 ** 3)
+            free_gb = usage.free / (1024**3)
             if free_gb < 2:
                 issues.append(f"LOW DISK SPACE: {free_gb:.1f}GB free")
             elif free_gb < 5:
@@ -1366,10 +1375,7 @@ class StreamingObserver:
 
         # 5. Error rate
         if self.state.consecutive_errors > 5:
-            issues.append(
-                f"High error rate: {self.state.consecutive_errors} "
-                f"consecutive errors"
-            )
+            issues.append(f"High error rate: {self.state.consecutive_errors} consecutive errors")
 
         self.state.last_health_check = datetime.now().isoformat()
         return issues
@@ -1397,6 +1403,7 @@ class StreamingObserver:
         """Generate HTML daily report with charts."""
         try:
             from scripts.streaming_report import generate_daily_report
+
             report_path = generate_daily_report(
                 day_number=self.state.current_day,
                 snapshot=self.state.daily_snapshots[-1] if self.state.daily_snapshots else {},
@@ -1411,6 +1418,7 @@ class StreamingObserver:
         """Generate the final publishing-ready summary."""
         try:
             from scripts.streaming_report import generate_final_summary
+
             summary_path = generate_final_summary(
                 state=asdict(self.state),
                 artifacts_dir=STREAMING_DIR,
@@ -1443,7 +1451,7 @@ class StreamingObserver:
         logger.info(f"  Reports: {DAILY_REPORTS_DIR}")
         logger.info(f"  State: {STREAMING_STATE}")
         logger.info(f"  Filterbank dir: {FILTERBANK_DIR}")
-        logger.info(f"  Press Ctrl+C to stop gracefully")
+        logger.info("  Press Ctrl+C to stop gracefully")
         logger.info("=" * 60)
 
         # Capture starting metrics
@@ -1479,7 +1487,9 @@ class StreamingObserver:
         for f in all_files:
             cat = categorize_target(f.name).get("category", "Other")
             cat_counts[cat] = cat_counts.get(cat, 0) + 1
-        logger.info(f"  Found {len(fil_files)} .fil + {len(h5_files)} .h5 = {total_files} files in {FILTERBANK_DIR}")
+        logger.info(
+            f"  Found {len(fil_files)} .fil + {len(h5_files)} .h5 = {total_files} files in {FILTERBANK_DIR}"
+        )
         for cat, cnt in sorted(cat_counts.items()):
             logger.info(f"    {cat}: {cnt} files")
 
@@ -1541,10 +1551,7 @@ class StreamingObserver:
                     last_health_check = now
 
                 # Daily report
-                if (
-                    now.date() != self._last_report_date
-                    and now.hour >= self.daily_report_hour
-                ):
+                if now.date() != self._last_report_date and now.hour >= self.daily_report_hour:
                     logger.info("\n" + "=" * 60)
                     logger.info(f"  DAILY ASSESSMENT - Day {self.state.current_day + 1}")
                     logger.info("=" * 60)
@@ -1567,8 +1574,10 @@ class StreamingObserver:
                             logger.info(f"    - {c}")
 
                 # Auto-train or fine-tune model after enough data collected
-                if (cycle_count % self._RETRAIN_INTERVAL == 0
-                        or cycle_count == self._MIN_FILES_FOR_TRAIN):
+                if (
+                    cycle_count % self._RETRAIN_INTERVAL == 0
+                    or cycle_count == self._MIN_FILES_FOR_TRAIN
+                ):
                     self._maybe_auto_train()
 
                 # Run ON-OFF cadence analysis periodically
@@ -1577,9 +1586,8 @@ class StreamingObserver:
 
                 # Save state every cycle so UI stays responsive
                 self.state.total_runtime_hours = (
-                    (now - datetime.fromisoformat(self.state.started_at))
-                    .total_seconds() / 3600
-                )
+                    now - datetime.fromisoformat(self.state.started_at)
+                ).total_seconds() / 3600
                 self._save_state()
 
                 # Progress update every 10 cycles
@@ -1620,9 +1628,8 @@ class StreamingObserver:
         self.state.completed = datetime.now() >= target_end
         self.state.completed_at = datetime.now().isoformat()
         self.state.total_runtime_hours = (
-            (datetime.now() - datetime.fromisoformat(self.state.started_at))
-            .total_seconds() / 3600
-        )
+            datetime.now() - datetime.fromisoformat(self.state.started_at)
+        ).total_seconds() / 3600
 
         self._take_daily_snapshot()
         self._generate_daily_report()
@@ -1649,9 +1656,11 @@ class StreamingObserver:
         print(f"  Final SNR threshold: {self.state.current_min_snr:.1f}")
 
         if self.state.category_stats:
-            print(f"\n  Results by Target Category:")
-            print(f"  {'Category':<15} {'Files':>6} {'Signals':>8} {'Cand.':>6} {'RFI':>6} {'Anom.':>6}")
-            print(f"  {'-'*15} {'-'*6} {'-'*8} {'-'*6} {'-'*6} {'-'*6}")
+            print("\n  Results by Target Category:")
+            print(
+                f"  {'Category':<15} {'Files':>6} {'Signals':>8} {'Cand.':>6} {'RFI':>6} {'Anom.':>6}"
+            )
+            print(f"  {'-' * 15} {'-' * 6} {'-' * 8} {'-' * 6} {'-' * 6} {'-' * 6}")
             for cat, stats in sorted(self.state.category_stats.items()):
                 print(
                     f"  {cat:<15} {stats.get('files', 0):>6} "
@@ -1662,9 +1671,9 @@ class StreamingObserver:
                 )
 
         if self.state.best_candidates:
-            print(f"\n  Top candidates:")
+            print("\n  Top candidates:")
             for i, c in enumerate(self.state.best_candidates[:5], 1):
-                cat_label = f"[{c.get('category', '?')}]" if c.get('category') else ""
+                cat_label = f"[{c.get('category', '?')}]" if c.get("category") else ""
                 print(
                     f"    {i}. {cat_label} OOD={c.get('ood_score', 0):.4f} | "
                     f"SNR={c.get('snr', 0):.1f} | "
@@ -1682,6 +1691,7 @@ class StreamingObserver:
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(

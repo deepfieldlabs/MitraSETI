@@ -9,14 +9,23 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QScrollArea, QSpinBox, QDoubleSpinBox, QComboBox,
-    QLineEdit, QCheckBox, QGroupBox, QFileDialog, QMessageBox,
-)
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .theme import COLORS
 
@@ -69,18 +78,18 @@ class SettingsPanel(QWidget):
         subtitle.setStyleSheet(f"font-size: 13px; color: {COLORS['text_secondary']};")
         layout.addWidget(subtitle)
 
-        group_ss = f"""
-            QGroupBox {{
+        group_ss = """
+            QGroupBox {
                 font-size: 14px; font-weight: 600; color: #4da6ff;
                 border: 1px solid rgba(100, 180, 255, 0.1);
                 border-radius: 12px;
                 padding-top: 28px; margin-top: 8px;
                 background: rgba(15, 25, 45, 0.45);
-            }}
-            QGroupBox::title {{
+            }
+            QGroupBox::title {
                 subcontrol-origin: margin; left: 16px;
                 padding: 0 8px; color: #4da6ff;
-            }}
+            }
         """
 
         # ── Pipeline Settings ──
@@ -163,7 +172,8 @@ class SettingsPanel(QWidget):
 
         sys.path.insert(0, str(Path(__file__).parent.parent))
         try:
-            from paths import FILTERBANK_DIR, ARTIFACTS_DIR, MODELS_DIR
+            from paths import ARTIFACTS_DIR, FILTERBANK_DIR, MODELS_DIR
+
             fb_path = str(FILTERBANK_DIR)
             art_path = str(ARTIFACTS_DIR)
             mdl_path = str(MODELS_DIR)
@@ -255,6 +265,7 @@ class SettingsPanel(QWidget):
 
         try:
             from paths import FILTERBANK_DIR
+
             bl_dir = FILTERBANK_DIR
         except Exception:
             bl_dir = _ARTIFACTS_DIR / "data" / "breakthrough_listen_data_files"
@@ -265,11 +276,9 @@ class SettingsPanel(QWidget):
             for f in bl_dir.iterdir():
                 if f.suffix in (".fil", ".h5", ".hdf5") and f.stat().st_size > 100_000:
                     file_count += 1
-                    total_size_gb += f.stat().st_size / (1024 ** 3)
+                    total_size_gb += f.stat().st_size / (1024**3)
 
-        self._bl_status = QLabel(
-            f"Currently: {file_count} files ({total_size_gb:.1f} GB)"
-        )
+        self._bl_status = QLabel(f"Currently: {file_count} files ({total_size_gb:.1f} GB)")
         self._bl_status.setStyleSheet("font-size: 12px; color: #34d399;")
         blg.addWidget(self._bl_status)
 
@@ -394,29 +403,32 @@ class SettingsPanel(QWidget):
 
     def _download_bl_data(self):
         """Download BL data files with confirmation dialog."""
-        import subprocess
         import shutil
+        import subprocess
 
         script_path = Path(__file__).parent.parent / "data" / "download_all_BL_data.sh"
         if not script_path.exists():
             QMessageBox.warning(
-                self, "Missing Script",
+                self,
+                "Missing Script",
                 f"Download script not found:\n{script_path}\n\n"
-                "Please ensure data/download_all_BL_data.sh exists."
+                "Please ensure data/download_all_BL_data.sh exists.",
             )
             return
 
         if not shutil.which("aria2c"):
             QMessageBox.warning(
-                self, "aria2c Not Found",
+                self,
+                "aria2c Not Found",
                 "aria2c is required for downloads.\n\n"
                 "Install with:\n  brew install aria2  (macOS)\n"
-                "  apt install aria2   (Linux)"
+                "  apt install aria2   (Linux)",
             )
             return
 
         reply = QMessageBox.question(
-            self, "Confirm Download",
+            self,
+            "Confirm Download",
             "This will download Breakthrough Listen observation files.\n\n"
             "Total size: ~40+ GB\n"
             "Files already on disk will be skipped.\n\n"
@@ -434,11 +446,12 @@ class SettingsPanel(QWidget):
                 cwd=str(script_path.parent),
             )
             QMessageBox.information(
-                self, "Download Started",
+                self,
+                "Download Started",
                 "Download is running in the background.\n"
                 "Check the terminal for progress.\n\n"
                 "Files will be saved to:\n"
-                "mitraseti_artifacts/data/breakthrough_listen_data_files/"
+                "mitraseti_artifacts/data/breakthrough_listen_data_files/",
             )
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to start download:\n{e}")

@@ -94,6 +94,7 @@ _INDEXES = [
 # SignalDB
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class SignalDB:
     """Async SQLite database manager for MitraSETI signals."""
 
@@ -135,10 +136,21 @@ class SignalDB:
         placeholders = []
         values = []
         allowed = {
-            "frequency_hz", "drift_rate", "snr", "rfi_score",
-            "classification", "confidence", "is_candidate", "is_verified",
-            "observation_id", "detected_at", "image_path", "ra", "dec",
-            "bandwidth_hz", "notes",
+            "frequency_hz",
+            "drift_rate",
+            "snr",
+            "rfi_score",
+            "classification",
+            "confidence",
+            "is_candidate",
+            "is_verified",
+            "observation_id",
+            "detected_at",
+            "image_path",
+            "ra",
+            "dec",
+            "bandwidth_hz",
+            "notes",
         }
         for key, val in signal_data.items():
             if key in allowed:
@@ -219,8 +231,13 @@ class SignalDB:
     async def update_signal(self, signal_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
         """Update signal fields and return the updated record."""
         allowed = {
-            "classification", "confidence", "rfi_score", "is_candidate",
-            "is_verified", "image_path", "notes",
+            "classification",
+            "confidence",
+            "rfi_score",
+            "is_candidate",
+            "is_verified",
+            "image_path",
+            "notes",
         }
         sets: List[str] = []
         values: List[Any] = []
@@ -242,10 +259,7 @@ class SignalDB:
 
     async def get_candidates(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """Return only signals marked as ET candidates."""
-        sql = (
-            "SELECT * FROM signals WHERE is_candidate = 1 "
-            "ORDER BY snr DESC LIMIT ? OFFSET ?"
-        )
+        sql = "SELECT * FROM signals WHERE is_candidate = 1 ORDER BY snr DESC LIMIT ? OFFSET ?"
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(sql, (limit, offset))
@@ -260,9 +274,16 @@ class SignalDB:
         placeholders = []
         values = []
         allowed = {
-            "file_path", "source_name", "ra", "dec", "duration",
-            "processed_at", "total_signals", "candidates_found",
-            "status", "error_message",
+            "file_path",
+            "source_name",
+            "ra",
+            "dec",
+            "duration",
+            "processed_at",
+            "total_signals",
+            "candidates_found",
+            "status",
+            "error_message",
         }
         for key, val in obs_data.items():
             if key in allowed:
@@ -284,7 +305,10 @@ class SignalDB:
     async def update_observation(self, obs_id: int, data: Dict[str, Any]) -> None:
         """Update an observation record."""
         allowed = {
-            "total_signals", "candidates_found", "status", "error_message",
+            "total_signals",
+            "candidates_found",
+            "status",
+            "error_message",
         }
         sets: List[str] = []
         values: List[Any] = []
@@ -318,7 +342,8 @@ class SignalDB:
         )
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                sql, (signal_id, observation_id, notes, catalog_matches, astrolens_match),
+                sql,
+                (signal_id, observation_id, notes, catalog_matches, astrolens_match),
             )
             await db.commit()
             return cursor.lastrowid  # type: ignore[return-value]
@@ -330,10 +355,14 @@ class SignalDB:
         async with aiosqlite.connect(self.db_path) as db:
             total_signals = (await (await db.execute("SELECT COUNT(*) FROM signals")).fetchone())[0]
             total_candidates = (
-                await (await db.execute("SELECT COUNT(*) FROM signals WHERE is_candidate = 1")).fetchone()
+                await (
+                    await db.execute("SELECT COUNT(*) FROM signals WHERE is_candidate = 1")
+                ).fetchone()
             )[0]
             verified = (
-                await (await db.execute("SELECT COUNT(*) FROM signals WHERE is_verified = 1")).fetchone()
+                await (
+                    await db.execute("SELECT COUNT(*) FROM signals WHERE is_verified = 1")
+                ).fetchone()
             )[0]
             total_observations = (
                 await (await db.execute("SELECT COUNT(*) FROM observations")).fetchone()

@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class OODResult:
     """Result of OOD detection on a radio signal."""
+
     ood_score: float
     is_anomaly: bool
     threshold: float
@@ -110,9 +111,7 @@ class RadioOODDetector:
         """
         scaled = logits / self.temperature
         max_logit = np.max(scaled)
-        energy = -self.temperature * (
-            max_logit + np.log(np.sum(np.exp(scaled - max_logit)))
-        )
+        energy = -self.temperature * (max_logit + np.log(np.sum(np.exp(scaled - max_logit))))
         return float(energy)
 
     def compute_spectral_distance(self, spectrogram: np.ndarray) -> float:
@@ -138,6 +137,7 @@ class RadioOODDetector:
         # Resize if needed
         if input_spectrum.shape[0] != self._reference_mean_spectrum.shape[0]:
             from scipy.ndimage import zoom
+
             factor = self._reference_mean_spectrum.shape[0] / input_spectrum.shape[0]
             input_spectrum = zoom(input_spectrum, factor, order=1)
 
@@ -161,7 +161,7 @@ class RadioOODDetector:
     def detect(
         self,
         spectrogram: np.ndarray,
-        classifier: "SignalClassifier",
+        classifier: SignalClassifier,
     ) -> OODResult:
         """
         Detect if a radio spectrogram is out-of-distribution.
@@ -206,11 +206,7 @@ class RadioOODDetector:
         is_anomaly = votes >= self.voting_threshold
 
         # Combined score (weighted average, normalised to ~[0, 1])
-        combined = (
-            msp_score * 2.0
-            + energy_score * 0.5
-            + spectral_score * 0.5
-        ) / 3.0
+        combined = (msp_score * 2.0 + energy_score * 0.5 + spectral_score * 0.5) / 3.0
 
         return OODResult(
             ood_score=combined,
@@ -265,11 +261,7 @@ class RadioOODDetector:
 
         is_anomaly = votes >= self.voting_threshold
 
-        combined = (
-            msp_score * 2.0
-            + energy_score * 0.5
-            + spectral_score * 0.5
-        ) / 3.0
+        combined = (msp_score * 2.0 + energy_score * 0.5 + spectral_score * 0.5) / 3.0
 
         return OODResult(
             ood_score=combined,
@@ -298,9 +290,7 @@ class RadioOODDetector:
             logger.warning("calibrate() called with empty reference data")
             return
 
-        logger.info(
-            f"Calibrating OOD detector with {len(reference_data)} reference signals"
-        )
+        logger.info(f"Calibrating OOD detector with {len(reference_data)} reference signals")
 
         # Compute time-averaged spectra for all reference signals
         spectra: List[np.ndarray] = []
@@ -311,6 +301,7 @@ class RadioOODDetector:
             # Resize to common frequency grid if needed
             if avg.shape[0] != target_freq_bins:
                 from scipy.ndimage import zoom
+
                 avg = zoom(avg, target_freq_bins / avg.shape[0], order=1)
             # Normalise
             std = avg.std()
@@ -350,7 +341,9 @@ class RadioOODDetector:
 # Private helpers
 # ------------------------------------------------------------------
 
+
 def _signal_types():
     """Lazy import to avoid circular dependency."""
     from .signal_classifier import SignalType
+
     return list(SignalType)

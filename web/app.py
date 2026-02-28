@@ -23,22 +23,19 @@ from pathlib import Path
 # Add project root
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
-
 import httpx
 import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from paths import (
-    DATA_DIR,
-    CANDIDATES_DIR,
-    STREAMING_STATE,
-    DISCOVERY_STATE,
-    CANDIDATES_FILE,
     ASTROLENS_CANDIDATES_FILE,
+    CANDIDATES_FILE,
+    DISCOVERY_STATE,
+    STREAMING_STATE,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,6 +92,7 @@ def api_client() -> httpx.Client:
 # ─────────────────────────────────────────────────────────────────────────────
 # Pages
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _load_local_stats() -> dict:
     """Build stats dict from local state files."""
@@ -177,22 +175,26 @@ def _enrich_for_skymap(candidates: list) -> list:
         if ra is None:
             continue
 
-        enriched.append({
-            "id": i + 1,
-            "ra_deg": ra + (i * 0.05),
-            "dec_deg": dec + (i * 0.03),
-            "snr": c.get("snr", 0),
-            "frequency_mhz": c.get("frequency_hz", 0) / 1e6,
-            "drift_rate": c.get("drift_rate", 0),
-            "rfi_score": c.get("rfi_probability", 0),
-            "classification": "candidate" if c.get("classification", "") in (
-                "narrowband_drifting", "candidate_et"
-            ) else "rfi" if "rfi" in c.get("classification", "").lower() else "signal",
-            "target_name": c.get("target_name", target),
-            "file": c.get("file_name", ""),
-            "ood_score": c.get("ood_score", 0),
-            "confidence": c.get("confidence", 0),
-        })
+        enriched.append(
+            {
+                "id": i + 1,
+                "ra_deg": ra + (i * 0.05),
+                "dec_deg": dec + (i * 0.03),
+                "snr": c.get("snr", 0),
+                "frequency_mhz": c.get("frequency_hz", 0) / 1e6,
+                "drift_rate": c.get("drift_rate", 0),
+                "rfi_score": c.get("rfi_probability", 0),
+                "classification": "candidate"
+                if c.get("classification", "") in ("narrowband_drifting", "candidate_et")
+                else "rfi"
+                if "rfi" in c.get("classification", "").lower()
+                else "signal",
+                "target_name": c.get("target_name", target),
+                "file": c.get("file_name", ""),
+                "ood_score": c.get("ood_score", 0),
+                "confidence": c.get("confidence", 0),
+            }
+        )
     return enriched
 
 
@@ -232,21 +234,23 @@ def _build_skymap_observations() -> list:
                 n_rfi = info.get("rfi", 0)
 
                 cls = "candidate" if n_cands > 0 else "rfi" if n_rfi > n_signals * 0.5 else "signal"
-                observations.append({
-                    "id": idx,
-                    "ra_deg": ra,
-                    "dec_deg": dec,
-                    "snr": max(n_cands * 5, 10) if n_cands > 0 else 5,
-                    "frequency_mhz": 0,
-                    "drift_rate": 0,
-                    "rfi_score": n_rfi / max(n_signals, 1),
-                    "classification": cls,
-                    "target_name": tgt,
-                    "file": f"{info.get('files', 0)} files",
-                    "signals": n_signals,
-                    "candidates": n_cands,
-                    "description": info.get("description", ""),
-                })
+                observations.append(
+                    {
+                        "id": idx,
+                        "ra_deg": ra,
+                        "dec_deg": dec,
+                        "snr": max(n_cands * 5, 10) if n_cands > 0 else 5,
+                        "frequency_mhz": 0,
+                        "drift_rate": 0,
+                        "rfi_score": n_rfi / max(n_signals, 1),
+                        "classification": cls,
+                        "target_name": tgt,
+                        "file": f"{info.get('files', 0)} files",
+                        "signals": n_signals,
+                        "candidates": n_cands,
+                        "description": info.get("description", ""),
+                    }
+                )
                 idx += 1
         except Exception:
             pass
@@ -297,22 +301,28 @@ async def dashboard(request: Request):
             running = age < 120
         health = {"status": "ok" if running else "offline", "mode": "standalone"}
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "stats": stats,
-        "candidates": candidates,
-        "health": health,
-        "mode": "dashboard",
-    })
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "stats": stats,
+            "candidates": candidates,
+            "health": health,
+            "mode": "dashboard",
+        },
+    )
 
 
 @app.get("/waterfall", response_class=HTMLResponse)
 async def waterfall_page(request: Request):
     """Waterfall spectrogram viewer page."""
-    return templates.TemplateResponse("waterfall.html", {
-        "request": request,
-        "mode": "waterfall",
-    })
+    return templates.TemplateResponse(
+        "waterfall.html",
+        {
+            "request": request,
+            "mode": "waterfall",
+        },
+    )
 
 
 @app.get("/signals", response_class=HTMLResponse)
@@ -363,7 +373,8 @@ async def signals_page(
 
         if classification:
             all_signals = [
-                s for s in all_signals
+                s
+                for s in all_signals
                 if classification.lower() in s.get("classification", "").lower()
             ]
         if min_snr > 0:
@@ -390,18 +401,21 @@ async def signals_page(
     if not stats:
         stats = _load_local_stats()
 
-    return templates.TemplateResponse("signals.html", {
-        "request": request,
-        "signals": signals,
-        "stats": stats,
-        "page": page,
-        "limit": limit,
-        "classification": classification,
-        "min_snr": min_snr,
-        "max_snr": max_snr,
-        "sort": sort,
-        "mode": "signals",
-    })
+    return templates.TemplateResponse(
+        "signals.html",
+        {
+            "request": request,
+            "signals": signals,
+            "stats": stats,
+            "page": page,
+            "limit": limit,
+            "classification": classification,
+            "min_snr": min_snr,
+            "max_snr": max_snr,
+            "sort": sort,
+            "mode": "signals",
+        },
+    )
 
 
 @app.get("/rfi", response_class=HTMLResponse)
@@ -421,12 +435,15 @@ async def rfi_page(request: Request):
         stats = _load_local_stats()
         rfi_stats = stats.get("rfi_stats", {})
 
-    return templates.TemplateResponse("rfi.html", {
-        "request": request,
-        "rfi_stats": rfi_stats,
-        "rfi_stats_json": json.dumps(rfi_stats),
-        "mode": "rfi",
-    })
+    return templates.TemplateResponse(
+        "rfi.html",
+        {
+            "request": request,
+            "rfi_stats": rfi_stats,
+            "rfi_stats_json": json.dumps(rfi_stats),
+            "mode": "rfi",
+        },
+    )
 
 
 @app.get("/streaming", response_class=HTMLResponse)
@@ -456,8 +473,12 @@ async def streaming_page(request: Request):
         try:
             with open(DISCOVERY_STATE) as f:
                 disc = json.load(f)
-            streaming["total_signals"] = disc.get("total_analyzed", streaming.get("total_signals", 0))
-            streaming["total_candidates"] = disc.get("candidates_found", streaming.get("total_candidates", 0))
+            streaming["total_signals"] = disc.get(
+                "total_analyzed", streaming.get("total_signals", 0)
+            )
+            streaming["total_candidates"] = disc.get(
+                "candidates_found", streaming.get("total_candidates", 0)
+            )
             streaming["live_cycles"] = disc.get("cycles_completed", 0)
         except Exception:
             pass
@@ -472,13 +493,16 @@ async def streaming_page(request: Request):
         except Exception:
             pass
 
-    return templates.TemplateResponse("streaming.html", {
-        "request": request,
-        "streaming": streaming,
-        "snapshots_json": json.dumps(snapshots),
-        "now": datetime.now().strftime("%H:%M:%S"),
-        "mode": "streaming",
-    })
+    return templates.TemplateResponse(
+        "streaming.html",
+        {
+            "request": request,
+            "streaming": streaming,
+            "snapshots_json": json.dumps(snapshots),
+            "now": datetime.now().strftime("%H:%M:%S"),
+            "mode": "streaming",
+        },
+    )
 
 
 @app.get("/skymap", response_class=HTMLResponse)
@@ -506,12 +530,15 @@ async def skymap_page(request: Request):
         except Exception:
             pass
 
-    return templates.TemplateResponse("skymap.html", {
-        "request": request,
-        "observations_json": json.dumps(observations),
-        "astrolens_json": json.dumps(astrolens_matches),
-        "mode": "skymap",
-    })
+    return templates.TemplateResponse(
+        "skymap.html",
+        {
+            "request": request,
+            "observations_json": json.dumps(observations),
+            "astrolens_json": json.dumps(astrolens_matches),
+            "mode": "skymap",
+        },
+    )
 
 
 @app.get("/reports", response_class=HTMLResponse)
@@ -531,29 +558,36 @@ async def reports_page(request: Request):
         except Exception:
             pass
 
-    return templates.TemplateResponse("reports.html", {
-        "request": request,
-        "stats": stats,
-        "candidates": candidates[:20],
-        "category_stats": category_stats,
-        "category_stats_json": json.dumps(category_stats),
-        "pipeline_metrics": pipeline_metrics,
-        "mode": "reports",
-    })
+    return templates.TemplateResponse(
+        "reports.html",
+        {
+            "request": request,
+            "stats": stats,
+            "candidates": candidates[:20],
+            "category_stats": category_stats,
+            "category_stats_json": json.dumps(category_stats),
+            "pipeline_metrics": pipeline_metrics,
+            "mode": "reports",
+        },
+    )
 
 
 @app.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request):
     """About MitraSETI page."""
-    return templates.TemplateResponse("about.html", {
-        "request": request,
-        "mode": "about",
-    })
+    return templates.TemplateResponse(
+        "about.html",
+        {
+            "request": request,
+            "mode": "about",
+        },
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API Proxy Endpoints
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @app.get("/api/signals")
 async def proxy_signals(limit: int = 100, skip: int = 0):
@@ -636,6 +670,7 @@ async def device_info():
     """Get GPU/device information."""
     try:
         from inference.gpu_utils import DeviceInfo
+
         info = DeviceInfo.detect()
         return info.to_dict()
     except Exception as e:
@@ -648,7 +683,7 @@ def main():
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host (default: 0.0.0.0)")
     args = parser.parse_args()
 
-    print(f"\n  MitraSETI Web Interface")
+    print("\n  MitraSETI Web Interface")
     print(f"  http://localhost:{args.port}")
     print(f"  API Backend: {API_BASE}\n")
 

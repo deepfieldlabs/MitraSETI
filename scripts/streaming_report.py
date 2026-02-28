@@ -57,8 +57,12 @@ def _fig_to_base64(fig) -> str:
     """Convert matplotlib figure to base64 PNG string."""
     buf = io.BytesIO()
     fig.savefig(
-        buf, format="png", dpi=120, bbox_inches="tight",
-        facecolor=_BG_DARK, edgecolor="none",
+        buf,
+        format="png",
+        dpi=120,
+        bbox_inches="tight",
+        facecolor=_BG_DARK,
+        edgecolor="none",
     )
     buf.seek(0)
     b64 = base64.b64encode(buf.read()).decode("utf-8")
@@ -89,17 +93,19 @@ def _chart_img(b64: str, alt: str) -> str:
         return (
             f'<div class="chart-container">'
             f'<img src="data:image/png;base64,{b64}" alt="{alt}">'
-            f'</div>'
+            f"</div>"
         )
     return '<div class="card">Chart unavailable (install matplotlib)</div>'
 
 
 # ── Signal count chart ────────────────────────────────────────────────────
 
+
 def _create_signal_count_chart(snapshots: List[dict]) -> str:
     """Signal count over days (bar + cumulative line)."""
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -116,11 +122,20 @@ def _create_signal_count_chart(snapshots: List[dict]) -> str:
         _style_axis(ax, "Signals Detected Over Days", "Day", "Signals")
 
         ax.bar(days, signals, color=_ACCENT_BLUE, alpha=0.7, label="Daily")
-        ax.plot(days, cumulative, "o-", color=_ACCENT_AMBER, linewidth=2,
-                markersize=5, label="Cumulative")
+        ax.plot(
+            days,
+            cumulative,
+            "o-",
+            color=_ACCENT_AMBER,
+            linewidth=2,
+            markersize=5,
+            label="Cumulative",
+        )
         ax.legend(
-            facecolor=_BG_CARD, edgecolor=_BORDER,
-            labelcolor=_TEXT_PRIMARY, fontsize=10,
+            facecolor=_BG_CARD,
+            edgecolor=_BORDER,
+            labelcolor=_TEXT_PRIMARY,
+            fontsize=10,
         )
 
         fig.tight_layout()
@@ -133,10 +148,12 @@ def _create_signal_count_chart(snapshots: List[dict]) -> str:
 
 # ── Candidate count chart ────────────────────────────────────────────────
 
+
 def _create_candidate_chart(snapshots: List[dict]) -> str:
     """Candidate count over days."""
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -153,11 +170,20 @@ def _create_candidate_chart(snapshots: List[dict]) -> str:
         _style_axis(ax, "ET Candidates Over Days", "Day", "Candidates")
 
         ax.bar(days, candidates, color=_ACCENT_GREEN, alpha=0.7, label="Daily")
-        ax.plot(days, cumulative, "o-", color=_ACCENT_CYAN, linewidth=2,
-                markersize=5, label="Cumulative")
+        ax.plot(
+            days,
+            cumulative,
+            "o-",
+            color=_ACCENT_CYAN,
+            linewidth=2,
+            markersize=5,
+            label="Cumulative",
+        )
         ax.legend(
-            facecolor=_BG_CARD, edgecolor=_BORDER,
-            labelcolor=_TEXT_PRIMARY, fontsize=10,
+            facecolor=_BG_CARD,
+            edgecolor=_BORDER,
+            labelcolor=_TEXT_PRIMARY,
+            fontsize=10,
         )
 
         fig.tight_layout()
@@ -170,10 +196,12 @@ def _create_candidate_chart(snapshots: List[dict]) -> str:
 
 # ── RFI rejection rate ───────────────────────────────────────────────────
 
+
 def _create_rfi_chart(snapshots: List[dict]) -> str:
     """RFI rejection rate trend."""
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -201,10 +229,12 @@ def _create_rfi_chart(snapshots: List[dict]) -> str:
 
 # ── Processing speed ─────────────────────────────────────────────────────
 
+
 def _create_speed_chart(snapshots: List[dict]) -> str:
     """Processing speed trend (files/hour)."""
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -227,10 +257,12 @@ def _create_speed_chart(snapshots: List[dict]) -> str:
 
 # ── Classification pie chart ─────────────────────────────────────────────
 
+
 def _create_classification_pie(snapshots: List[dict]) -> str:
     """Classification distribution pie chart (aggregated across all days)."""
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -247,8 +279,14 @@ def _create_classification_pie(snapshots: List[dict]) -> str:
         values = list(agg.values())
 
         colors = [
-            _ACCENT_BLUE, _ACCENT_GREEN, _ACCENT_RED, _ACCENT_AMBER,
-            _ACCENT_PURPLE, _ACCENT_CYAN, "#f472b6", "#818cf8",
+            _ACCENT_BLUE,
+            _ACCENT_GREEN,
+            _ACCENT_RED,
+            _ACCENT_AMBER,
+            _ACCENT_PURPLE,
+            _ACCENT_CYAN,
+            "#f472b6",
+            "#818cf8",
             "#a3e635",
         ]
 
@@ -269,7 +307,10 @@ def _create_classification_pie(snapshots: List[dict]) -> str:
 
         ax.set_title(
             "Signal Classification Distribution",
-            color=_TEXT_PRIMARY, fontsize=13, fontweight="bold", pad=16,
+            color=_TEXT_PRIMARY,
+            fontsize=13,
+            fontweight="bold",
+            pad=16,
         )
 
         fig.tight_layout()
@@ -282,10 +323,12 @@ def _create_classification_pie(snapshots: List[dict]) -> str:
 
 # ── Sensitivity (SNR threshold) evolution ────────────────────────────────
 
+
 def _create_sensitivity_chart(snapshots: List[dict]) -> str:
     """SNR threshold evolution over days."""
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -296,13 +339,22 @@ def _create_sensitivity_chart(snapshots: List[dict]) -> str:
         fig, ax = plt.subplots(figsize=(8, 4), facecolor=_BG_DARK)
         _style_axis(ax, "Sensitivity Evolution (min SNR)", "Day", "SNR Threshold")
 
-        ax.plot(days, ends, "o-", color=_ACCENT_PURPLE, linewidth=2, markersize=6,
-                label="End-of-day threshold")
+        ax.plot(
+            days,
+            ends,
+            "o-",
+            color=_ACCENT_PURPLE,
+            linewidth=2,
+            markersize=6,
+            label="End-of-day threshold",
+        )
         ax.fill_between(days, starts, ends, alpha=0.15, color=_ACCENT_PURPLE)
 
         ax.legend(
-            facecolor=_BG_CARD, edgecolor=_BORDER,
-            labelcolor=_TEXT_PRIMARY, fontsize=10,
+            facecolor=_BG_CARD,
+            edgecolor=_BORDER,
+            labelcolor=_TEXT_PRIMARY,
+            fontsize=10,
         )
 
         fig.tight_layout()
@@ -439,6 +491,7 @@ tr:hover td { background: rgba(56, 189, 248, 0.04); }
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def generate_daily_report(
     day_number: int,
     snapshot: dict,
@@ -493,12 +546,12 @@ def generate_daily_report(
         candidates_rows += f"""
         <tr>
             <td>{i}</td>
-            <td><strong>{c.get('ood_score', 0):.4f}</strong></td>
-            <td>{c.get('signal_type', '?')}</td>
-            <td>{c.get('snr', 0):.1f}</td>
-            <td>{c.get('drift_rate', 0):.4f}</td>
-            <td>{c.get('confidence', 0):.1%}</td>
-            <td>{Path(c.get('file', '')).name if c.get('file') else '?'}</td>
+            <td><strong>{c.get("ood_score", 0):.4f}</strong></td>
+            <td>{c.get("signal_type", "?")}</td>
+            <td>{c.get("snr", 0):.1f}</td>
+            <td>{c.get("drift_rate", 0):.4f}</td>
+            <td>{c.get("confidence", 0):.1%}</td>
+            <td>{Path(c.get("file", "")).name if c.get("file") else "?"}</td>
         </tr>"""
 
     # Corrections
@@ -507,7 +560,7 @@ def generate_daily_report(
         for c in snap.get("corrections_applied", []):
             corrections_html += (
                 f'<div class="correction-item">'
-                f'<strong>Day {snap.get("day", "?")}:</strong> {c}</div>'
+                f"<strong>Day {snap.get('day', '?')}:</strong> {c}</div>"
             )
     if not corrections_html:
         corrections_html = '<div class="card">No corrections needed yet.</div>'
@@ -526,7 +579,7 @@ def generate_daily_report(
 <h1>MitraSETI Streaming Observation</h1>
 <div class="subtitle">
     Day {day_number} of {target_days} |
-    {datetime.now().strftime('%Y-%m-%d %H:%M')} |
+    {datetime.now().strftime("%Y-%m-%d %H:%M")} |
     Mode: {mode.upper()} |
     Runtime: {runtime:.1f}h
 </div>
@@ -561,7 +614,7 @@ def generate_daily_report(
         <div class="stat-value">{day_signals:,}</div>
         <div class="stat-label">Signals Today</div>
     </div>
-    <div class="stat-card {'highlight' if day_candidates > 0 else ''}">
+    <div class="stat-card {"highlight" if day_candidates > 0 else ""}">
         <div class="stat-value">{day_candidates}</div>
         <div class="stat-label">Candidates Today</div>
     </div>
@@ -655,9 +708,7 @@ def generate_final_summary(
     pie_chart = _create_classification_pie(snapshots) if snapshots else ""
     sensitivity_chart = _create_sensitivity_chart(snapshots) if snapshots else ""
 
-    candidate_rate = (
-        (total_candidates / total_signals * 100) if total_signals > 0 else 0
-    )
+    candidate_rate = (total_candidates / total_signals * 100) if total_signals > 0 else 0
     rfi_rate = (total_rfi / total_signals * 100) if total_signals > 0 else 0
 
     # Candidates table
@@ -666,12 +717,12 @@ def generate_final_summary(
         candidates_rows += f"""
         <tr>
             <td>{i}</td>
-            <td><strong>{c.get('ood_score', 0):.4f}</strong></td>
-            <td>{c.get('signal_type', '?')}</td>
-            <td>{c.get('snr', 0):.1f}</td>
-            <td>{c.get('drift_rate', 0):.4f}</td>
-            <td>{c.get('confidence', 0):.1%}</td>
-            <td>{Path(c.get('file', '')).name if c.get('file') else '?'}</td>
+            <td><strong>{c.get("ood_score", 0):.4f}</strong></td>
+            <td>{c.get("signal_type", "?")}</td>
+            <td>{c.get("snr", 0):.1f}</td>
+            <td>{c.get("drift_rate", 0):.4f}</td>
+            <td>{c.get("confidence", 0):.1%}</td>
+            <td>{Path(c.get("file", "")).name if c.get("file") else "?"}</td>
         </tr>"""
 
     # Per-day breakdown
@@ -679,15 +730,15 @@ def generate_final_summary(
     for s in snapshots:
         day_rows += f"""
         <tr>
-            <td>{s.get('day', '?')}</td>
-            <td>{s.get('date', '?')}</td>
-            <td>{s.get('files_processed', 0):,}</td>
-            <td>{s.get('signals_found', 0):,}</td>
-            <td>{s.get('candidates_found', 0)}</td>
-            <td>{s.get('rfi_rejected', 0)}</td>
-            <td>{s.get('candidate_rate', 0):.2f}%</td>
-            <td>{s.get('files_per_hour', 0):.0f}</td>
-            <td>{len(s.get('corrections_applied', []))}</td>
+            <td>{s.get("day", "?")}</td>
+            <td>{s.get("date", "?")}</td>
+            <td>{s.get("files_processed", 0):,}</td>
+            <td>{s.get("signals_found", 0):,}</td>
+            <td>{s.get("candidates_found", 0)}</td>
+            <td>{s.get("rfi_rejected", 0)}</td>
+            <td>{s.get("candidate_rate", 0):.2f}%</td>
+            <td>{s.get("files_per_hour", 0):.0f}</td>
+            <td>{len(s.get("corrections_applied", []))}</td>
         </tr>"""
 
     # Mode changes
@@ -695,9 +746,9 @@ def generate_final_summary(
     for m in mode_history:
         mode_rows += f"""
         <tr>
-            <td>Day {m.get('day', '?')}</td>
-            <td>{m.get('from', '?')} &rarr; {m.get('to', '?')}</td>
-            <td>{m.get('reason', '')}</td>
+            <td>Day {m.get("day", "?")}</td>
+            <td>{m.get("from", "?")} &rarr; {m.get("to", "?")}</td>
+            <td>{m.get("reason", "")}</td>
         </tr>"""
 
     # Corrections log
@@ -706,7 +757,7 @@ def generate_final_summary(
         for c in snap.get("corrections_applied", []):
             all_corrections.append(
                 f'<div class="correction-item">'
-                f'<strong>Day {snap.get("day", "?")}:</strong> {c}</div>'
+                f"<strong>Day {snap.get('day', '?')}:</strong> {c}</div>"
             )
     corrections_html = "".join(all_corrections)
     if not corrections_html:
@@ -743,7 +794,7 @@ def generate_final_summary(
 <h1>MitraSETI Streaming Observation</h1>
 <div class="subtitle">
     Final Summary | {total_days} days |
-    {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    {datetime.now().strftime("%Y-%m-%d %H:%M")}
 </div>
 
 <div class="summary-box">
@@ -874,8 +925,6 @@ def generate_final_summary(
         "best_candidates": best_candidates[:20],
         "daily_snapshots": snapshots,
     }
-    json_path.write_text(
-        json.dumps(json_data, indent=2, default=str), encoding="utf-8"
-    )
+    json_path.write_text(json.dumps(json_data, indent=2, default=str), encoding="utf-8")
 
     return str(summary_path)
