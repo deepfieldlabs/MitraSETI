@@ -381,7 +381,7 @@ class SkyMapPanel(QWidget):
         """Load observation data from streaming state and verified candidates."""
         self._observations = []
 
-        from ..paths import DATA_DIR, CANDIDATES_DIR
+        from paths import DATA_DIR, CANDIDATES_DIR
 
         state_file = DATA_DIR / "streaming_state.json"
         if state_file.exists():

@@ -37,6 +37,7 @@ from .theme import COLORS, create_glass_card, create_glow_button
 
 _ARTIFACTS_DIR = _Path(__file__).parent.parent.parent / "mitraseti_artifacts"
 _FILTERBANK_DIR = _ARTIFACTS_DIR / "data" / "filterbank"
+_BL_DATA_DIR = _ARTIFACTS_DIR / "data" / "breakthrough_listen_data_files"
 
 
 # ── Custom "seti" colormap — dark blue → cyan glow ──────────────────────────
@@ -493,10 +494,16 @@ class WaterfallViewer(QWidget):
                 self._file_combo.addItem(label)
                 self._file_paths.append(f)
 
-        # Also check the data/training directory for synthetic .fil files
-        training_fb = _ARTIFACTS_DIR / "data" / "filterbank"
-        if training_fb.exists() and training_fb != _FILTERBANK_DIR:
-            for f in sorted(training_fb.glob("*.fil")):
+        if _BL_DATA_DIR.exists():
+            bl_files = sorted(
+                list(_BL_DATA_DIR.glob("*.fil")) +
+                list(_BL_DATA_DIR.glob("*.h5")) +
+                list(_BL_DATA_DIR.glob("*.hdf5")),
+                key=lambda f: f.name,
+            )
+            for f in bl_files:
+                if f in set(self._file_paths):
+                    continue
                 size_mb = f.stat().st_size / (1024 * 1024)
                 label = f"{f.name}  ({size_mb:.1f} MB)"
                 self._file_combo.addItem(label)
@@ -507,6 +514,20 @@ class WaterfallViewer(QWidget):
         if idx >= 0:
             self._file_combo.setCurrentIndex(idx)
         self._file_combo.blockSignals(False)
+
+    def load_file_by_name(self, filename: str):
+        """Load a file by filename (called from Signal Gallery click)."""
+        for search_dir in [_BL_DATA_DIR, _FILTERBANK_DIR]:
+            if not search_dir.exists():
+                continue
+            candidate = search_dir / filename
+            if candidate.exists():
+                self._load_real_file(candidate)
+                return
+        for i, fp in enumerate(self._file_paths):
+            if fp and fp.name == filename:
+                self._file_combo.setCurrentIndex(i)
+                return
 
     def _on_file_selected(self, index: int):
         """Handle file selection from dropdown."""

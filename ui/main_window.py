@@ -263,7 +263,10 @@ class MainWindow(QMainWindow):
 
     def _open_signal_in_viewer(self, signal_data: dict):
         """Navigate to waterfall viewer with the selected signal's file."""
-        self._on_nav_clicked("Waterfall Viewer")
+        file_name = signal_data.get("file", "")
+        if file_name and hasattr(self.waterfall_viewer, "load_file_by_name"):
+            self.waterfall_viewer.load_file_by_name(file_name)
+        self._on_nav_clicked(1)
 
     # ── Status bar ────────────────────────────────────────────────────────
 
