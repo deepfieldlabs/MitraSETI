@@ -84,38 +84,38 @@
 <!-- Summary Stats -->
 <div class="report-grid">
     <div class="report-stat">
-        <div class="val">{{ stats.get('total_files_processed', 0) | default(0, true) }}</div>
+        <div class="val">{{ "{:,}".format(stats.get('total_observations', 0) | default(0, true)) }}</div>
         <div class="lbl">Files Processed</div>
     </div>
     <div class="report-stat">
         <div class="val">{{ "{:,}".format(stats.get('total_signals', 0) | default(0, true)) }}</div>
-        <div class="lbl">Signals Analyzed</div>
+        <div class="lbl">Raw Signals</div>
+    </div>
+    <div class="report-stat highlight">
+        <div class="val">{{ "{:,}".format(stats.get('pipeline_signals', 0) | default(0, true)) }}</div>
+        <div class="lbl">Post-Filter Signals</div>
     </div>
     <div class="report-stat highlight">
         <div class="val">{{ stats.get('total_candidates', 0) | default(0, true) }}</div>
         <div class="lbl">ML Candidates</div>
     </div>
+</div>
+
+<div class="report-grid">
     <div class="report-stat danger">
         <div class="val">{{ "{:,}".format(stats.get('total_rfi_rejected', 0) | default(0, true)) }}</div>
         <div class="lbl">RFI Rejected</div>
     </div>
-</div>
-
-<div class="report-grid">
     <div class="report-stat">
         <div class="val">{{ "%.1f" | format(stats.get('total_runtime_hours', 0) | default(0, true)) }}h</div>
         <div class="lbl">Total Runtime</div>
-    </div>
-    <div class="report-stat warning">
-        <div class="val">{{ stats.get('total_ood_anomalies', 0) | default(0, true) }}</div>
-        <div class="lbl">OOD Anomalies</div>
     </div>
     <div class="report-stat">
         <div class="val">{{ candidates | length }}</div>
         <div class="lbl">Verified Candidates</div>
     </div>
     <div class="report-stat">
-        <div class="val">{{ stats.get('current_mode', 'offline') }}</div>
+        <div class="val" style="font-size: 20px;">{{ stats.get('current_mode', 'offline') }}</div>
         <div class="lbl">Pipeline Mode</div>
     </div>
 </div>

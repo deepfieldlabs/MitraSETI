@@ -153,10 +153,86 @@
         color: var(--text-tertiary);
         margin-bottom: 12px;
     }
+
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-content {
+        background: var(--bg-surface-solid);
+        border: 1px solid var(--glass-border);
+        border-radius: 20px;
+        padding: 32px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        position: relative;
+    }
+    .modal-close {
+        position: absolute;
+        top: 14px; right: 18px;
+        background: none; border: none;
+        color: var(--text-tertiary);
+        font-size: 22px;
+        cursor: pointer;
+    }
+    .modal-close:hover { color: var(--accent-cyan); }
+    .modal-title {
+        font-size: 18px;
+        font-weight: 400;
+        color: var(--accent-cyan);
+        margin-bottom: 20px;
+    }
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border-dim);
+    }
+    .detail-key {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .detail-val {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+    .detail-spectrogram {
+        margin: 16px 0;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid var(--border-subtle);
+    }
+    .detail-spectrogram canvas {
+        width: 100%;
+        height: 200px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Signal Detail Modal -->
+<div class="modal-overlay" id="signal-modal">
+    <div class="modal-content">
+        <button class="modal-close" id="modal-close">&times;</button>
+        <div class="modal-title" id="modal-title">Signal Details</div>
+        <div class="detail-spectrogram">
+            <canvas id="modal-spectrogram"></canvas>
+        </div>
+        <div id="modal-details"></div>
+    </div>
+</div>
+
 <div class="page-header">
     <h1>Signal Gallery</h1>
     <p class="subtitle">Browse, filter, and inspect detected signals</p>
@@ -324,6 +400,9 @@
 
 {% block extra_scripts %}
 <script>
+// ── Signal data for modal ──
+const signalData = {{ signals | tojson }};
+
 // ── Generate mini spectrograms for each signal card ──
 function seededRandom(seed) {
     let s = seed;
@@ -391,5 +470,80 @@ document.querySelectorAll('.mini-spectrogram').forEach(canvas => {
     }
     ctx.putImageData(imageData, 0, 0);
 });
+
+// ── Signal card click → modal ──
+const modal = document.getElementById('signal-modal');
+const modalClose = document.getElementById('modal-close');
+
+function renderModalSpectrogram(seed) {
+    const canvas = document.getElementById('modal-spectrogram');
+    const rand = seededRandom((seed || 1) * 12345);
+    const w = canvas.width = 560;
+    const h = canvas.height = 200;
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.createImageData(w, h);
+    const pixels = imageData.data;
+    const driftRate = (rand() - 0.5) * 0.3;
+    const signalPos = 0.3 + rand() * 0.4;
+    const signalStrength = 0.4 + rand() * 0.5;
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            let val = rand() * 0.2;
+            const sx = signalPos * w + driftRate * y * w / h;
+            const dist = Math.abs(x - sx);
+            if (dist < 3) val += (1 - dist / 3) * signalStrength;
+            if (seed % 3 === 0) {
+                const sx2 = (signalPos + 0.18) * w - driftRate * 0.5 * y * w / h;
+                const dist2 = Math.abs(x - sx2);
+                if (dist2 < 2.5) val += (1 - dist2 / 2.5) * 0.3;
+            }
+            val = Math.min(val, 1);
+            const [r, g, b] = interpolateColor(val);
+            const idx = (y * w + x) * 4;
+            pixels[idx] = r; pixels[idx+1] = g; pixels[idx+2] = b; pixels[idx+3] = 255;
+        }
+    }
+    ctx.putImageData(imageData, 0, 0);
+}
+
+function openSignalModal(id) {
+    const sig = signalData.find(s => s.id == id) || signalData[id - 1] || {};
+    const title = document.getElementById('modal-title');
+    const details = document.getElementById('modal-details');
+    const cls = (sig.classification || 'unknown').toLowerCase();
+    const clsLabel = cls.includes('candidate') ? 'Candidate' : cls.includes('rfi') ? 'RFI' : cls.charAt(0).toUpperCase() + cls.slice(1);
+
+    title.innerHTML = `Signal #${sig.id || id} &mdash; <span class="badge badge-${cls.includes('candidate') ? 'candidate' : cls.includes('rfi') ? 'rfi' : cls.includes('narrowband') ? 'narrowband' : 'unknown'}">${clsLabel}</span>`;
+
+    const freq = sig.frequency_mhz || (sig.frequency_hz ? (sig.frequency_hz / 1e6) : 0);
+    const rows = [
+        ['Target', sig.target_name || sig.category || 'Unknown'],
+        ['Classification', sig.classification || 'unknown'],
+        ['SNR', `<span style="color:var(--accent-cyan)">${(sig.snr || 0).toFixed(1)}</span>`],
+        ['Frequency', `${freq.toFixed(4)} MHz`],
+        ['Drift Rate', `${(sig.drift_rate || 0).toFixed(4)} Hz/s`],
+        ['Confidence', `${((sig.confidence || 0) * 100).toFixed(1)}%`],
+        ['RFI Probability', (sig.rfi_probability || sig.rfi_score || 0).toExponential(2)],
+        ['OOD Score', (sig.ood_score || 0).toFixed(4)],
+        ['Is Anomaly', sig.is_anomaly ? 'Yes' : 'No'],
+        ['Source File', sig.file_name || sig.file || 'N/A'],
+        ['Processed At', sig.processed_at || 'N/A'],
+    ];
+
+    details.innerHTML = rows.map(([k, v]) =>
+        `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`
+    ).join('');
+
+    renderModalSpectrogram(sig.id || id);
+    modal.classList.add('active');
+}
+
+document.querySelectorAll('.signal-card').forEach(card => {
+    card.addEventListener('click', () => openSignalModal(card.dataset.id));
+});
+
+modalClose.addEventListener('click', () => modal.classList.remove('active'));
+modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('active'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.classList.remove('active'); });
 </script>
 {% endblock %}

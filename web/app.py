@@ -103,14 +103,37 @@ def _load_local_stats() -> dict:
         try:
             with open(STREAMING_STATE) as f:
                 state = json.load(f)
-            stats["total_signals"] = state.get("total_signals", 0)
+
+            cat_stats = state.get("category_stats", {})
+            raw_signals = sum(v.get("signals", 0) for v in cat_stats.values())
+            total_rfi = sum(v.get("rfi", 0) for v in cat_stats.values())
+            total_files = sum(v.get("files", 0) for v in cat_stats.values())
+
+            stats["total_observations"] = state.get("total_files_processed", 0) or total_files
+            stats["total_signals"] = raw_signals or state.get("total_signals", 0)
+            stats["candidates"] = state.get("total_candidates", 0)
             stats["total_candidates"] = state.get("total_candidates", 0)
-            stats["total_rfi_rejected"] = state.get("total_rfi_rejected", 0)
-            stats["uptime_seconds"] = state.get("uptime_seconds", 0)
-            stats["cycles_completed"] = state.get("cycles_completed", 0)
-            stats["avg_snr"] = state.get("avg_snr", 0)
-            stats["max_snr"] = state.get("max_snr", 0)
+            stats["total_rfi_rejected"] = total_rfi or state.get("total_rfi_rejected", 0)
+            stats["total_ood_anomalies"] = state.get("total_ood_anomalies", 0)
+            stats["total_runtime_hours"] = state.get("total_runtime_hours", 0)
+            stats["total_files_processed"] = state.get("total_files_processed", 0) or total_files
+            stats["pipeline_signals"] = state.get("total_signals", 0)
+            stats["current_mode"] = state.get("current_mode", "offline")
+            stats["completed"] = state.get("completed", False)
+
+            rfi_rate = (total_rfi / raw_signals * 100) if raw_signals > 0 else 0
+            stats["rfi_rate"] = rfi_rate
+            runtime_h = state.get("total_runtime_hours", 0) or 1
+            stats["processing_speed"] = int(raw_signals / (runtime_h * 60))
+            stats["astrolens_matches"] = state.get("astrolens_crossref_total", 0)
             stats["classification_counts"] = state.get("classification_counts", {})
+
+            stats["rfi_stats"] = {
+                "total_signals": raw_signals,
+                "rfi_rejected": total_rfi,
+                "rfi_rate": rfi_rate,
+                "false_positives": 0,
+            }
         except Exception:
             pass
 
@@ -118,10 +141,11 @@ def _load_local_stats() -> dict:
         try:
             with open(DISCOVERY_STATE) as f:
                 disc = json.load(f)
-            stats["total_signals"] = disc.get("total_analyzed", stats.get("total_signals", 0))
-            stats["total_candidates"] = disc.get("candidates_found", stats.get("total_candidates", 0))
-            stats["total_rfi_rejected"] = disc.get("rfi_rejected", stats.get("total_rfi_rejected", 0))
-            stats["cycles_completed"] = disc.get("cycles_completed", stats.get("cycles_completed", 0))
+            if disc.get("total_analyzed", 0) > stats.get("total_signals", 0):
+                stats["total_signals"] = disc["total_analyzed"]
+            if disc.get("candidates_found", 0) > stats.get("candidates", 0):
+                stats["candidates"] = disc["candidates_found"]
+                stats["total_candidates"] = disc["candidates_found"]
         except Exception:
             pass
     return stats
@@ -256,7 +280,15 @@ async def dashboard(request: Request):
         stats = _load_local_stats()
 
     if not candidates:
-        candidates = _load_local_candidates()[:20]
+        raw = _load_local_candidates()[:20]
+        candidates = []
+        for i, c in enumerate(raw, 1):
+            entry = dict(c)
+            entry.setdefault("id", i)
+            if "frequency_mhz" not in entry and "frequency_hz" in entry:
+                entry["frequency_mhz"] = entry["frequency_hz"] / 1e6
+            entry.setdefault("rfi_score", entry.get("rfi_probability", 0))
+            candidates.append(entry)
 
     if not health:
         running = False
@@ -319,12 +351,20 @@ async def signals_page(
         logger.warning(f"API unavailable, using local state files: {e}")
 
     if not signals:
-        all_signals = _load_local_candidates()
+        raw = _load_local_candidates()
+        all_signals = []
+        for i, s in enumerate(raw, 1):
+            entry = dict(s)
+            entry.setdefault("id", i)
+            if "frequency_mhz" not in entry and "frequency_hz" in entry:
+                entry["frequency_mhz"] = entry["frequency_hz"] / 1e6
+            entry.setdefault("rfi_score", entry.get("rfi_probability", 0))
+            all_signals.append(entry)
 
         if classification:
             all_signals = [
                 s for s in all_signals
-                if s.get("classification", "").lower() == classification.lower()
+                if classification.lower() in s.get("classification", "").lower()
             ]
         if min_snr > 0:
             all_signals = [s for s in all_signals if s.get("snr", 0) >= min_snr]
@@ -336,13 +376,13 @@ async def signals_page(
         elif sort == "snr_asc":
             all_signals.sort(key=lambda s: s.get("snr", 0))
         elif sort == "freq_desc":
-            all_signals.sort(key=lambda s: s.get("frequency", 0), reverse=True)
+            all_signals.sort(key=lambda s: s.get("frequency_mhz", 0), reverse=True)
         elif sort == "freq_asc":
-            all_signals.sort(key=lambda s: s.get("frequency", 0))
+            all_signals.sort(key=lambda s: s.get("frequency_mhz", 0))
         elif sort == "time_desc":
-            all_signals.sort(key=lambda s: s.get("timestamp", ""), reverse=True)
+            all_signals.sort(key=lambda s: s.get("processed_at", ""), reverse=True)
         elif sort == "time_asc":
-            all_signals.sort(key=lambda s: s.get("timestamp", ""))
+            all_signals.sort(key=lambda s: s.get("processed_at", ""))
 
         start = page * limit
         signals = all_signals[start : start + limit]
@@ -375,7 +415,11 @@ async def rfi_page(request: Request):
             if r.status_code == 200:
                 rfi_stats = r.json()
     except Exception as e:
-        logger.error(f"API error: {e}")
+        logger.warning(f"API unavailable, using local state: {e}")
+
+    if not rfi_stats:
+        stats = _load_local_stats()
+        rfi_stats = stats.get("rfi_stats", {})
 
     return templates.TemplateResponse("rfi.html", {
         "request": request,
@@ -484,11 +528,6 @@ async def reports_page(request: Request):
                 state = json.load(f)
             category_stats = state.get("category_stats", {})
             pipeline_metrics = state.get("pipeline_metrics", {})
-            stats["total_files_processed"] = state.get("total_files_processed", 0)
-            stats["total_runtime_hours"] = state.get("total_runtime_hours", 0)
-            stats["total_ood_anomalies"] = state.get("total_ood_anomalies", 0)
-            stats["current_mode"] = state.get("current_mode", "unknown")
-            stats["completed"] = state.get("completed", False)
         except Exception:
             pass
 
