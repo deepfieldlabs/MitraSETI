@@ -45,14 +45,14 @@ class MainWindow(QMainWindow):
     """MitraSETI main application window — crystalline glass design."""
 
     NAV_ITEMS = [
-        ("🏠", "Dashboard", 0),
-        ("📡", "Waterfall Viewer", 1),
-        ("🔬", "Signal Gallery", 2),
-        ("🛡️", "RFI Dashboard", 3),
-        ("📡", "Space Radar", 4),
-        ("📶", "Streaming", 5),
-        ("⚙️", "Settings", 6),
-        ("ℹ️", "About", 7),
+        ("\u2302", "Dashboard", 0),
+        ("\u2637", "Waterfall Viewer", 1),
+        ("\u2609", "Signal Gallery", 2),
+        ("\u2616", "RFI Dashboard", 3),
+        ("\u25CE", "Space Radar", 4),
+        ("\u25B6", "Streaming", 5),
+        ("\u2699", "Settings", 6),
+        ("\u24D8", "About", 7),
     ]
 
     def __init__(self):
