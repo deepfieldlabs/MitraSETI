@@ -385,26 +385,52 @@ class WaterfallViewer(QWidget):
         self._mpl_toolbar = NavigationToolbar(self._canvas, self)
         self._mpl_toolbar.setStyleSheet("""
             QToolBar {
-                background: rgba(10, 16, 28, 0.8);
-                border: 1px solid rgba(100, 180, 255, 0.08);
+                background: rgba(15, 25, 45, 0.9);
+                border: 1px solid rgba(100, 180, 255, 0.15);
                 border-radius: 8px;
-                spacing: 4px;
-                padding: 2px;
+                spacing: 6px;
+                padding: 4px 8px;
             }
             QToolButton {
-                background: transparent;
-                border: none;
-                padding: 4px;
-                border-radius: 4px;
+                background: rgba(40, 60, 90, 0.6);
+                border: 1px solid rgba(100, 180, 255, 0.12);
+                padding: 6px;
+                border-radius: 6px;
+                min-width: 28px;
+                min-height: 28px;
             }
             QToolButton:hover {
-                background: rgba(0, 212, 255, 0.15);
+                background: rgba(0, 212, 255, 0.25);
+                border-color: rgba(0, 212, 255, 0.4);
             }
             QToolButton:checked {
-                background: rgba(0, 212, 255, 0.2);
-                border: 1px solid rgba(0, 212, 255, 0.3);
+                background: rgba(0, 212, 255, 0.3);
+                border: 1px solid rgba(0, 212, 255, 0.5);
+            }
+            QLabel {
+                color: rgba(200, 215, 235, 0.7);
+                font-size: 11px;
+            }
+            QLineEdit {
+                background: rgba(15, 25, 45, 0.8);
+                border: 1px solid rgba(100, 180, 255, 0.2);
+                border-radius: 4px;
+                color: #e0e8f0;
+                padding: 2px 4px;
             }
         """)
+        # Invert toolbar icons for dark theme visibility
+        from PyQt5.QtWidgets import QToolButton as _QTB
+        for btn in self._mpl_toolbar.findChildren(_QTB):
+            icon = btn.icon()
+            if not icon.isNull():
+                from PyQt5.QtGui import QIcon, QPixmap as _QP
+                sizes = icon.availableSizes()
+                if sizes:
+                    pm = icon.pixmap(sizes[0])
+                    img = pm.toImage()
+                    img.invertPixels()
+                    btn.setIcon(QIcon(_QP.fromImage(img)))
 
         spec_layout.addWidget(self._mpl_toolbar)
         spec_layout.addWidget(self._canvas, 1)
@@ -517,17 +543,23 @@ class WaterfallViewer(QWidget):
 
     def load_file_by_name(self, filename: str):
         """Load a file by filename (called from Signal Gallery click)."""
+        target_path = None
         for search_dir in [_BL_DATA_DIR, _FILTERBANK_DIR]:
             if not search_dir.exists():
                 continue
             candidate = search_dir / filename
             if candidate.exists():
-                self._load_real_file(candidate)
-                return
-        for i, fp in enumerate(self._file_paths):
-            if fp and fp.name == filename:
-                self._file_combo.setCurrentIndex(i)
-                return
+                target_path = candidate
+                break
+        if target_path is None:
+            for i, fp in enumerate(self._file_paths):
+                if fp and fp.name == filename:
+                    target_path = fp
+                    break
+        if target_path is not None and target_path.exists():
+            self._file_label.setText(f"Loading {target_path.name}...")
+            self._file_label.repaint()
+            QTimer.singleShot(50, lambda p=target_path: self._load_real_file(p))
 
     def _on_file_selected(self, index: int):
         """Handle file selection from dropdown."""

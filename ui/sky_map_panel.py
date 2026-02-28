@@ -406,14 +406,19 @@ class SkyMapPanel(QWidget):
             try:
                 with open(cand_file) as f:
                     candidates = json.load(f)
-                for c in candidates:
+                for i, c in enumerate(candidates):
+                    target = c.get("target_name", c.get("category", f"Target-{i}"))
+                    freq_mhz = c.get("frequency_hz", 0) / 1e6 if c.get("frequency_hz") else 0
+                    seed_str = f"{target}_{freq_mhz:.4f}_{i}"
+                    ra = float(c.get("ra", (hash(seed_str) % 3600) / 10.0))
+                    dec = float(c.get("dec", (hash(seed_str + "d") % 1200 - 600) / 10.0))
                     self._observations.append({
-                        "name": c.get("target", c.get("category", "")),
-                        "ra": float(c.get("ra", hash(c.get("id", "")) % 360)),
-                        "dec": float(c.get("dec", (hash(c.get("id", "") + "d") % 120) - 60)),
+                        "name": target,
+                        "ra": ra,
+                        "dec": dec,
                         "signals": 1,
-                        "candidates": 1 if c.get("verified") else 0,
-                        "frequency_mhz": c.get("frequency_hz", 0) / 1e6 if c.get("frequency_hz") else 0,
+                        "candidates": 1,
+                        "frequency_mhz": freq_mhz,
                         "snr": c.get("snr", 0),
                         "classification": c.get("classification", ""),
                     })

@@ -238,6 +238,61 @@ class SettingsPanel(QWidget):
 
         layout.addWidget(al_group)
 
+        # ── Breakthrough Listen Data ──
+        bl_group = QGroupBox("Breakthrough Listen Data")
+        bl_group.setStyleSheet(group_ss)
+        blg = QVBoxLayout(bl_group)
+        blg.setSpacing(12)
+
+        bl_info = QLabel(
+            "Download observation files from the BL Open Data Archive.\n"
+            "Files are saved to the data/breakthrough_listen_data_files/ directory.\n"
+            "Requires aria2c (brew install aria2)."
+        )
+        bl_info.setStyleSheet(f"font-size: 12px; color: {COLORS['text_secondary']};")
+        bl_info.setWordWrap(True)
+        blg.addWidget(bl_info)
+
+        try:
+            from paths import FILTERBANK_DIR
+            bl_dir = FILTERBANK_DIR
+        except Exception:
+            bl_dir = _ARTIFACTS_DIR / "data" / "breakthrough_listen_data_files"
+
+        file_count = 0
+        total_size_gb = 0.0
+        if bl_dir.exists():
+            for f in bl_dir.iterdir():
+                if f.suffix in (".fil", ".h5", ".hdf5") and f.stat().st_size > 100_000:
+                    file_count += 1
+                    total_size_gb += f.stat().st_size / (1024 ** 3)
+
+        self._bl_status = QLabel(
+            f"Currently: {file_count} files ({total_size_gb:.1f} GB)"
+        )
+        self._bl_status.setStyleSheet("font-size: 12px; color: #34d399;")
+        blg.addWidget(self._bl_status)
+
+        dl_btn = QPushButton("📥  Download BL Data Files")
+        dl_btn.setCursor(Qt.PointingHandCursor)
+        dl_btn.setMinimumHeight(40)
+        dl_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(52, 211, 153, 0.1);
+                border: 1px solid rgba(52, 211, 153, 0.25);
+                border-radius: 10px; padding: 8px 24px;
+                color: #34d399; font-size: 13px; font-weight: 600;
+            }
+            QPushButton:hover {
+                background: rgba(52, 211, 153, 0.2);
+                border-color: rgba(52, 211, 153, 0.4);
+            }
+        """)
+        dl_btn.clicked.connect(self._download_bl_data)
+        blg.addWidget(dl_btn)
+
+        layout.addWidget(bl_group)
+
         # ── Save button ──
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -336,3 +391,54 @@ class SettingsPanel(QWidget):
         self._settings = {}
         self._load_values()
         QMessageBox.information(self, "Reset", "Settings restored to defaults.")
+
+    def _download_bl_data(self):
+        """Download BL data files with confirmation dialog."""
+        import subprocess
+        import shutil
+
+        script_path = Path(__file__).parent.parent / "data" / "download_all_BL_data.sh"
+        if not script_path.exists():
+            QMessageBox.warning(
+                self, "Missing Script",
+                f"Download script not found:\n{script_path}\n\n"
+                "Please ensure data/download_all_BL_data.sh exists."
+            )
+            return
+
+        if not shutil.which("aria2c"):
+            QMessageBox.warning(
+                self, "aria2c Not Found",
+                "aria2c is required for downloads.\n\n"
+                "Install with:\n  brew install aria2  (macOS)\n"
+                "  apt install aria2   (Linux)"
+            )
+            return
+
+        reply = QMessageBox.question(
+            self, "Confirm Download",
+            "This will download Breakthrough Listen observation files.\n\n"
+            "Total size: ~40+ GB\n"
+            "Files already on disk will be skipped.\n\n"
+            "Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            subprocess.Popen(
+                ["bash", str(script_path)],
+                cwd=str(script_path.parent),
+            )
+            QMessageBox.information(
+                self, "Download Started",
+                "Download is running in the background.\n"
+                "Check the terminal for progress.\n\n"
+                "Files will be saved to:\n"
+                "mitraseti_artifacts/data/breakthrough_listen_data_files/"
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to start download:\n{e}")

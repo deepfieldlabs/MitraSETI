@@ -55,8 +55,8 @@ BENCHMARK_SIZES = {
     "tiny": {"nchans": 64, "ntime": 32, "label": "Tiny (64×32)"},
     "small": {"nchans": 256, "ntime": 64, "label": "Small (256×64)"},
     "medium": {"nchans": 1024, "ntime": 256, "label": "Medium (1024×256)"},
-    "large": {"nchans": 4096, "ntime": 512, "label": "Large (4096×512)"},
-    "xlarge": {"nchans": 8192, "ntime": 1024, "label": "XL (8192×1024)"},
+    "large": {"nchans": 8192, "ntime": 512, "label": "Large (8192×512)"},
+    "blscale": {"nchans": 65536, "ntime": 16, "label": "BL-Scale (65536×16)"},
 }
 
 DEFAULT_SIZES = ["tiny", "small", "medium", "large"]
@@ -310,8 +310,23 @@ def benchmark_turboseti(filepath: Path) -> dict:
 
     try:
         from turbo_seti.find_doppler.find_doppler import FindDoppler
-        result["available"] = True
     except ImportError:
+        return result
+
+    # Validate FindDoppler can be instantiated (import may succeed but runtime may fail)
+    try:
+        import h5py
+        with tempfile.TemporaryDirectory() as vtmp:
+            vpath = Path(vtmp) / "validate.h5"
+            with h5py.File(str(vpath), "w") as f:
+                f.create_dataset("data", data=np.zeros((64, 32), dtype=np.float32))
+                f.attrs["fch1"] = 1420.0
+                f.attrs["foff"] = -0.00029
+                f.attrs["tsamp"] = 18.253611
+                f.attrs["nchans"] = 64
+            fd = FindDoppler(str(vpath), max_drift=4.0, snr=10.0, out_dir=vtmp)
+        result["available"] = True
+    except Exception:
         return result
 
     gc.collect()
@@ -343,7 +358,10 @@ def benchmark_turboseti(filepath: Path) -> dict:
 
     except Exception as e:
         logger.warning(f"turboSETI benchmark error: {e}")
+        result["available"] = False
         result["error"] = str(e)[:100]
+        result["time_s"] = 0.0
+        return result
 
     end = time.perf_counter()
     result["time_s"] = round(end - start, 4)
@@ -480,12 +498,18 @@ class Benchmark:
                         turbo_result = r
                 turbo_median_time = float(np.median(turbo_times))
 
-            # Calculate speedup
+            # Calculate speedup (0.0 when turboSETI not available)
             speedup = (
                 turbo_median_time / astro_median_time
-                if turbo_median_time > 0 and astro_median_time > 0
+                if self.turboseti_available and turbo_median_time > 0 and astro_median_time > 0
                 else 0.0
             )
+
+            # When turboSETI not available, ensure no stale values
+            if not self.turboseti_available:
+                turbo_median_time = 0.0
+                turbo_result = {"time_s": 0, "signals": 0, "candidates": 0,
+                                "memory_mb": 0, "available": False}
 
             result = BenchmarkResult(
                 size_label=label,
@@ -500,15 +524,17 @@ class Benchmark:
                 mitraseti_throughput_mbs=round(
                     file_size_mb / astro_median_time if astro_median_time > 0 else 0, 2
                 ),
-                turboseti_time_s=round(turbo_median_time, 4),
-                turboseti_signals=turbo_result.get("signals", 0),
-                turboseti_candidates=turbo_result.get("candidates", 0),
-                turboseti_available=self.turboseti_available,
-                turboseti_memory_mb=turbo_result.get("memory_mb", 0),
-                turboseti_throughput_mbs=round(
+                turboseti_time_s=0.0 if not self.turboseti_available else round(turbo_median_time, 4),
+                turboseti_signals=0 if not self.turboseti_available else turbo_result.get("signals", 0),
+                turboseti_candidates=0 if not self.turboseti_available else turbo_result.get("candidates", 0),
+                turboseti_available=(
+                    self.turboseti_available and turbo_result.get("available", False)
+                ),
+                turboseti_memory_mb=0.0 if not self.turboseti_available else turbo_result.get("memory_mb", 0),
+                turboseti_throughput_mbs=0.0 if not self.turboseti_available else round(
                     file_size_mb / turbo_median_time if turbo_median_time > 0 else 0, 2
                 ),
-                speedup=round(speedup, 2),
+                speedup=0.0 if not self.turboseti_available else round(speedup, 2),
             )
 
             suite.results.append(asdict(result))
@@ -533,6 +559,11 @@ class Benchmark:
 
         suite.completed_at = datetime.now().isoformat()
         suite.total_elapsed_s = round(time.time() - suite_start, 2)
+
+        # Update turbo availability from actual results (may be False if FindDoppler failed)
+        suite.turboseti_available = any(
+            r.get("turboseti_available", False) for r in suite.results
+        )
 
         # Save results and generate reports
         self._save_json(suite)
@@ -613,18 +644,28 @@ class Benchmark:
 
         # Build table rows
         table_rows = ""
+        turboseti_unavailable_msg = (
+            "turboSETI not installed — install with: pip install turbo_seti"
+            if not suite.turboseti_available
+            else None
+        )
         for r in results:
-            speedup_html = (
-                f"<strong style='color:#34d399'>{r['speedup']:.1f}x</strong>"
-                if r["speedup"] > 0
-                else "<span style='color:#94a3b8'>N/A</span>"
-            )
+            if suite.turboseti_available:
+                speedup_html = (
+                    f"<strong style='color:#34d399'>{r['speedup']:.1f}x</strong>"
+                    if r["speedup"] > 0
+                    else "<span style='color:#94a3b8'>N/A</span>"
+                )
+                turbo_cell = f"{r['turboseti_time_s']:.4f}s"
+            else:
+                speedup_html = "<span style='color:#94a3b8'>N/A</span>"
+                turbo_cell = f"<span style='color:#94a3b8'>{turboseti_unavailable_msg}</span>"
             table_rows += f"""
             <tr>
                 <td>{r['size_label']}</td>
                 <td>{r['file_size_mb']:.2f}</td>
                 <td><strong>{r['mitraseti_time_s']:.4f}s</strong></td>
-                <td>{r['turboseti_time_s']:.4f}s</td>
+                <td>{turbo_cell}</td>
                 <td>{speedup_html}</td>
                 <td>{r['mitraseti_throughput_mbs']:.1f}</td>
                 <td>{r['mitraseti_signals']}</td>
@@ -863,12 +904,12 @@ def main():
 Examples:
     python scripts/benchmark.py                                 # Default benchmark
     python scripts/benchmark.py --sizes tiny small medium       # Specific sizes
-    python scripts/benchmark.py --sizes tiny small medium large xlarge  # All sizes
+    python scripts/benchmark.py --sizes tiny small medium large blscale  # All sizes
     python scripts/benchmark.py --no-turboseti                  # Skip turboSETI comparison
     python scripts/benchmark.py --runs 5                        # More runs for accuracy
     python scripts/benchmark.py --output-dir ./benchmarks       # Custom output
 
-Available sizes: tiny, small, medium, large, xlarge
+Available sizes: tiny, small, medium, large, blscale
         """,
     )
 

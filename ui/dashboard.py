@@ -180,8 +180,8 @@ class DashboardPanel(QWidget):
         actions_row.setSpacing(12)
 
         load_btn = self._make_action_btn(
-            "📂  Load File", "#4da6ff",
-            "Open a filterbank (.fil) or HDF5 (.h5) file"
+            "📡  Waterfall Viewer", "#4da6ff",
+            "Open the spectrogram viewer to inspect filterbank (.fil) or HDF5 (.h5) files"
         )
         load_btn.clicked.connect(lambda: self.navigate_to.emit(1))
         actions_row.addWidget(load_btn)
