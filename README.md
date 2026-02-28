@@ -13,7 +13,7 @@
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70%2B-orange?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.70+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
   <a href="https://pypi.org/project/mitraseti/"><img src="https://img.shields.io/badge/version-0.1.0-purple?style=flat-square" alt="Version 0.1.0"></a>
-  <a href="https://github.com/SamanTabworlds/MitraSETI/stargazers"><img src="https://img.shields.io/github/stars/SamanTabworlds/MitraSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
+  <a href="https://github.com/deepfieldlabs/MitraSETI/stargazers"><img src="https://img.shields.io/github/stars/deepfieldlabs/MitraSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
 </p>
 
 ---
@@ -240,7 +240,7 @@ Inference supports **MPS** (Apple Silicon), **CUDA** (NVIDIA), and **CPU** backe
 <summary><strong>macOS</strong></summary>
 
 ```bash
-git clone https://github.com/SamanTabworlds/MitraSETI.git
+git clone https://github.com/deepfieldlabs/MitraSETI.git
 cd MitraSETI
 
 python3 -m venv .venv
@@ -266,7 +266,7 @@ pip install -e .
 sudo apt-get update
 sudo apt-get install -y python3-dev libhdf5-dev pkg-config
 
-git clone https://github.com/SamanTabworlds/MitraSETI.git
+git clone https://github.com/deepfieldlabs/MitraSETI.git
 cd MitraSETI
 
 python3 -m venv .venv
@@ -287,7 +287,7 @@ pip install -e .
 <summary><strong>Windows</strong></summary>
 
 ```powershell
-git clone https://github.com/SamanTabworlds/MitraSETI.git
+git clone https://github.com/deepfieldlabs/MitraSETI.git
 cd MitraSETI
 
 python -m venv .venv
@@ -344,6 +344,21 @@ The PyQt5 desktop application provides a native interface with waterfall viewer,
 ```bash
 python main.py
 ```
+
+<p align="center">
+  <img src="screenshots/waterfall_viewer.png" alt="Waterfall Viewer" width="900"><br>
+  <em>Waterfall Viewer — spectrogram display with drift-rate overlay and zoom controls</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/signal_gallery.png" alt="Signal Gallery" width="900"><br>
+  <em>Signal Gallery — browse detections with ML classification and confidence scores</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/sky_radar.png" alt="Sky Radar" width="900"><br>
+  <em>Sky Radar — interactive celestial map with radio + optical source overlay</em>
+</p>
 
 The desktop app includes:
 - **Waterfall Viewer** — zoom, pan, drift line overlay, ON/OFF comparison
@@ -511,7 +526,7 @@ MitraSETI is **not** a fork of turboSETI — it is a ground-up reimagination of 
 
 ## AstroLens Integration
 
-MitraSETI includes first-class integration with [AstroLens](https://github.com/SamanTabworlds/astroLens), enabling a unique **optical + radio cross-reference** workflow:
+MitraSETI includes first-class integration with [AstroLens](https://github.com/deepfieldlabs/astroLens), enabling a unique **optical + radio cross-reference** workflow:
 
 1. **Detect** narrowband signals in radio filterbank data with MitraSETI
 2. **Cross-reference** signal coordinates against AstroLens optical catalog via the `/astrolens/crossref` API
@@ -567,7 +582,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 <p align="center">
   <img src="assets/deepfieldlabs_profile_768.png" alt="Deep Field Labs" width="80" style="border-radius: 50%;">
   <br>
-  <sub>Created by <a href="https://github.com/SamanTabworlds">Saman Tabatabaeian</a> · <a href="https://github.com/SamanTabworlds">Deep Field Labs</a></sub>
+  <sub>Created by <a href="https://www.linkedin.com/in/samantabatabaeian/">Saman Tabatabaeian</a> · <a href="https://github.com/deepfieldlabs">Deep Field Labs</a></sub>
   <br><br>
   <strong>Built for the search for extraterrestrial intelligence.</strong>
   <br>

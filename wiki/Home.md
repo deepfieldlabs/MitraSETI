@@ -35,10 +35,23 @@ MitraSETI is a ground-up reimagination of the SETI signal analysis pipeline, com
 
 ## Quick Links
 
-- **GitHub Repository:** [SamanTabworlds/MitraSETI](https://github.com/SamanTabworlds/MitraSETI)
+- **GitHub Repository:** [deepfieldlabs/MitraSETI](https://github.com/deepfieldlabs/MitraSETI)
 - **License:** MIT
 - **Python:** 3.10+ | **Rust:** 1.70+
-- **Author:** [Saman Tabatabaeian](https://github.com/SamanTabworlds) · Deep Field Labs
+- **Author:** [Saman Tabatabaeian](https://www.linkedin.com/in/samantabatabaeian/) · [Deep Field Labs](https://github.com/deepfieldlabs)
+
+---
+
+## Screenshots
+
+### Waterfall Viewer
+![Waterfall Viewer](https://raw.githubusercontent.com/deepfieldlabs/MitraSETI/main/screenshots/waterfall_viewer.png)
+
+### Signal Gallery
+![Signal Gallery](https://raw.githubusercontent.com/deepfieldlabs/MitraSETI/main/screenshots/signal_gallery.png)
+
+### Sky Radar
+![Sky Radar](https://raw.githubusercontent.com/deepfieldlabs/MitraSETI/main/screenshots/sky_radar.png)
 
 ---
 
