@@ -52,6 +52,7 @@ class MainWindow(QMainWindow):
         ("📡", "Space Radar", 4),
         ("📶", "Streaming", 5),
         ("⚙️", "Settings", 6),
+        ("ℹ️", "About", 7),
     ]
 
     def __init__(self):
@@ -237,6 +238,7 @@ class MainWindow(QMainWindow):
         from .streaming_panel import StreamingPanel
         from .sky_map_panel import SkyMapPanel
         from .settings_panel import SettingsPanel
+        from .about_panel import AboutPanel
 
         self.dashboard = DashboardPanel()
         self.waterfall_viewer = WaterfallViewer()
@@ -245,6 +247,7 @@ class MainWindow(QMainWindow):
         self.sky_map = SkyMapPanel()
         self.streaming_panel = StreamingPanel()
         self.settings_panel = SettingsPanel()
+        self.about_panel = AboutPanel()
 
         self.content_stack.addWidget(self.dashboard)        # 0
         self.content_stack.addWidget(self.waterfall_viewer)  # 1
@@ -253,6 +256,7 @@ class MainWindow(QMainWindow):
         self.content_stack.addWidget(self.sky_map)           # 4
         self.content_stack.addWidget(self.streaming_panel)   # 5
         self.content_stack.addWidget(self.settings_panel)    # 6
+        self.content_stack.addWidget(self.about_panel)       # 7
 
         # Wire cross-panel signals
         self.dashboard.navigate_to.connect(self._on_nav_clicked)
