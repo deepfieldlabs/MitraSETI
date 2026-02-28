@@ -41,6 +41,7 @@ Cargo.lock
 # =========================
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
@@ -73,15 +74,12 @@ desktop.ini
 # MitraSETI specific
 # =========================
 mitraseti_artifacts/
-*.pt
-*.pth
-*.onnx
+models/*.onnx
 *.fil
 *.h5
 *.dat
 *.log
-data/
-models/
+data/breakthrough_listen_data_files/
 output/
 results/
 *.waterfall.png

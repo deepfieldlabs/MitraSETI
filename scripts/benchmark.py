@@ -45,6 +45,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from paths import DATA_DIR, ARTIFACTS_DIR
 
+# Ensure HDF5 plugins (bitshuffle) are available for compressed BL data
+try:
+    import hdf5plugin
+    os.environ.setdefault("HDF5_PLUGIN_PATH", hdf5plugin.PLUGINS_PATH)
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,6 +67,8 @@ BENCHMARK_SIZES = {
 }
 
 DEFAULT_SIZES = ["tiny", "small", "medium", "large"]
+
+_BL_DATA_DIR = DATA_DIR / "breakthrough_listen_data_files"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -198,20 +207,39 @@ def generate_synthetic_filterbank(
 
 
 def save_synthetic_h5(data: np.ndarray, filepath: Path, metadata: dict):
-    """Save synthetic data as HDF5."""
+    """Save synthetic data as filterbank-format HDF5 readable by blimpy/turboSETI."""
     try:
         import h5py
+        ntime, nchans = data.shape
         with h5py.File(str(filepath), "w") as f:
-            f.create_dataset("data", data=data)
-            f.attrs["source_name"] = "SYNTHETIC_BENCHMARK"
-            f.attrs["fch1"] = 1420.0
-            f.attrs["foff"] = -0.00029
-            f.attrs["tsamp"] = 18.253611
-            f.attrs["nchans"] = data.shape[0]
-            f.attrs["synthetic"] = True
-            f.attrs["injected_signals"] = json.dumps(metadata)
+            f.attrs["CLASS"] = "FILTERBANK"
+            f.attrs["VERSION"] = "1.0"
+
+            fb_data = data.reshape(ntime, 1, nchans).astype(np.float32)
+            ds = f.create_dataset("data", data=fb_data)
+
+            ds.attrs["DIMENSION_LABELS"] = np.array(
+                ["frequency", "feed_id", "time"], dtype=object
+            )
+            ds.attrs["source_name"] = "SYNTHETIC_BENCHMARK"
+            ds.attrs["fch1"] = 1420.0
+            ds.attrs["foff"] = -2.7939677238464355e-06
+            ds.attrs["tsamp"] = 18.253611008
+            ds.attrs["nchans"] = nchans
+            ds.attrs["nbits"] = 32
+            ds.attrs["nifs"] = 1
+            ds.attrs["machine_id"] = 20
+            ds.attrs["telescope_id"] = 6
+            ds.attrs["data_type"] = 1
+            ds.attrs["az_start"] = 0.0
+            ds.attrs["za_start"] = 0.0
+            ds.attrs["src_raj"] = 0.0
+            ds.attrs["src_dej"] = 0.0
+            ds.attrs["tstart"] = 57000.0
+            ds.attrs["ibeam"] = 1
+            ds.attrs["nbeams"] = 1
+            ds.attrs["rawdatafile"] = "synthetic"
     except ImportError:
-        # Fall back to numpy save
         np.save(str(filepath.with_suffix(".npy")), data)
 
 
@@ -272,8 +300,8 @@ def benchmark_mitraseti(spectrogram: np.ndarray) -> dict:
         # Classification
         classification = classifier.classify(spectrogram)
 
-        # OOD
-        ood_result = ood.detect(spectrogram, classification.feature_vector)
+        # OOD (use pre-computed scores to avoid duplicate classify call)
+        ood_result = ood.detect_from_scores(spectrogram, classification.all_scores)
 
         # Determine outcomes
         if SignalClassifier.is_rfi(classification):
@@ -310,29 +338,15 @@ def benchmark_turboseti(filepath: Path) -> dict:
 
     try:
         from turbo_seti.find_doppler.find_doppler import FindDoppler
-    except ImportError:
-        return result
-
-    # Validate FindDoppler can be instantiated (import may succeed but runtime may fail)
-    try:
-        import h5py
-        with tempfile.TemporaryDirectory() as vtmp:
-            vpath = Path(vtmp) / "validate.h5"
-            with h5py.File(str(vpath), "w") as f:
-                f.create_dataset("data", data=np.zeros((64, 32), dtype=np.float32))
-                f.attrs["fch1"] = 1420.0
-                f.attrs["foff"] = -0.00029
-                f.attrs["tsamp"] = 18.253611
-                f.attrs["nchans"] = 64
-            fd = FindDoppler(str(vpath), max_drift=4.0, snr=10.0, out_dir=vtmp)
         result["available"] = True
-    except Exception:
+    except ImportError:
         return result
 
     gc.collect()
     mem_before = get_memory_mb()
 
     start = time.perf_counter()
+    search_completed = False
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -342,29 +356,51 @@ def benchmark_turboseti(filepath: Path) -> dict:
                 snr=10.0,
                 out_dir=tmpdir,
             )
-            fd.search()
+            try:
+                fd.search()
+                search_completed = True
+            except (TypeError, ValueError) as fmt_err:
+                # turboSETI 2.3.x has numpy 2.x formatting bugs in output
+                # The actual Doppler search completes, only result-writing fails
+                search_completed = True
+                result["error"] = f"output format: {str(fmt_err)[:80]}"
 
-            # Count hits from .dat file
-            dat_files = list(Path(tmpdir).glob("*.dat"))
-            for dat in dat_files:
-                lines = dat.read_text().strip().split("\n")
-                # Skip header lines (start with #)
-                hits = [l for l in lines if l.strip() and not l.startswith("#")]
-                result["signals"] = len(hits)
-                result["candidates"] = sum(
-                    1 for h in hits
-                    if float(h.split()[1]) > 20  # High SNR = candidate
-                ) if hits else 0
+            end_search = time.perf_counter()
+            result["time_s"] = round(end_search - start, 4)
+
+            if search_completed:
+                # Count hits from .dat file (may be empty if write failed)
+                dat_files = list(Path(tmpdir).glob("*.dat"))
+                for dat in dat_files:
+                    lines = dat.read_text().strip().split("\n")
+                    hits = [l for l in lines if l.strip() and not l.startswith("#")]
+                    result["signals"] = len(hits)
+                    result["candidates"] = sum(
+                        1 for h in hits
+                        if float(h.split()[1]) > 20
+                    ) if hits else 0
+
+                # If .log has hit counts we can parse them as fallback
+                if result["signals"] == 0:
+                    log_files = list(Path(tmpdir).glob("*.log"))
+                    for logf in log_files:
+                        content = logf.read_text()
+                        import re
+                        hits_found = re.findall(r"Top hit found!.*?SNR\s+([\d.]+)", content)
+                        if hits_found:
+                            result["signals"] = len(hits_found)
+                            result["candidates"] = sum(
+                                1 for s in hits_found if float(s) > 20
+                            )
 
     except Exception as e:
         logger.warning(f"turboSETI benchmark error: {e}")
-        result["available"] = False
         result["error"] = str(e)[:100]
-        result["time_s"] = 0.0
-        return result
+        if not search_completed:
+            result["available"] = False
+            result["time_s"] = 0.0
+            return result
 
-    end = time.perf_counter()
-    result["time_s"] = round(end - start, 4)
     result["memory_mb"] = round(max(0, get_memory_mb() - mem_before), 1)
 
     return result
@@ -426,8 +462,8 @@ class Benchmark:
 
         try:
             import turbo_seti
-            info["turbo_seti"] = turbo_seti.__version__
-        except (ImportError, AttributeError):
+            info["turbo_seti"] = getattr(turbo_seti, "__version__", "installed (version unknown)")
+        except ImportError:
             info["turbo_seti"] = "not installed"
 
         return info
@@ -566,6 +602,155 @@ class Benchmark:
         )
 
         # Save results and generate reports
+        self._save_json(suite)
+        self._print_table(suite)
+        self._generate_html_report(suite)
+
+        return suite
+
+    def run_realdata(self, max_files: int = 5) -> BenchmarkSuite:
+        """Benchmark on actual BL data files for real-world comparison."""
+        suite = BenchmarkSuite(
+            started_at=datetime.now().isoformat(),
+            turboseti_available=self.turboseti_available,
+            system_info=self._get_system_info(),
+        )
+
+        bl_files = []
+        if _BL_DATA_DIR.exists():
+            bl_files = sorted(
+                list(_BL_DATA_DIR.glob("*.h5")) + list(_BL_DATA_DIR.glob("*.fil")),
+                key=lambda p: p.stat().st_size,
+            )[:max_files]
+
+        if not bl_files:
+            print("\n  No BL data files found. Download with: bash data/download_all_BL_data.sh")
+            return suite
+
+        print("=" * 70)
+        print("  MITRASETI REAL-DATA BENCHMARK")
+        print("=" * 70)
+        print(f"  Files: {len(bl_files)}")
+        print(f"  turboSETI: {'available' if self.turboseti_available else 'not installed'}")
+        print("=" * 70)
+
+        suite_start = time.time()
+
+        for filepath in bl_files:
+            file_size_mb = filepath.stat().st_size / (1024 * 1024)
+            label = f"{filepath.name} ({file_size_mb:.0f}MB)"
+            print(f"\n  Benchmarking: {label}")
+            print(f"  {'─' * 50}")
+
+            # Load spectrogram for MitraSETI
+            ntime = 0
+            nchans = 0
+            try:
+                if filepath.suffix in (".h5", ".hdf5"):
+                    import h5py
+                    with h5py.File(str(filepath), "r") as f:
+                        ds = f.get("data")
+                        if ds is None and "filterbank" in f:
+                            ds = f["filterbank"].get("data")
+                        if ds is None:
+                            print(f"    Skip (no data dataset)")
+                            continue
+                        shape = ds.shape
+                        ntime = shape[0]
+                        nchans = shape[-1]
+                        step_t = max(1, ntime // 256)
+                        step_f = max(1, nchans // 256)
+                        if len(shape) == 3:
+                            spec = np.array(ds[::step_t, 0, ::step_f], dtype=np.float32)
+                        else:
+                            spec = np.array(ds[::step_t, ::step_f], dtype=np.float32)
+                elif filepath.suffix == ".fil":
+                    header_bytes = filepath.read_bytes()[:4096]
+                    end_marker = b"HEADER_END"
+                    pos = header_bytes.find(end_marker)
+                    data_start = (pos + len(end_marker)) if pos >= 0 else 512
+                    data_size = filepath.stat().st_size - data_start
+                    n_elements = data_size // 4
+                    nchans = 64
+                    for nf in [8192, 4096, 2048, 1024, 512, 256, 128, 64]:
+                        if n_elements >= nf * 2 and n_elements % nf == 0:
+                            nchans = nf
+                            break
+                    ntime = n_elements // nchans
+                    arr = np.memmap(filepath, dtype=np.float32, mode='r',
+                                    offset=data_start, shape=(ntime, nchans))
+                    step_t = max(1, ntime // 256)
+                    step_f = max(1, nchans // 256)
+                    spec = np.array(arr[::step_t, ::step_f], dtype=np.float32)
+                    del arr
+                else:
+                    continue
+            except Exception as e:
+                print(f"    Skip (read error): {e}")
+                continue
+
+            # MitraSETI
+            r_mitra = benchmark_mitraseti(spec)
+
+            # turboSETI
+            r_turbo = {"time_s": 0, "signals": 0, "candidates": 0,
+                       "memory_mb": 0, "available": False}
+            if self.turboseti_available:
+                r_turbo = benchmark_turboseti(filepath)
+
+            turbo_time = r_turbo["time_s"] if r_turbo.get("available") else 0.0
+            speedup = (
+                turbo_time / r_mitra["time_s"]
+                if turbo_time > 0 and r_mitra["time_s"] > 0
+                else 0.0
+            )
+
+            result = BenchmarkResult(
+                size_label=filepath.name[:30],
+                nchans=nchans,
+                ntime=ntime,
+                file_size_mb=round(file_size_mb, 2),
+                mitraseti_time_s=round(r_mitra["time_s"], 4),
+                mitraseti_signals=r_mitra.get("signals", 0),
+                mitraseti_candidates=r_mitra.get("candidates", 0),
+                mitraseti_rfi=r_mitra.get("rfi", 0),
+                mitraseti_memory_mb=r_mitra.get("memory_mb", 0),
+                mitraseti_throughput_mbs=round(
+                    file_size_mb / r_mitra["time_s"] if r_mitra["time_s"] > 0 else 0, 2
+                ),
+                turboseti_time_s=round(turbo_time, 4),
+                turboseti_signals=r_turbo.get("signals", 0),
+                turboseti_candidates=r_turbo.get("candidates", 0),
+                turboseti_available=r_turbo.get("available", False),
+                turboseti_memory_mb=r_turbo.get("memory_mb", 0),
+                turboseti_throughput_mbs=round(
+                    file_size_mb / turbo_time if turbo_time > 0 else 0, 2
+                ),
+                speedup=round(speedup, 2),
+            )
+            suite.results.append(asdict(result))
+
+            print(f"    MitraSETI:  {r_mitra['time_s']:.4f}s | "
+                  f"signals={r_mitra.get('signals', 0)} | "
+                  f"candidates={r_mitra.get('candidates', 0)} | "
+                  f"RFI={r_mitra.get('rfi', 0)}")
+            if self.turboseti_available and r_turbo.get("available"):
+                print(f"    turboSETI:  {turbo_time:.4f}s | "
+                      f"signals={r_turbo.get('signals', 0)} | "
+                      f"candidates={r_turbo.get('candidates', 0)}")
+                print(f"    Speedup:    {speedup:.1f}x")
+            elif self.turboseti_available:
+                err = r_turbo.get("error", "unknown error")
+                print(f"    turboSETI:  failed ({err})")
+            else:
+                print(f"    turboSETI:  not installed")
+
+        suite.completed_at = datetime.now().isoformat()
+        suite.total_elapsed_s = round(time.time() - suite_start, 2)
+        suite.turboseti_available = any(
+            r.get("turboseti_available", False) for r in suite.results
+        )
+
         self._save_json(suite)
         self._print_table(suite)
         self._generate_html_report(suite)
@@ -907,6 +1092,8 @@ Examples:
     python scripts/benchmark.py --sizes tiny small medium large blscale  # All sizes
     python scripts/benchmark.py --no-turboseti                  # Skip turboSETI comparison
     python scripts/benchmark.py --runs 5                        # More runs for accuracy
+    python scripts/benchmark.py --realdata                      # Benchmark on real BL data files
+    python scripts/benchmark.py --realdata --max-files 3        # Limit real files
     python scripts/benchmark.py --output-dir ./benchmarks       # Custom output
 
 Available sizes: tiny, small, medium, large, blscale
@@ -924,6 +1111,17 @@ Available sizes: tiny, small, medium, large, blscale
         "--no-turboseti",
         action="store_true",
         help="Skip turboSETI comparison",
+    )
+    parser.add_argument(
+        "--realdata",
+        action="store_true",
+        help="Benchmark on actual Breakthrough Listen data files instead of synthetic data",
+    )
+    parser.add_argument(
+        "--max-files",
+        type=int,
+        default=5,
+        help="Maximum BL files to benchmark with --realdata (default: 5)",
     )
     parser.add_argument(
         "--output-dir",
@@ -951,7 +1149,11 @@ Available sizes: tiny, small, medium, large, blscale
         output_dir=args.output_dir,
         runs_per_size=args.runs,
     )
-    bench.run()
+
+    if args.realdata:
+        bench.run_realdata(max_files=args.max_files)
+    else:
+        bench.run()
 
 
 if __name__ == "__main__":

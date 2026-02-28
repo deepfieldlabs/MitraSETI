@@ -204,6 +204,7 @@ class DashboardPanel(QWidget):
             "📊  Generate Report", "#fbbf24",
             "Export analysis summary"
         )
+        report_btn.clicked.connect(self._generate_report)
         actions_row.addWidget(report_btn)
 
         layout.addLayout(actions_row)
@@ -445,6 +446,121 @@ class DashboardPanel(QWidget):
             }}
         """)
         return btn
+
+    # ── Generate Report ────────────────────────────────────────────────
+
+    def _generate_report(self):
+        """Generate an HTML summary report from current streaming results."""
+        import json
+        from datetime import datetime
+
+        artifacts = Path(__file__).parent.parent.parent / "mitraseti_artifacts"
+        reports_dir = artifacts / "streaming_reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        state_file = artifacts / "data" / "streaming_state.json"
+        cands_file = artifacts / "candidates" / "verified_candidates.json"
+
+        state = {}
+        candidates = []
+        if state_file.exists():
+            try:
+                with open(state_file) as f:
+                    state = json.load(f)
+            except Exception:
+                pass
+        if cands_file.exists():
+            try:
+                with open(cands_file) as f:
+                    candidates = json.load(f)
+            except Exception:
+                pass
+
+        if not state and not candidates:
+            QMessageBox.information(
+                self, "No Data",
+                "No streaming data or candidates found.\n"
+                "Run the streaming pipeline first to generate results."
+            )
+            return
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
+        report_path = reports_dir / f"summary_report_{ts}.html"
+
+        total_signals = state.get("total_signals", 0)
+        total_candidates = state.get("total_candidates", 0)
+        total_rfi = state.get("total_rfi_rejected", 0)
+        files_processed = state.get("files_processed", 0)
+        runtime_h = state.get("total_runtime_hours", 0)
+        rfi_pct = (total_rfi / total_signals * 100) if total_signals > 0 else 0
+
+        candidates.sort(key=lambda c: c.get("snr", 0), reverse=True)
+
+        cand_rows = ""
+        for i, c in enumerate(candidates[:20], 1):
+            cand_rows += f"""<tr>
+                <td>{i}</td>
+                <td>{c.get('target_name', c.get('category', 'Unknown'))}</td>
+                <td>{c.get('frequency_hz', 0)/1e6:.4f}</td>
+                <td>{c.get('snr', 0):.1f}</td>
+                <td>{c.get('drift_rate', 0):.4f}</td>
+                <td>{c.get('classification', 'N/A')}</td>
+                <td>{c.get('file', 'N/A')}</td>
+            </tr>"""
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>MitraSETI Summary Report — {ts}</title>
+<style>
+body {{ font-family: 'Inter', -apple-system, sans-serif; background: #0a0e18; color: #e0e8f0; margin: 0; padding: 40px; }}
+h1 {{ color: #00d4ff; font-weight: 300; letter-spacing: 2px; }}
+h2 {{ color: #7c3aed; margin-top: 32px; }}
+.stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; }}
+.stat {{ background: rgba(15,25,45,0.8); border: 1px solid rgba(100,180,255,0.15); border-radius: 12px; padding: 20px; text-align: center; }}
+.stat .val {{ font-size: 32px; font-weight: 300; color: #00d4ff; }}
+.stat .lbl {{ font-size: 11px; color: rgba(200,215,235,0.5); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }}
+table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
+th {{ text-align: left; padding: 10px 14px; font-size: 11px; color: rgba(0,212,255,0.7); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(100,180,255,0.15); }}
+td {{ padding: 10px 14px; font-size: 13px; border-bottom: 1px solid rgba(100,180,255,0.06); }}
+tr:hover td {{ background: rgba(0,212,255,0.03); }}
+.footer {{ text-align: center; margin-top: 40px; font-size: 11px; color: rgba(140,165,200,0.4); }}
+</style></head><body>
+<h1>MitraSETI — Summary Report</h1>
+<p style="color: rgba(200,215,235,0.6);">Generated {datetime.now().strftime("%B %d, %Y at %H:%M")}</p>
+
+<div class="stats">
+  <div class="stat"><div class="val">{files_processed}</div><div class="lbl">Files Processed</div></div>
+  <div class="stat"><div class="val">{total_signals:,}</div><div class="lbl">Signals Analyzed</div></div>
+  <div class="stat"><div class="val">{len(candidates)}</div><div class="lbl">Verified Candidates</div></div>
+  <div class="stat"><div class="val">{rfi_pct:.1f}%</div><div class="lbl">RFI Rejection Rate</div></div>
+</div>
+
+<h2>Pipeline Performance</h2>
+<div class="stats">
+  <div class="stat"><div class="val">{runtime_h:.1f}h</div><div class="lbl">Total Runtime</div></div>
+  <div class="stat"><div class="val">{total_rfi:,}</div><div class="lbl">RFI Rejected</div></div>
+  <div class="stat"><div class="val">{total_candidates}</div><div class="lbl">ML Candidates</div></div>
+  <div class="stat"><div class="val">{state.get('cadence_passed', 0)}</div><div class="lbl">Cadence Passed</div></div>
+</div>
+
+<h2>Top Verified Candidates</h2>
+<table>
+<thead><tr><th>#</th><th>Target</th><th>Freq (MHz)</th><th>SNR</th><th>Drift (Hz/s)</th><th>Classification</th><th>Source File</th></tr></thead>
+<tbody>{cand_rows if cand_rows else '<tr><td colspan="7" style="text-align:center; color: rgba(200,215,235,0.4);">No candidates found</td></tr>'}</tbody>
+</table>
+
+<div class="footer">MitraSETI v0.1.0 — Deep Field Labs — Intelligent SETI Signal Analysis</div>
+</body></html>"""
+
+        try:
+            report_path.write_text(html, encoding="utf-8")
+            webbrowser.open(f"file://{report_path}")
+            QMessageBox.information(
+                self, "Report Generated",
+                f"Summary report saved and opened in browser:\n{report_path}"
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to generate report:\n{e}")
 
     # ── Benchmark & Download ─────────────────────────────────────────────
 

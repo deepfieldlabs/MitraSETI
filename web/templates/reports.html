@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+
+{% block extra_head %}
+<style>
+    .report-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .report-stat {
+        background: linear-gradient(135deg, rgba(15, 25, 45, 0.7), rgba(20, 35, 60, 0.5));
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.25s;
+    }
+    .report-stat:hover {
+        border-color: var(--glass-border-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(0, 212, 255, 0.08);
+    }
+    .report-stat .val {
+        font-size: 32px;
+        font-weight: 300;
+        color: var(--accent-cyan);
+    }
+    .report-stat .lbl {
+        font-size: 10px;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 4px;
+    }
+    .report-stat.highlight .val { color: var(--accent-green); }
+    .report-stat.warning .val { color: var(--accent-amber); }
+    .report-stat.danger .val { color: var(--accent-rose); }
+
+    .category-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .category-table th {
+        text-align: left;
+        padding: 12px 14px;
+        font-size: 10px;
+        color: rgba(0, 212, 255, 0.7);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .category-table td {
+        padding: 10px 14px;
+        font-size: 13px;
+        border-bottom: 1px solid var(--border-dim);
+    }
+    .category-table tr:hover td {
+        background: rgba(0, 212, 255, 0.03);
+    }
+
+    .charts-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    @media (max-width: 1200px) {
+        .report-grid { grid-template-columns: repeat(2, 1fr); }
+        .charts-row { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Pipeline Reports</h1>
+    <div class="subtitle">Streaming results and analysis summary from MitraSETI processing</div>
+</div>
+
+<!-- Summary Stats -->
+<div class="report-grid">
+    <div class="report-stat">
+        <div class="val">{{ stats.get('total_files_processed', 0) | default(0, true) }}</div>
+        <div class="lbl">Files Processed</div>
+    </div>
+    <div class="report-stat">
+        <div class="val">{{ "{:,}".format(stats.get('total_signals', 0) | default(0, true)) }}</div>
+        <div class="lbl">Signals Analyzed</div>
+    </div>
+    <div class="report-stat highlight">
+        <div class="val">{{ stats.get('total_candidates', 0) | default(0, true) }}</div>
+        <div class="lbl">ML Candidates</div>
+    </div>
+    <div class="report-stat danger">
+        <div class="val">{{ "{:,}".format(stats.get('total_rfi_rejected', 0) | default(0, true)) }}</div>
+        <div class="lbl">RFI Rejected</div>
+    </div>
+</div>
+
+<div class="report-grid">
+    <div class="report-stat">
+        <div class="val">{{ "%.1f" | format(stats.get('total_runtime_hours', 0) | default(0, true)) }}h</div>
+        <div class="lbl">Total Runtime</div>
+    </div>
+    <div class="report-stat warning">
+        <div class="val">{{ stats.get('total_ood_anomalies', 0) | default(0, true) }}</div>
+        <div class="lbl">OOD Anomalies</div>
+    </div>
+    <div class="report-stat">
+        <div class="val">{{ candidates | length }}</div>
+        <div class="lbl">Verified Candidates</div>
+    </div>
+    <div class="report-stat">
+        <div class="val">{{ stats.get('current_mode', 'offline') }}</div>
+        <div class="lbl">Pipeline Mode</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="charts-row">
+    <div class="card">
+        <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">Signals by Target Category</h3>
+        <canvas id="categoryChart" height="260"></canvas>
+    </div>
+    <div class="card">
+        <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">RFI vs Candidates per Target</h3>
+        <canvas id="rfiChart" height="260"></canvas>
+    </div>
+</div>
+
+<!-- Category Stats Table -->
+<div class="card">
+    <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">Processing by Target Category</h3>
+    <table class="category-table">
+        <thead>
+            <tr>
+                <th>Target</th>
+                <th>Description</th>
+                <th>Files</th>
+                <th>Signals</th>
+                <th>Candidates</th>
+                <th>RFI</th>
+                <th>Anomalies</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cat, info in category_stats.items() %}
+            <tr>
+                <td style="color: var(--accent-cyan); font-weight: 500;">{{ info.get('target_name', cat) }}</td>
+                <td style="color: var(--text-secondary); font-size: 12px;">{{ info.get('description', '') }}</td>
+                <td>{{ info.get('files', 0) }}</td>
+                <td>{{ "{:,}".format(info.get('signals', 0)) }}</td>
+                <td style="color: {% if info.get('candidates', 0) > 0 %}var(--accent-green){% else %}var(--text-tertiary){% endif %};">{{ info.get('candidates', 0) }}</td>
+                <td style="color: var(--accent-rose);">{{ "{:,}".format(info.get('rfi', 0)) }}</td>
+                <td>{{ "{:,}".format(info.get('anomalies', 0)) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Top Candidates -->
+<div class="card">
+    <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary);">Top Verified Candidates</h3>
+    <table class="category-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Target</th>
+                <th>Classification</th>
+                <th>Freq (MHz)</th>
+                <th>SNR</th>
+                <th>Drift (Hz/s)</th>
+                <th>Confidence</th>
+                <th>OOD Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in candidates %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td style="color: var(--accent-cyan);">{{ c.get('target_name', c.get('category', 'Unknown')) }}</td>
+                <td>
+                    {% set cls = c.get('classification', 'unknown') %}
+                    <span class="badge badge-{% if 'candidate' in cls %}candidate{% elif 'rfi' in cls %}rfi{% elif 'narrowband' in cls %}narrowband{% else %}unknown{% endif %}">
+                        {{ cls }}
+                    </span>
+                </td>
+                <td>{{ "%.4f" | format(c.get('frequency_hz', 0) / 1000000) }}</td>
+                <td style="color: var(--accent-amber); font-weight: 500;">{{ "%.1f" | format(c.get('snr', 0)) }}</td>
+                <td>{{ "%.4f" | format(c.get('drift_rate', 0)) }}</td>
+                <td>{{ "%.1f%%" | format(c.get('confidence', 0) * 100) }}</td>
+                <td>{{ "%.4f" | format(c.get('ood_score', 0)) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const catStats = {{ category_stats_json | safe }};
+
+const labels = Object.values(catStats).map(v => v.target_name || 'Unknown');
+const signalData = Object.values(catStats).map(v => v.signals || 0);
+const candData = Object.values(catStats).map(v => v.candidates || 0);
+const rfiData = Object.values(catStats).map(v => v.rfi || 0);
+
+new Chart(document.getElementById('categoryChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Signals',
+            data: signalData,
+            backgroundColor: 'rgba(0, 212, 255, 0.6)',
+            borderColor: 'rgba(0, 212, 255, 0.8)',
+            borderWidth: 1,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(100,180,255,0.06)' } },
+            x: { grid: { display: false }, ticks: { maxRotation: 45 } }
+        }
+    }
+});
+
+new Chart(document.getElementById('rfiChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [
+            {
+                label: 'RFI Rejected',
+                data: rfiData,
+                backgroundColor: 'rgba(255, 51, 102, 0.5)',
+                borderColor: 'rgba(255, 51, 102, 0.7)',
+                borderWidth: 1,
+                borderRadius: 4,
+            },
+            {
+                label: 'Candidates',
+                data: candData,
+                backgroundColor: 'rgba(0, 255, 136, 0.5)',
+                borderColor: 'rgba(0, 255, 136, 0.7)',
+                borderWidth: 1,
+                borderRadius: 4,
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 16 } } },
+        scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(100,180,255,0.06)' } },
+            x: { grid: { display: false }, ticks: { maxRotation: 45 } }
+        }
+    }
+});
+</script>
+{% endblock %}

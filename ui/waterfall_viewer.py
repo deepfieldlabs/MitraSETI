@@ -569,11 +569,18 @@ class WaterfallViewer(QWidget):
         if index < len(self._file_paths):
             filepath = self._file_paths[index]
             if filepath and filepath.exists():
-                self._load_real_file(filepath)
+                size_mb = filepath.stat().st_size / (1024 * 1024)
+                self._file_label.setText(f"Loading {filepath.name} ({size_mb:.0f} MB)...")
+                self._file_label.repaint()
+                QTimer.singleShot(50, lambda p=filepath: self._load_real_file(p))
+
+    _MAX_DISPLAY_FREQ = 2048
+    _MAX_DISPLAY_TIME = 1024
 
     def _load_real_file(self, filepath):
         """Load a real .fil or .h5 file into the viewer."""
-        self._file_label.setText(filepath.name)
+        size_mb = filepath.stat().st_size / (1024 * 1024)
+        self._file_label.setText(f"{filepath.name}  ({size_mb:.0f} MB)")
         try:
             if filepath.suffix in (".h5", ".hdf5"):
                 self._load_h5(filepath)
@@ -585,34 +592,61 @@ class WaterfallViewer(QWidget):
                 )
             self._render()
         except Exception as e:
-            self._file_label.setText(f"{filepath.name} (load error)")
+            self._file_label.setText(f"{filepath.name} (error: {e})")
             self._data, self._signals = generate_demo_waterfall(
                 seed=hash(str(filepath)) % 2**31
             )
             self._render()
 
+    @staticmethod
+    def _downsample_2d(arr: np.ndarray, max_t: int, max_f: int) -> np.ndarray:
+        """Downsample a 2D array by block-averaging for fast display."""
+        nt, nf = arr.shape
+        step_t = max(1, nt // max_t)
+        step_f = max(1, nf // max_f)
+        if step_t > 1 or step_f > 1:
+            nt_trim = (nt // step_t) * step_t
+            nf_trim = (nf // step_f) * step_f
+            trimmed = arr[:nt_trim, :nf_trim]
+            reshaped = trimmed.reshape(nt_trim // step_t, step_t,
+                                       nf_trim // step_f, step_f)
+            return reshaped.mean(axis=(1, 3))
+        return arr
+
     def _load_h5(self, filepath):
-        """Load HDF5 filterbank data."""
+        """Load HDF5 filterbank data with subsampling for large files."""
         try:
             import h5py
             with h5py.File(str(filepath), "r") as f:
                 if "data" in f:
-                    raw = np.array(f["data"], dtype=np.float32)
+                    ds = f["data"]
                 elif "filterbank" in f and "data" in f["filterbank"]:
-                    raw = np.array(f["filterbank"]["data"], dtype=np.float32)
+                    ds = f["filterbank"]["data"]
                 else:
                     keys = list(f.keys())
-                    if keys:
-                        raw = np.array(f[keys[0]], dtype=np.float32)
-                    else:
-                        raw = np.zeros((256, 64), dtype=np.float32)
+                    ds = f[keys[0]] if keys else None
 
-            # Ensure 2D (time x freq)
-            if raw.ndim == 3:
-                raw = raw[:, 0, :]
-            if raw.ndim == 1:
-                side = int(np.sqrt(raw.size))
-                raw = raw[:side * side].reshape(side, side)
+                if ds is None:
+                    self._data = np.zeros((256, 64), dtype=np.float32)
+                    self._signals = []
+                    return
+
+                shape = ds.shape
+                if len(shape) == 3:
+                    nt, _, nf = shape
+                    step_t = max(1, nt // self._MAX_DISPLAY_TIME)
+                    step_f = max(1, nf // self._MAX_DISPLAY_FREQ)
+                    raw = np.array(ds[::step_t, 0, ::step_f], dtype=np.float32)
+                elif len(shape) == 2:
+                    nt, nf = shape
+                    step_t = max(1, nt // self._MAX_DISPLAY_TIME)
+                    step_f = max(1, nf // self._MAX_DISPLAY_FREQ)
+                    raw = np.array(ds[::step_t, ::step_f], dtype=np.float32)
+                elif len(shape) == 1:
+                    side = int(np.sqrt(ds.size))
+                    raw = np.array(ds[:side * side], dtype=np.float32).reshape(side, side)
+                else:
+                    raw = np.zeros((256, 64), dtype=np.float32)
 
             self._data = raw
             self._signals = []
@@ -622,36 +656,38 @@ class WaterfallViewer(QWidget):
             )
 
     def _load_fil(self, filepath):
-        """Load Sigproc .fil filterbank data."""
+        """Load Sigproc .fil filterbank data with subsampling."""
         try:
+            file_size = filepath.stat().st_size
             with open(filepath, "rb") as f:
-                raw = f.read()
+                header_bytes = f.read(min(4096, file_size))
 
-            # Find data start after header
             end_marker = b"HEADER_END"
-            pos = raw.find(end_marker)
-            if pos >= 0:
-                data_start = pos + len(end_marker)
-            else:
-                data_start = min(512, len(raw) // 4)
+            pos = header_bytes.find(end_marker)
+            data_start = (pos + len(end_marker)) if pos >= 0 else min(512, file_size // 4)
+            data_size = file_size - data_start
+            n_elements = data_size // 4
 
-            data_bytes = raw[data_start:]
-            arr = np.frombuffer(data_bytes, dtype=np.float32)
-
-            # Try to reshape into a reasonable 2D array
-            n_elements = arr.size
             if n_elements == 0:
                 self._data = np.zeros((256, 64), dtype=np.float32)
-            else:
-                # Guess a reasonable n_freq
-                for n_freq in [8192, 4096, 2048, 1024, 512, 256, 128, 64]:
-                    if n_elements >= n_freq * 2 and n_elements % n_freq == 0:
-                        n_time = n_elements // n_freq
-                        self._data = arr.reshape(n_time, n_freq)
-                        break
-                else:
-                    side = int(np.sqrt(n_elements))
-                    self._data = arr[: side * side].reshape(side, side)
+                self._signals = []
+                return
+
+            n_freq = 64
+            for nf in [8192, 4096, 2048, 1024, 512, 256, 128, 64]:
+                if n_elements >= nf * 2 and n_elements % nf == 0:
+                    n_freq = nf
+                    break
+
+            n_time = n_elements // n_freq
+
+            arr = np.memmap(filepath, dtype=np.float32, mode='r',
+                            offset=data_start, shape=(n_time, n_freq))
+
+            self._data = self._downsample_2d(
+                arr, self._MAX_DISPLAY_TIME, self._MAX_DISPLAY_FREQ
+            )
+            del arr
 
             self._signals = []
         except Exception:
@@ -710,13 +746,32 @@ class WaterfallViewer(QWidget):
 
         cmap = self._get_cmap()
 
+        # Normalize data for display (convert to dB, clip outliers)
+        display_data = self._data.copy()
+        finite = display_data[np.isfinite(display_data)]
+        if finite.size > 0 and finite.max() > 0:
+            display_data = np.clip(display_data, 1e-10, None)
+            display_data = 10.0 * np.log10(display_data)
+            finite_db = display_data[np.isfinite(display_data)]
+            if finite_db.size > 0:
+                vmin = np.percentile(finite_db, 2)
+                vmax = np.percentile(finite_db, 98)
+                if vmax <= vmin:
+                    vmax = vmin + 1.0
+            else:
+                vmin, vmax = 0, 1
+        else:
+            vmin, vmax = None, None
+
         # Main (ON-source) spectrogram
         self._ax.imshow(
-            self._data,
+            display_data,
             aspect="auto",
             origin="lower",
             cmap=cmap,
             interpolation="nearest",
+            vmin=vmin,
+            vmax=vmax,
         )
         self._ax.set_xlabel("Frequency Channel", color="#e0e8f0", fontsize=10)
         self._ax.set_ylabel("Time Step", color="#e0e8f0", fontsize=10)

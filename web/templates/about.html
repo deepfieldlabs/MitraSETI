@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}About{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>About MitraSETI</h1>
+    <div class="subtitle">Intelligent SETI Signal Analysis Platform</div>
+</div>
+
+<div class="card-grid cols-2">
+    <!-- Project Overview -->
+    <div class="card">
+        <h3 style="font-size: 15px; font-weight: 500; color: var(--accent-cyan); margin-bottom: 16px;">
+            &#x2728; Project
+        </h3>
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.8; margin-bottom: 16px;">
+            MitraSETI is a Rust + Python hybrid platform for intelligent SETI signal analysis.
+            It combines high-performance Rust DSP pipelines with Python ML models to detect,
+            classify, and verify candidate extraterrestrial signals in real time. Designed for
+            streaming radio telescope data, it features GPU-accelerated inference, adaptive RFI
+            rejection, and AstroLens cross-matching.
+        </p>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px;">
+            <span class="badge badge-candidate">v0.1.0</span>
+            <span class="badge badge-narrowband">MIT License</span>
+        </div>
+    </div>
+
+    <!-- Creator -->
+    <div class="card">
+        <h3 style="font-size: 15px; font-weight: 500; color: var(--accent-cyan); margin-bottom: 16px;">
+            &#x1F464; Creator
+        </h3>
+        <div style="margin-bottom: 14px;">
+            <div style="font-size: 18px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px;">
+                Saman Tabatabaeian
+            </div>
+            <div style="font-size: 12px; color: var(--text-tertiary); letter-spacing: 0.5px;">
+                Cloud &amp; DevOps Engineer &bull; AI/ML Developer
+            </div>
+        </div>
+        <div style="margin-bottom: 14px;">
+            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Organization</div>
+            <div style="font-size: 15px; font-weight: 500; color: var(--accent-purple);">Deep Field Labs</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <a href="https://linkedin.com/in/samantab" target="_blank" rel="noopener"
+               style="display: inline-flex; align-items: center; gap: 8px; color: var(--accent-cyan); text-decoration: none; font-size: 13px; transition: opacity 0.2s;"
+               onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+                &#x1F517; linkedin.com/in/samantab
+            </a>
+            <a href="https://github.com/deepfieldlabs" target="_blank" rel="noopener"
+               style="display: inline-flex; align-items: center; gap: 8px; color: var(--accent-cyan); text-decoration: none; font-size: 13px; transition: opacity 0.2s;"
+               onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+                &#x1F4BB; github.com/deepfieldlabs
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Tech Stack & Companion -->
+<div class="card-grid cols-2" style="margin-top: 0;">
+    <div class="card">
+        <h3 style="font-size: 15px; font-weight: 500; color: var(--accent-cyan); margin-bottom: 16px;">
+            &#x2699; Technology
+        </h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="stat-card" style="padding: 14px;">
+                <div style="font-size: 12px; color: var(--accent-amber); font-weight: 500;">Rust</div>
+                <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">DSP &amp; Signal Pipeline</div>
+            </div>
+            <div class="stat-card" style="padding: 14px;">
+                <div style="font-size: 12px; color: var(--accent-green); font-weight: 500;">Python</div>
+                <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">ML Inference &amp; Web UI</div>
+            </div>
+            <div class="stat-card" style="padding: 14px;">
+                <div style="font-size: 12px; color: var(--accent-cyan); font-weight: 500;">FastAPI</div>
+                <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">API &amp; Web Server</div>
+            </div>
+            <div class="stat-card" style="padding: 14px;">
+                <div style="font-size: 12px; color: var(--accent-purple); font-weight: 500;">PyTorch</div>
+                <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">GPU-Accelerated Models</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="font-size: 15px; font-weight: 500; color: var(--accent-cyan); margin-bottom: 16px;">
+            &#x1F52D; Companion Project
+        </h3>
+        <div style="font-size: 15px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px;">
+            AstroLens
+        </div>
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 14px;">
+            Gravitational lensing detection and analysis platform. AstroLens cross-matches
+            with MitraSETI candidate signals to correlate SETI observations with known
+            astrophysical phenomena and deep-sky survey data.
+        </p>
+        <a href="https://github.com/deepfieldlabs" target="_blank" rel="noopener"
+           class="btn" style="font-size: 12px; padding: 8px 16px;">
+            &#x2197; View on GitHub
+        </a>
+    </div>
+</div>
+{% endblock %}

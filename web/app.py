@@ -46,6 +46,25 @@ logger = logging.getLogger(__name__)
 # API backend URL
 API_BASE = os.environ.get("MITRASETI_API", "http://localhost:9000")
 
+# Well-known target coordinates (RA, Dec in degrees) for sky map plotting
+_TARGET_COORDS: dict[str, tuple[float, float]] = {
+    "VOYAGER": (286.86, 12.17),
+    "TRAPPIST": (346.62, -5.04),
+    "TRAPPIST-1": (346.62, -5.04),
+    "3C161": (93.0, -5.88),
+    "3C286": (202.78, 30.51),
+    "3C48": (24.42, 33.16),
+    "HD-109376": (188.56, -26.89),
+    "HD109376": (188.56, -26.89),
+    "LHS292": (159.58, -44.32),
+    "GJ699": (269.45, 4.69),
+    "HIP107346": (326.20, 38.78),
+    "KIC8462852": (301.56, 44.46),
+    "KEPLER992B": (291.42, 42.33),
+    "PROXCEN": (217.39, -62.68),
+    "PROXIMA": (217.39, -62.68),
+}
+
 # Setup app
 app = FastAPI(title="MitraSETI Web", version="1.0.0")
 
@@ -77,6 +96,139 @@ def api_client() -> httpx.Client:
 # Pages
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _load_local_stats() -> dict:
+    """Build stats dict from local state files."""
+    stats = {}
+    if STREAMING_STATE.exists():
+        try:
+            with open(STREAMING_STATE) as f:
+                state = json.load(f)
+            stats["total_signals"] = state.get("total_signals", 0)
+            stats["total_candidates"] = state.get("total_candidates", 0)
+            stats["total_rfi_rejected"] = state.get("total_rfi_rejected", 0)
+            stats["uptime_seconds"] = state.get("uptime_seconds", 0)
+            stats["cycles_completed"] = state.get("cycles_completed", 0)
+            stats["avg_snr"] = state.get("avg_snr", 0)
+            stats["max_snr"] = state.get("max_snr", 0)
+            stats["classification_counts"] = state.get("classification_counts", {})
+        except Exception:
+            pass
+
+    if DISCOVERY_STATE.exists():
+        try:
+            with open(DISCOVERY_STATE) as f:
+                disc = json.load(f)
+            stats["total_signals"] = disc.get("total_analyzed", stats.get("total_signals", 0))
+            stats["total_candidates"] = disc.get("candidates_found", stats.get("total_candidates", 0))
+            stats["total_rfi_rejected"] = disc.get("rfi_rejected", stats.get("total_rfi_rejected", 0))
+            stats["cycles_completed"] = disc.get("cycles_completed", stats.get("cycles_completed", 0))
+        except Exception:
+            pass
+    return stats
+
+
+def _load_local_candidates() -> list:
+    """Load candidates from verified_candidates.json."""
+    if CANDIDATES_FILE.exists():
+        try:
+            with open(CANDIDATES_FILE) as f:
+                cands = json.load(f)
+            cands.sort(key=lambda c: c.get("snr", 0), reverse=True)
+            return cands
+        except Exception:
+            pass
+    return []
+
+
+def _enrich_for_skymap(candidates: list) -> list:
+    """Add ra_deg/dec_deg coordinates and normalize fields for the sky map."""
+    enriched = []
+    for i, c in enumerate(candidates):
+        target = (c.get("target_name") or c.get("category") or "").upper()
+        ra, dec = None, None
+        for key, coords in _TARGET_COORDS.items():
+            if key.upper() in target or target in key.upper():
+                ra, dec = coords
+                break
+        if ra is None:
+            continue
+
+        enriched.append({
+            "id": i + 1,
+            "ra_deg": ra + (i * 0.05),
+            "dec_deg": dec + (i * 0.03),
+            "snr": c.get("snr", 0),
+            "frequency_mhz": c.get("frequency_hz", 0) / 1e6,
+            "drift_rate": c.get("drift_rate", 0),
+            "rfi_score": c.get("rfi_probability", 0),
+            "classification": "candidate" if c.get("classification", "") in (
+                "narrowband_drifting", "candidate_et"
+            ) else "rfi" if "rfi" in c.get("classification", "").lower() else "signal",
+            "target_name": c.get("target_name", target),
+            "file": c.get("file_name", ""),
+            "ood_score": c.get("ood_score", 0),
+            "confidence": c.get("confidence", 0),
+        })
+    return enriched
+
+
+def _build_skymap_observations() -> list:
+    """Build full observation list from streaming state and candidates."""
+    observations = []
+    seen_targets = set()
+
+    # First add verified candidates with real data
+    candidates = _load_local_candidates()
+    observations.extend(_enrich_for_skymap(candidates))
+    for o in observations:
+        seen_targets.add(o.get("target_name", ""))
+
+    # Then add category stats as aggregate observations
+    if STREAMING_STATE.exists():
+        try:
+            with open(STREAMING_STATE) as f:
+                state = json.load(f)
+            cat_stats = state.get("category_stats", {})
+            idx = len(observations) + 1
+            for _cat, info in cat_stats.items():
+                tgt = info.get("target_name", "")
+                if tgt in seen_targets:
+                    continue
+                tgt_upper = tgt.upper()
+                ra, dec = None, None
+                for key, coords in _TARGET_COORDS.items():
+                    if key.upper() in tgt_upper or tgt_upper in key.upper():
+                        ra, dec = coords
+                        break
+                if ra is None:
+                    continue
+
+                n_signals = info.get("signals", 0)
+                n_cands = info.get("candidates", 0)
+                n_rfi = info.get("rfi", 0)
+
+                cls = "candidate" if n_cands > 0 else "rfi" if n_rfi > n_signals * 0.5 else "signal"
+                observations.append({
+                    "id": idx,
+                    "ra_deg": ra,
+                    "dec_deg": dec,
+                    "snr": max(n_cands * 5, 10) if n_cands > 0 else 5,
+                    "frequency_mhz": 0,
+                    "drift_rate": 0,
+                    "rfi_score": n_rfi / max(n_signals, 1),
+                    "classification": cls,
+                    "target_name": tgt,
+                    "file": f"{info.get('files', 0)} files",
+                    "signals": n_signals,
+                    "candidates": n_cands,
+                    "description": info.get("description", ""),
+                })
+                idx += 1
+        except Exception:
+            pass
+    return observations
+
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Main dashboard page."""
@@ -98,7 +250,20 @@ async def dashboard(request: Request):
             if r.status_code == 200:
                 health = r.json()
     except Exception as e:
-        logger.error(f"API error: {e}")
+        logger.warning(f"API unavailable, using local state files: {e}")
+
+    if not stats:
+        stats = _load_local_stats()
+
+    if not candidates:
+        candidates = _load_local_candidates()[:20]
+
+    if not health:
+        running = False
+        if STREAMING_STATE.exists():
+            age = time.time() - STREAMING_STATE.stat().st_mtime
+            running = age < 120
+        health = {"status": "ok" if running else "offline", "mode": "standalone"}
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -151,7 +316,39 @@ async def signals_page(
             if r.status_code == 200:
                 stats = r.json()
     except Exception as e:
-        logger.error(f"API error: {e}")
+        logger.warning(f"API unavailable, using local state files: {e}")
+
+    if not signals:
+        all_signals = _load_local_candidates()
+
+        if classification:
+            all_signals = [
+                s for s in all_signals
+                if s.get("classification", "").lower() == classification.lower()
+            ]
+        if min_snr > 0:
+            all_signals = [s for s in all_signals if s.get("snr", 0) >= min_snr]
+        if max_snr < 999:
+            all_signals = [s for s in all_signals if s.get("snr", 0) <= max_snr]
+
+        if sort == "snr_desc":
+            all_signals.sort(key=lambda s: s.get("snr", 0), reverse=True)
+        elif sort == "snr_asc":
+            all_signals.sort(key=lambda s: s.get("snr", 0))
+        elif sort == "freq_desc":
+            all_signals.sort(key=lambda s: s.get("frequency", 0), reverse=True)
+        elif sort == "freq_asc":
+            all_signals.sort(key=lambda s: s.get("frequency", 0))
+        elif sort == "time_desc":
+            all_signals.sort(key=lambda s: s.get("timestamp", ""), reverse=True)
+        elif sort == "time_asc":
+            all_signals.sort(key=lambda s: s.get("timestamp", ""))
+
+        start = page * limit
+        signals = all_signals[start : start + limit]
+
+    if not stats:
+        stats = _load_local_stats()
 
     return templates.TemplateResponse("signals.html", {
         "request": request,
@@ -252,7 +449,10 @@ async def skymap_page(request: Request):
             if r.status_code == 200:
                 observations = r.json()
     except Exception as e:
-        logger.error(f"API error: {e}")
+        logger.warning(f"API unavailable, using local state files: {e}")
+
+    if not observations:
+        observations = _build_skymap_observations()
 
     # Load AstroLens cross-matches
     if ASTROLENS_CANDIDATES_FILE.exists():
@@ -267,6 +467,48 @@ async def skymap_page(request: Request):
         "observations_json": json.dumps(observations),
         "astrolens_json": json.dumps(astrolens_matches),
         "mode": "skymap",
+    })
+
+
+@app.get("/reports", response_class=HTMLResponse)
+async def reports_page(request: Request):
+    """Reports summary page."""
+    stats = _load_local_stats()
+    candidates = _load_local_candidates()
+    category_stats = {}
+    pipeline_metrics = {}
+
+    if STREAMING_STATE.exists():
+        try:
+            with open(STREAMING_STATE) as f:
+                state = json.load(f)
+            category_stats = state.get("category_stats", {})
+            pipeline_metrics = state.get("pipeline_metrics", {})
+            stats["total_files_processed"] = state.get("total_files_processed", 0)
+            stats["total_runtime_hours"] = state.get("total_runtime_hours", 0)
+            stats["total_ood_anomalies"] = state.get("total_ood_anomalies", 0)
+            stats["current_mode"] = state.get("current_mode", "unknown")
+            stats["completed"] = state.get("completed", False)
+        except Exception:
+            pass
+
+    return templates.TemplateResponse("reports.html", {
+        "request": request,
+        "stats": stats,
+        "candidates": candidates[:20],
+        "category_stats": category_stats,
+        "category_stats_json": json.dumps(category_stats),
+        "pipeline_metrics": pipeline_metrics,
+        "mode": "reports",
+    })
+
+
+@app.get("/about", response_class=HTMLResponse)
+async def about_page(request: Request):
+    """About MitraSETI page."""
+    return templates.TemplateResponse("about.html", {
+        "request": request,
+        "mode": "about",
     })
 
 
