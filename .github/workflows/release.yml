@@ -28,11 +28,12 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install hdf5 pkg-config
       - run: pip install maturin
-      - run: maturin build --release --manifest-path core/Cargo.toml
+      - name: Build wheel
+        run: maturin build --release --manifest-path core/Cargo.toml --out dist
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: target/wheels/*.whl
+          path: dist/*.whl
 
   release:
     needs: [build-wheels]
@@ -47,3 +48,25 @@ jobs:
         with:
           files: dist/**/*.whl
           generate_release_notes: true
+          body: |
+            ## MitraSETI v${{ github.ref_name }} — Intelligent SETI Signal Analysis
+
+            High-performance SETI signal processing powered by **Rust + Python**.
+
+            ### Key Features
+            - **45x faster** de-Doppler search than turboSETI (Rust + rayon parallelism)
+            - **CNN+Transformer** ML classifier for radio signal classification
+            - **Spectral distance OOD** detector for anomaly identification
+            - **Real-time streaming** mode for Breakthrough Listen data
+            - **Desktop app** (PyQt5) — Waterfall Viewer, Signal Gallery, Space Radar
+            - **Web app** (FastAPI) — interactive dashboard and reports
+            - **RFI rejection** with multi-factor composite scoring
+
+            ### Install
+            ```bash
+            pip install mitraseti_core-*.whl
+            ```
+
+            ### Links
+            - [Documentation](https://github.com/deepfieldlabs/MitraSETI/wiki)
+            - [Deep Field Labs](https://deepfieldlabs.github.io)
