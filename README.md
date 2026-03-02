@@ -346,6 +346,11 @@ python main.py
 ```
 
 <p align="center">
+  <img src="assets/gifs/MitraSETI.gif" alt="MitraSETI Demo" width="900"><br>
+  <em>MitraSETI desktop app — real-time signal processing and ML classification</em>
+</p>
+
+<p align="center">
   <img src="screenshots/waterfall_viewer.png" alt="Waterfall Viewer" width="900"><br>
   <em>Waterfall Viewer — spectrogram display with drift-rate overlay and zoom controls</em>
 </p>

@@ -42,6 +42,12 @@ MitraSETI is a ground-up reimagination of the SETI signal analysis pipeline, com
 
 ---
 
+## Demo
+
+![MitraSETI Demo](https://raw.githubusercontent.com/deepfieldlabs/MitraSETI/main/assets/gifs/MitraSETI.gif)
+
+---
+
 ## Screenshots
 
 ### Waterfall Viewer
