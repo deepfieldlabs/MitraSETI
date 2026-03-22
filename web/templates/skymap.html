@@ -519,16 +519,39 @@ function redrawMap() {
         renderedPoints.push({ x, y, radius: Math.max(radius, 6), obs });
     });
 
-    // Also plot AstroLens-only positions
-    allAstrolens.forEach(al => {
+    // Also plot AstroLens-only positions (with tooltips)
+    allAstrolens.forEach((al, idx) => {
         const x = ((al.ra_deg || 0) / 360) * w;
         const y = ((90 - (al.dec_deg || 0)) / 180) * h;
 
         if (filter === 'all' || filter === 'astrolens') {
+            const oodScore = al.ood_score || 0;
+            const alpha = 0.35 + Math.min(oodScore, 1.0) * 0.65;
+            const size = 5 + Math.min(oodScore, 1.0) * 4;
+
             ctx.save();
-            ctx.globalAlpha = 0.5;
-            drawStar(x, y, 6, '#7c3aed');
+            ctx.globalAlpha = alpha;
+            drawStar(x, y, size, '#7c3aed');
             ctx.restore();
+
+            renderedPoints.push({
+                x, y, radius: Math.max(size, 8),
+                obs: {
+                    id: 'AL-' + (idx + 1),
+                    ra_deg: al.ra_deg || 0,
+                    dec_deg: al.dec_deg || 0,
+                    snr: oodScore * 100,
+                    frequency_mhz: 0,
+                    drift_rate: 0,
+                    rfi_score: 0,
+                    classification: al.classification || 'optical',
+                    astrolens_match: true,
+                    ood_score: oodScore,
+                    source: 'AstroLens',
+                    is_transient: al.is_transient || false,
+                    confidence: al.confidence || 0,
+                }
+            });
         }
     });
 
@@ -609,16 +632,23 @@ canvas.addEventListener('mousemove', function(e) {
         const cls = obs.classification || 'unknown';
         const clsColor = cls === 'candidate' ? '#00ff88' : cls === 'rfi' ? '#ff3366' : '#5b8def';
 
-        tooltip.innerHTML = `
-            <div class="tt-header" style="color: ${clsColor};">${cls.charAt(0).toUpperCase() + cls.slice(1)} #${obs.id || '?'}</div>
-            <div class="tt-row"><span class="tt-key">RA</span><span class="tt-val">${(obs.ra_deg || 0).toFixed(3)}&deg;</span></div>
-            <div class="tt-row"><span class="tt-key">Dec</span><span class="tt-val">${(obs.dec_deg || 0).toFixed(3)}&deg;</span></div>
-            <div class="tt-row"><span class="tt-key">SNR</span><span class="tt-val" style="color: var(--accent-cyan);">${(obs.snr || 0).toFixed(1)}</span></div>
-            <div class="tt-row"><span class="tt-key">Frequency</span><span class="tt-val">${(obs.frequency_mhz || 0).toFixed(2)} MHz</span></div>
-            <div class="tt-row"><span class="tt-key">Drift Rate</span><span class="tt-val">${(obs.drift_rate || 0).toFixed(4)} Hz/s</span></div>
-            <div class="tt-row"><span class="tt-key">RFI Score</span><span class="tt-val">${(obs.rfi_score || 0).toFixed(2)}</span></div>
-            ${obs.astrolens_match ? '<div class="tt-row"><span class="tt-key">AstroLens</span><span class="tt-val" style="color: #7c3aed;">Optical Match</span></div>' : ''}
-        `;
+        const isAstrolens = obs.source === 'AstroLens';
+        let ttHtml = `<div class="tt-header" style="color: ${isAstrolens ? '#7c3aed' : clsColor};">${isAstrolens ? 'AstroLens' : cls.charAt(0).toUpperCase() + cls.slice(1)} #${obs.id || '?'}</div>`;
+        ttHtml += `<div class="tt-row"><span class="tt-key">RA</span><span class="tt-val">${(obs.ra_deg || 0).toFixed(3)}&deg;</span></div>`;
+        ttHtml += `<div class="tt-row"><span class="tt-key">Dec</span><span class="tt-val">${(obs.dec_deg || 0).toFixed(3)}&deg;</span></div>`;
+        if (isAstrolens) {
+            ttHtml += `<div class="tt-row"><span class="tt-key">Class</span><span class="tt-val" style="color: #7c3aed;">${obs.classification || 'unknown'}</span></div>`;
+            ttHtml += `<div class="tt-row"><span class="tt-key">OOD Score</span><span class="tt-val" style="color: var(--accent-cyan);">${(obs.ood_score || 0).toFixed(3)}</span></div>`;
+            ttHtml += `<div class="tt-row"><span class="tt-key">Confidence</span><span class="tt-val">${(obs.confidence || 0).toFixed(3)}</span></div>`;
+            if (obs.is_transient) ttHtml += `<div class="tt-row"><span class="tt-key">Transient</span><span class="tt-val" style="color: var(--accent-amber);">Yes</span></div>`;
+        } else {
+            ttHtml += `<div class="tt-row"><span class="tt-key">SNR</span><span class="tt-val" style="color: var(--accent-cyan);">${(obs.snr || 0).toFixed(1)}</span></div>`;
+            ttHtml += `<div class="tt-row"><span class="tt-key">Frequency</span><span class="tt-val">${(obs.frequency_mhz || 0).toFixed(2)} MHz</span></div>`;
+            ttHtml += `<div class="tt-row"><span class="tt-key">Drift Rate</span><span class="tt-val">${(obs.drift_rate || 0).toFixed(4)} Hz/s</span></div>`;
+            ttHtml += `<div class="tt-row"><span class="tt-key">RFI Score</span><span class="tt-val">${(obs.rfi_score || 0).toFixed(2)}</span></div>`;
+            if (obs.astrolens_match) ttHtml += `<div class="tt-row"><span class="tt-key">AstroLens</span><span class="tt-val" style="color: #7c3aed;">Optical Match</span></div>`;
+        }
+        tooltip.innerHTML = ttHtml;
     } else {
         tooltip.style.display = 'none';
     }

@@ -823,7 +823,7 @@ class MitraSETIPipeline:
                 if n_after_rfi > 0
                 else 0,
                 "rfi_rejected": len(raw_candidates) - n_after_rfi,
-                "algorithm": "brute_force",
+                "algorithm": "taylor_tree",
             },
             "ml_classifier": {
                 "model_trained": self._model_loaded,

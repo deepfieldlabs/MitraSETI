@@ -28,14 +28,14 @@
 //!    physical signal.
 //! 6. **Result** — return candidates sorted by descending SNR.
 //!
-//! ## Taylor Tree (future)
+//! ## Taylor Tree
 //!
 //! A naïve drift-rate search is O(N_d × N_t × N_f) where N_d is the number
 //! of drift rates, N_t the number of time steps, and N_f the number of
 //! frequency channels.  The **Taylor tree** algorithm (Taylor 1974) reduces
-//! this to O(N_d × N_f × log₂ N_t) by recursively combining partial sums —
-//! analogous to an FFT butterfly.  The placeholder in this module marks where
-//! the tree should be inserted.
+//! this to O(N_padded × N_f × log₂ N_padded) by recursively combining
+//! partial sums — analogous to an FFT butterfly.  This is enabled by
+//! default via `SearchParams.use_taylor_tree`.
 
 use std::time::Instant;
 
@@ -86,7 +86,7 @@ impl DedopplerEngine {
     #[pyo3(signature = (params=None))]
     pub fn new(params: Option<SearchParams>) -> Self {
         Self {
-            params: params.unwrap_or_else(|| SearchParams::new(4.0, 10.0, 0, true)),
+            params: params.unwrap_or_else(|| SearchParams::new(4.0, 10.0, 0, true, true)),
         }
     }
 
@@ -160,14 +160,20 @@ impl DedopplerEngine {
         info!("Searching {} drift rates", drift_rates.len());
 
         // ------------------------------------------------------------------
-        // Step 4: Parallel drift-rate search
+        // Step 4: De-Doppler search (Taylor tree or brute-force)
         // ------------------------------------------------------------------
-        let raw_candidates: Vec<SignalCandidate> = drift_rates
-            .par_iter()
-            .flat_map(|&drift_rate| {
-                self.search_single_drift(&normalised, header, drift_rate, n_times, n_chans)
-            })
-            .collect();
+        let raw_candidates: Vec<SignalCandidate> = if self.params.use_taylor_tree {
+            info!("Using Taylor tree algorithm (O(N·F·log N))");
+            self.taylor_tree_search(&normalised, header, n_times, n_chans)?
+        } else {
+            info!("Using brute-force algorithm (O(D·N·F))");
+            drift_rates
+                .par_iter()
+                .flat_map(|&drift_rate| {
+                    self.search_single_drift(&normalised, header, drift_rate, n_times, n_chans)
+                })
+                .collect()
+        };
 
         info!("Raw threshold crossings: {}", raw_candidates.len());
 
@@ -329,6 +335,209 @@ impl DedopplerEngine {
         }
 
         candidates
+    }
+
+    // ==================================================================
+    // Taylor tree de-Doppler search
+    // ==================================================================
+
+    /// Taylor tree de-Doppler search (Taylor 1974).
+    ///
+    /// Computes integrated power along all drift-rate trajectories
+    /// simultaneously using a divide-and-conquer tree structure.
+    /// Complexity: O(log₂(N_t) × N_padded × N_f) vs the brute-force
+    /// O(N_d × N_t × N_f).
+    ///
+    /// The algorithm builds partial sums layer by layer:
+    ///   - Layer 0: pairs of time steps, 2 drift options each
+    ///   - Layer k: groups of 2^(k+1) steps, 2^(k+1) drift options
+    ///   - Final layer: all time steps, N_padded drift options
+    ///
+    /// At each layer, bit k of the total drift index determines whether
+    /// the second sub-group is shifted by 2^k channels.  This produces
+    /// a staircase approximation of the true diagonal trajectory — the
+    /// same approximation turboSETI uses — with resolution equal to the
+    /// natural drift-rate step (one channel per observation).
+    fn taylor_tree_search(
+        &self,
+        data: &Array2<f32>,
+        header: &FilterbankHeader,
+        n_times: usize,
+        n_chans: usize,
+    ) -> Result<Vec<SignalCandidate>, DedopplerError> {
+        let obs_length = header.tsamp * n_times as f64;
+        let channel_bw_hz = header.foff.abs() * 1e6;
+        if obs_length <= 0.0 || channel_bw_hz <= 0.0 {
+            return Err(DedopplerError::InvalidDriftStep);
+        }
+
+        let drift_step = channel_bw_hz / obs_length;
+        let max_drift_channels =
+            (self.params.max_drift_rate / drift_step).ceil() as usize;
+
+        let n_layers = if n_times <= 1 {
+            0
+        } else {
+            (n_times as f64).log2().ceil() as usize
+        };
+        let n_padded: usize = if n_layers == 0 { 1 } else { 1 << n_layers };
+        let snr_norm = (n_times as f64).sqrt();
+
+        info!(
+            "Taylor tree: {} layers, n_padded={}, max_drift=±{} channels",
+            n_layers, n_padded, max_drift_channels
+        );
+
+        let mut all_candidates = Vec::new();
+
+        // Run for positive drifts and negative drifts.
+        for sign in &[1i64, -1i64] {
+            let tree = self.build_taylor_tree(data, n_times, n_chans, n_padded, n_layers, *sign);
+
+            // Extract candidates from the final tree layer.
+            // Row d in the tree = total drift of d channels (in the sign direction).
+            let limit = max_drift_channels.min(n_padded);
+            for d in 0..=limit {
+                let drift_channels = d as i64 * sign;
+                let drift_rate = drift_channels as f64 * drift_step;
+
+                // Skip zero drift for the negative pass (already covered by positive).
+                if *sign == -1 && d == 0 {
+                    continue;
+                }
+
+                for f in 0..n_chans {
+                    let integrated = tree[[d, f]] as f64;
+                    let snr = integrated / snr_norm;
+
+                    if snr >= self.params.min_snr as f64 {
+                        let freq_hz = (header.fch1 + f as f64 * header.foff) * 1e6;
+                        all_candidates.push(SignalCandidate {
+                            frequency_hz: freq_hz,
+                            drift_rate,
+                            snr,
+                            start_time: header.tstart,
+                            end_time: header.tstart + obs_length,
+                            bandwidth: channel_bw_hz,
+                            rfi_score: 0.0,
+                            is_candidate: true,
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(all_candidates)
+    }
+
+    /// Build the Taylor tree for one drift direction.
+    ///
+    /// `sign`:  +1 for positive drifts (channels increase with time),
+    ///          -1 for negative drifts (channels decrease with time).
+    ///
+    /// Returns an Array2 of shape (n_padded, n_chans) where row d
+    /// contains the integrated power for total drift d channels.
+    fn build_taylor_tree(
+        &self,
+        data: &Array2<f32>,
+        n_times: usize,
+        n_chans: usize,
+        n_padded: usize,
+        n_layers: usize,
+        sign: i64,
+    ) -> Array2<f32> {
+        if n_layers == 0 {
+            // Single time step — just return the spectrum.
+            let mut out = Array2::<f32>::zeros((1, n_chans));
+            for f in 0..n_chans {
+                out[[0, f]] = data[[0, f]];
+            }
+            return out;
+        }
+
+        // Layer 0: combine pairs of time steps.
+        // Output has n_padded rows: row (g*2 + drift_bit) for group g.
+        let mut prev = Array2::<f32>::zeros((n_padded, n_chans));
+        let n_groups_0 = n_padded / 2;
+
+        for g in 0..n_groups_0 {
+            let t0 = 2 * g;
+            let t1 = 2 * g + 1;
+
+            for f in 0..n_chans {
+                let v0 = if t0 < n_times { data[[t0, f]] } else { 0.0 };
+                let v1_noshift = if t1 < n_times { data[[t1, f]] } else { 0.0 };
+
+                // drift_bit = 0: no channel shift
+                prev[[g * 2, f]] = v0 + v1_noshift;
+
+                // drift_bit = 1: shift by 1 channel in the drift direction
+                let f_shifted = f as i64 + sign;
+                let v1_shifted = if t1 < n_times
+                    && f_shifted >= 0
+                    && (f_shifted as usize) < n_chans
+                {
+                    data[[t1, f_shifted as usize]]
+                } else {
+                    0.0
+                };
+                prev[[g * 2 + 1, f]] = v0 + v1_shifted;
+            }
+        }
+
+        // Layers 1 through n_layers-1.
+        for k in 1..n_layers {
+            let n_drifts_prev: usize = 1 << k;
+            let n_drifts_curr: usize = 1 << (k + 1);
+            let shift_amount = 1i64 << k;
+            let n_groups_curr = n_padded / n_drifts_curr;
+
+            let mut curr = Array2::<f32>::zeros((n_padded, n_chans));
+
+            // Parallelise over groups (each group is independent).
+            let group_results: Vec<(usize, Vec<(usize, usize, f32)>)> = (0..n_groups_curr)
+                .into_par_iter()
+                .map(|g| {
+                    let first_start = (2 * g) * n_drifts_prev;
+                    let second_start = (2 * g + 1) * n_drifts_prev;
+                    let out_start = g * n_drifts_curr;
+
+                    let mut entries = Vec::with_capacity(n_drifts_curr * n_chans);
+
+                    for d in 0..n_drifts_curr {
+                        let d_sub = d & (n_drifts_prev - 1);
+                        let d_bit = (d >> k) & 1;
+                        let ch_shift = d_bit as i64 * shift_amount * sign;
+
+                        let row_first = first_start + d_sub;
+                        let row_second = second_start + d_sub;
+                        let row_out = out_start + d;
+
+                        for f in 0..n_chans {
+                            let f_shifted = f as i64 + ch_shift;
+                            let second_val =
+                                if f_shifted >= 0 && (f_shifted as usize) < n_chans {
+                                    prev[[row_second, f_shifted as usize]]
+                                } else {
+                                    0.0
+                                };
+                            entries.push((row_out, f, prev[[row_first, f]] + second_val));
+                        }
+                    }
+                    (g, entries)
+                })
+                .collect();
+
+            for (_g, entries) in group_results {
+                for (row, col, val) in entries {
+                    curr[[row, col]] = val;
+                }
+            }
+
+            prev = curr;
+        }
+
+        prev
     }
 
     /// Cluster detections that are close in frequency and drift rate.

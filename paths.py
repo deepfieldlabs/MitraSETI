@@ -103,6 +103,7 @@ ASTROLENS_ARTIFACTS_DIR = Path(
     )
 )
 ASTROLENS_CANDIDATES_FILE = ASTROLENS_ARTIFACTS_DIR / "data" / "anomaly_candidates.json"
+ASTROLENS_SKYMAP_FILE = ASTROLENS_ARTIFACTS_DIR / "data" / "skymap_export.json"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

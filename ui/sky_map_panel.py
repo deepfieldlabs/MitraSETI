@@ -48,6 +48,7 @@ _CATEGORY_COLORS = {
     "rfi": QColor(255, 100, 80, 100),
     "observation": QColor(60, 130, 90, 140),
     "anomaly": QColor(255, 200, 40),
+    "astrolens": QColor(124, 58, 237),
 }
 
 _RING_COUNT = 6
@@ -89,7 +90,10 @@ class _TargetBlip:
         dec_norm = (90.0 - self.dec_deg) / 180.0
         self.radius = max(0.05, min(dec_norm, 0.95))
 
-        if self.n_candidates > 0:
+        source = obs.get("source", "")
+        if source == "astrolens":
+            self.category = "astrolens"
+        elif self.n_candidates > 0:
             self.category = "candidate"
         elif self.n_signals > 0:
             self.category = "signal"
@@ -355,6 +359,7 @@ class SkyMapPanel(QWidget):
                 "All Targets",
                 "With Signals",
                 "Candidates Only",
+                "AstroLens Only",
             ]
         )
         self.filter_combo.currentIndexChanged.connect(self._apply_filter)
@@ -392,6 +397,7 @@ class SkyMapPanel(QWidget):
             ("●", "#3c825a", "Observation"),
             ("●", "#4da6ff", "Signal"),
             ("◆", "#34d399", "Candidate"),
+            ("★", "#7c3aed", "AstroLens"),
         ]
         for symbol, color, label in legend_items:
             lbl = QLabel(f'<span style="color:{color}">{symbol}</span> {label}')
@@ -401,10 +407,10 @@ class SkyMapPanel(QWidget):
         layout.addLayout(stats_bar)
 
     def _load_data(self):
-        """Load observation data from streaming state and verified candidates."""
+        """Load observation data from streaming state, verified candidates, and AstroLens."""
         self._observations = []
 
-        from paths import CANDIDATES_DIR, DATA_DIR
+        from paths import ASTROLENS_SKYMAP_FILE, CANDIDATES_DIR, DATA_DIR
 
         state_file = DATA_DIR / "streaming_state.json"
         if state_file.exists():
@@ -447,6 +453,32 @@ class SkyMapPanel(QWidget):
                             "frequency_mhz": freq_mhz,
                             "snr": c.get("snr", 0),
                             "classification": c.get("classification", ""),
+                        }
+                    )
+            except Exception:
+                pass
+
+        # Load AstroLens optical detections for unified sky map
+        if ASTROLENS_SKYMAP_FILE.exists():
+            try:
+                with open(ASTROLENS_SKYMAP_FILE) as f:
+                    al_data = json.load(f)
+                for al in al_data if isinstance(al_data, list) else []:
+                    ra = al.get("ra_deg")
+                    dec = al.get("dec_deg")
+                    if ra is None or dec is None:
+                        continue
+                    cls = al.get("classification", "unknown")
+                    self._observations.append(
+                        {
+                            "name": f"AstroLens: {cls}",
+                            "ra": float(ra),
+                            "dec": float(dec),
+                            "signals": 0,
+                            "candidates": 1 if al.get("ood_score", 0) > 0.5 else 0,
+                            "snr": al.get("ood_score", 0) * 100,
+                            "classification": f"astrolens_{cls}",
+                            "source": "astrolens",
                         }
                     )
             except Exception:
@@ -510,6 +542,8 @@ class SkyMapPanel(QWidget):
             if filter_idx == 1 and n_sig == 0:
                 continue
             if filter_idx == 2 and n_cand == 0:
+                continue
+            if filter_idx == 3 and obs.get("source") != "astrolens":
                 continue
             filtered.append(obs)
 

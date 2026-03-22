@@ -33,6 +33,7 @@ from fastapi.templating import Jinja2Templates
 
 from paths import (
     ASTROLENS_CANDIDATES_FILE,
+    ASTROLENS_SKYMAP_FILE,
     CANDIDATES_FILE,
     DISCOVERY_STATE,
     STREAMING_STATE,
@@ -522,13 +523,15 @@ async def skymap_page(request: Request):
     if not observations:
         observations = _build_skymap_observations()
 
-    # Load AstroLens cross-matches
-    if ASTROLENS_CANDIDATES_FILE.exists():
-        try:
-            with open(ASTROLENS_CANDIDATES_FILE) as f:
-                astrolens_matches = json.load(f)
-        except Exception:
-            pass
+    # Load AstroLens detections (prefer coordinate-enriched skymap export)
+    for al_path in [ASTROLENS_SKYMAP_FILE, ASTROLENS_CANDIDATES_FILE]:
+        if al_path.exists():
+            try:
+                with open(al_path) as f:
+                    astrolens_matches = json.load(f)
+                break
+            except Exception:
+                pass
 
     return templates.TemplateResponse(
         "skymap.html",

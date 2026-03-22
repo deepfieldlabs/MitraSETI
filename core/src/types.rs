@@ -217,25 +217,37 @@ pub struct SearchParams {
 
     /// Whether to apply RFI rejection filters to the candidate list.
     pub rfi_rejection: bool,
+
+    /// Use the Taylor tree algorithm for de-Doppler search (O(N log N)
+    /// instead of brute-force O(N² × D)).  Enabled by default.
+    pub use_taylor_tree: bool,
 }
 
 #[pymethods]
 impl SearchParams {
     #[new]
-    #[pyo3(signature = (max_drift_rate=4.0, min_snr=10.0, n_workers=0, rfi_rejection=true))]
-    pub fn new(max_drift_rate: f64, min_snr: f64, n_workers: usize, rfi_rejection: bool) -> Self {
+    #[pyo3(signature = (max_drift_rate=4.0, min_snr=10.0, n_workers=0, rfi_rejection=true, use_taylor_tree=true))]
+    pub fn new(
+        max_drift_rate: f64,
+        min_snr: f64,
+        n_workers: usize,
+        rfi_rejection: bool,
+        use_taylor_tree: bool,
+    ) -> Self {
         Self {
             max_drift_rate,
             min_snr,
             n_workers,
             rfi_rejection,
+            use_taylor_tree,
         }
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "SearchParams(max_drift={:.2} Hz/s, min_snr={:.1}, workers={}, rfi={})",
+            "SearchParams(max_drift={:.2} Hz/s, min_snr={:.1}, workers={}, rfi={}, taylor={})",
             self.max_drift_rate, self.min_snr, self.n_workers, self.rfi_rejection,
+            self.use_taylor_tree,
         )
     }
 }
