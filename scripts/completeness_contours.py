@@ -25,7 +25,6 @@ import json
 import logging
 import os
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
@@ -139,7 +138,6 @@ def plot_completeness(data: Dict, output_path: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize
 
     grid = np.array(data["grid"])
     snr_vals = np.array(data["snr_values"])

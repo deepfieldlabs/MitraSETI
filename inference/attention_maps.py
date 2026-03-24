@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
 
 import numpy as np
 
@@ -52,7 +52,7 @@ def extract_attention(
     attention_weights = {}
 
     def _make_hook(layer_name):
-        def hook_fn(module, input, output):
+        def hook_fn(module, input_tensor, output):
             if isinstance(output, tuple) and len(output) >= 2:
                 attn = output[1]
                 if attn is not None:
@@ -177,7 +177,6 @@ def plot_attention_overlay(
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     fig.patch.set_facecolor("#080c14")

@@ -68,10 +68,7 @@ def detect_periodicity(
         return _null_result()
 
     # Ensure (freq, time) orientation
-    if spectrogram.shape[0] > spectrogram.shape[1]:
-        spec = spectrogram
-    else:
-        spec = spectrogram.T
+    spec = spectrogram if spectrogram.shape[0] > spectrogram.shape[1] else spectrogram.T
 
     n_freq, n_time = spec.shape
 
@@ -143,8 +140,7 @@ def detect_periodicity(
         for h in range(2, 5):
             harmonic_freq = peak_freq * h
             harmonic_idx = int(round(harmonic_freq * n_time * tsamp))
-            if 0 < harmonic_idx < len(snr_spectrum):
-                if snr_spectrum[harmonic_idx] >= significance_threshold * 0.5:
+            if 0 < harmonic_idx < len(snr_spectrum) and snr_spectrum[harmonic_idx] >= significance_threshold * 0.5:
                     harmonics.append(1.0 / harmonic_freq)
 
     # Fold the time series at the best period
@@ -198,10 +194,7 @@ def batch_periodicity_search(
     if spectrogram.ndim != 2:
         return []
 
-    if spectrogram.shape[0] > spectrogram.shape[1]:
-        spec = spectrogram
-    else:
-        spec = spectrogram.T
+    spec = spectrogram if spectrogram.shape[0] > spectrogram.shape[1] else spectrogram.T
 
     n_freq, n_time = spec.shape
     avg_power = spec.mean(axis=1)

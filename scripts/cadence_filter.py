@@ -346,7 +346,7 @@ def run_cadence_filter(
                 f"ON={c.get('on_detections', '?')}/{c.get('on_scans_total', '?')}"
             )
     else:
-        logger.info(f"\n  No candidates survived cadence filter (all matched to OFF → RFI)")
+        logger.info("\n  No candidates survived cadence filter (all matched to OFF → RFI)")
 
     return result
 

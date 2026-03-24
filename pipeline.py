@@ -443,10 +443,7 @@ class MitraSETIPipeline:
         snr = candidate.get("snr", 0)
         classification = candidate.get("classification", "unknown")
 
-        if abs(foff) > 0:
-            center_ch = int((fch1 - freq_mhz) / abs(foff))
-        else:
-            center_ch = n_chans // 2
+        center_ch = int((fch1 - freq_mhz) / abs(foff)) if abs(foff) > 0 else n_chans // 2
         center_ch = max(0, min(center_ch, n_chans - 1))
 
         half = n_freq // 2
@@ -474,7 +471,6 @@ class MitraSETIPipeline:
             extent=extent, interpolation="nearest",
         )
 
-        drift_ch_per_step = drift_rate * tsamp / (abs(foff) * 1e6) if abs(foff) > 0 else 0
         drift_freq_start = freq_mhz
         drift_freq_end = freq_mhz + drift_rate * time_end / 1e6
 

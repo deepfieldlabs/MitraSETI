@@ -34,7 +34,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 if "HDF5_PLUGIN_PATH" not in os.environ:
     os.environ["HDF5_PLUGIN_PATH"] = ""
@@ -386,11 +386,11 @@ def print_summary(results: Dict[str, Any]) -> None:
             print()
 
     # 90% completeness SNR
-    print(f"\n--- 90% completeness SNR ---")
+    print("\n--- 90% completeness SNR ---")
     for algo_name, algo_label in [("taylor_tree", "Taylor"), ("brute_force", "Brute")]:
         algo_data = results.get(algo_name, {})
         for drift_key, drift_data in sorted(algo_data.items()):
-            for i, snr in enumerate(snr_values):
+            for _, snr in enumerate(snr_values):
                 snr_key = f"snr_{snr:.1f}"
                 if drift_data.get(snr_key, {}).get("completeness", 0) >= 0.9:
                     print(f"  {algo_label:8s} {drift_key}: SNR >= {snr:.0f}")

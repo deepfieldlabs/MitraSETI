@@ -17,12 +17,9 @@ Tests all new modules:
 
 from __future__ import annotations
 
-import json
-import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -477,6 +474,7 @@ class TestCLI:
 
     def test_cli_version(self):
         from click.testing import CliRunner
+
         from cli import cli
 
         runner = CliRunner()
@@ -486,6 +484,7 @@ class TestCLI:
 
     def test_cli_rfi_command(self):
         from click.testing import CliRunner
+
         from cli import cli
 
         runner = CliRunner()
@@ -495,6 +494,7 @@ class TestCLI:
 
     def test_cli_paths_command(self):
         from click.testing import CliRunner
+
         from cli import cli
 
         runner = CliRunner()
@@ -504,6 +504,7 @@ class TestCLI:
 
     def test_cli_persistence_command(self):
         from click.testing import CliRunner
+
         from cli import cli
 
         runner = CliRunner()
@@ -536,7 +537,7 @@ class TestSpectralKurtosisAdaptive:
         data[:, 100] = 1000.0  # constant power
 
         result = MitraSETIPipeline.compute_spectral_kurtosis(data)
-        assert result["rfi_mask"][100] is True or result["rfi_mask"][100] == True
+        assert result["rfi_mask"][100]
 
     def test_adaptive_thresholds_present(self):
         """Should report adaptive threshold bounds."""

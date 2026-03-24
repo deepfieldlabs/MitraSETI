@@ -168,7 +168,7 @@ def test_ztf_coord_lookup():
 def test_sky_map_panel_imports():
     """Desktop sky map panel should be importable with AstroLens support."""
     try:
-        from ui.sky_map_panel import SkyMapPanel, _TargetBlip
+        from ui.sky_map_panel import _TargetBlip
 
         obs_radio = {"name": "Test", "ra": 100, "dec": 30, "signals": 1, "candidates": 0}
         blip_radio = _TargetBlip(obs_radio)
@@ -203,7 +203,6 @@ def main():
 
     passed = 0
     failed = 0
-    skipped = 0
 
     for name, func in tests:
         print(f"\n[TEST] {name}")

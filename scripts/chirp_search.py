@@ -40,7 +40,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 if "HDF5_PLUGIN_PATH" not in os.environ:
     os.environ["HDF5_PLUGIN_PATH"] = ""
@@ -154,7 +154,7 @@ def run_chirp_search(
     }
 
     # Run baseline (accel = 0)
-    logger.info(f"  Baseline (accel=0): running Taylor tree...")
+    logger.info("  Baseline (accel=0): running Taylor tree...")
     engine = _core.DedopplerEngine(params_tt)
     rust_header = _core.FilterbankHeader(
         nchans=n_chans, nifs=1, nbits=32, tsamp=tsamp,

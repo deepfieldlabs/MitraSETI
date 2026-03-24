@@ -33,7 +33,6 @@ def export_candidates_fits(
     confidence, rfi_probability, ood_score, is_candidate,
     interestingness_score, ra_deg, dec_deg, known_rfi, etc.
     """
-    from astropy.io import fits
     from astropy.table import Table
 
     if output_path is None:

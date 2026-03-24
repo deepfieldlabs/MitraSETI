@@ -140,7 +140,7 @@ def merge_multiscale_hits(
     freq_tolerance_hz.
     """
     all_hits = []
-    for scale, hits in hits_by_scale.items():
+    for _scale, hits in hits_by_scale.items():
         all_hits.extend(hits)
 
     if not all_hits:
@@ -256,7 +256,7 @@ def plot_multiscale_summary(results: List[Dict], output_path: Path) -> None:
                        labelcolor="#8ca5c8", fontsize=8)
 
     # Panel 2: timing comparison
-    for ri, r in enumerate(results):
+    for _ri, r in enumerate(results):
         times = [r["scales"].get(str(s), {}).get("time_s", 0) for s in SCALES]
         axes[1].plot(scale_labels, times, "o-", linewidth=2, markersize=6,
                      label=Path(r["file"]).stem[:30])
@@ -273,7 +273,7 @@ def plot_multiscale_summary(results: List[Dict], output_path: Path) -> None:
     axes[2].set_xlabel("Unique Detections", color="#8ca5c8")
     axes[2].set_title("Broadband-Only Detections", color="#e0e8f0", fontsize=12)
 
-    for bar, count in zip(bars, unique_counts):
+    for bar, count in zip(bars, unique_counts, strict=False):
         axes[2].text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2,
                      str(count), va="center", color="#ff9f43", fontsize=10)
 

@@ -129,7 +129,7 @@ def benchmark(bench_type: str, repeats: int):
 @click.option("--source", default="streaming", help="Data source: streaming, file")
 def export_cmd(fmt: str, output: str, source: str):
     """Export results in various formats."""
-    from paths import STREAMING_STATE, CANDIDATES_DIR
+    from paths import CANDIDATES_DIR, STREAMING_STATE
 
     candidates = []
     if source == "streaming" and STREAMING_STATE.exists():
@@ -240,8 +240,13 @@ def persistence():
 def paths():
     """Show configured artifact paths."""
     from paths import (
-        PROJECT_ROOT, ARTIFACTS_DIR, DATA_DIR, DB_PATH,
-        FILTERBANK_DIR, MODELS_DIR, CANDIDATES_DIR,
+        ARTIFACTS_DIR,
+        CANDIDATES_DIR,
+        DATA_DIR,
+        DB_PATH,
+        FILTERBANK_DIR,
+        MODELS_DIR,
+        PROJECT_ROOT,
     )
     click.echo("\nMitraSETI Paths:")
     click.echo(f"  Project root:  {PROJECT_ROOT}")

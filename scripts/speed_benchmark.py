@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -99,10 +100,8 @@ def run_single_benchmark(
     data_flat = data.ravel().tolist()
 
     # Warm-up run
-    try:
+    with contextlib.suppress(Exception):
         engine.search(data_flat, n_times, n_chans, header)
-    except Exception:
-        pass
 
     # Timed run
     t0 = time.perf_counter()
@@ -143,7 +142,7 @@ def run_benchmark_suite(
             timings = []
             throughputs = []
 
-            for rep in range(repeats):
+            for _rep in range(repeats):
                 r = run_single_benchmark(n_chans, n_times, use_taylor)
                 timings.append(r["elapsed_s"])
                 throughputs.append(r["throughput_mpts_s"])
@@ -166,11 +165,8 @@ def run_benchmark_suite(
 
     # Compute speedup factors
     speedups = []
-    for tt, bf in zip(results["taylor_tree"], results["brute_force"]):
-        if tt["mean_s"] > 0:
-            speedup = bf["mean_s"] / tt["mean_s"]
-        else:
-            speedup = float("inf")
+    for tt, bf in zip(results["taylor_tree"], results["brute_force"], strict=False):
+        speedup = bf["mean_s"] / tt["mean_s"] if tt["mean_s"] > 0 else float("inf")
         speedups.append({
             "n_chans": tt["n_chans"],
             "speedup_x": round(speedup, 1),

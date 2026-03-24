@@ -25,7 +25,6 @@ import json
 import logging
 import os
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -86,7 +85,7 @@ def measure_false_positive_rate(
         total_false_positives = 0
         total_channels_searched = 0
 
-        for trial in range(n_trials):
+        for _trial in range(n_trials):
             noise = rng.standard_normal((n_times, n_chans)).astype(np.float32)
             data_flat = noise.ravel().tolist()
 
@@ -280,9 +279,9 @@ def main():
         print(f"{e['snr_threshold']:>15.1f}  {e['total_false_positives']:>16d}  {e['fpr']:>10.6f}")
 
     if has_tpr:
-        print(f"\n  ROC curve generated using injection/recovery TPR data")
+        print("\n  ROC curve generated using injection/recovery TPR data")
     else:
-        print(f"\n  Run injection_recovery.py first to generate ROC curve")
+        print("\n  Run injection_recovery.py first to generate ROC curve")
     print(f"  Plot: {plot_path}")
 
 

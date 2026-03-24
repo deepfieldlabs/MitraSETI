@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -51,8 +51,8 @@ def crossmatch_radio_optical(
         Dict with matched pairs, unmatched radio, unmatched optical,
         and statistics.
     """
-    from astropy.coordinates import SkyCoord, match_coordinates_sky
     import astropy.units as u
+    from astropy.coordinates import SkyCoord, match_coordinates_sky
 
     # Filter to candidates with valid coordinates
     radio_with_coords = []

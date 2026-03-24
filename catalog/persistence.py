@@ -42,7 +42,7 @@ class PersistenceTracker:
             try:
                 with open(self._path) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass
         return {"sources": {}, "version": 1}
 

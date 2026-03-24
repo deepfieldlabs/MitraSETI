@@ -35,10 +35,8 @@ import json
 import logging
 import os
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
 
 if "HDF5_PLUGIN_PATH" not in os.environ:
     os.environ["HDF5_PLUGIN_PATH"] = ""
@@ -47,7 +45,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from paths import ARTIFACTS_DIR, DATA_DIR, MODELS_DIR
+from paths import DATA_DIR, MODELS_DIR
 
 logger = logging.getLogger("mitraseti.pretrain")
 
@@ -167,7 +165,7 @@ def generate_synthetic_spectrograms(
     rng = np.random.default_rng(42)
     spectrograms = []
 
-    for i in range(n_samples):
+    for _ in range(n_samples):
         spec = rng.standard_normal((freq_bins, time_steps)).astype(np.float32) * 0.3
 
         n_signals = rng.integers(0, 4)
@@ -434,7 +432,7 @@ def main():
     print(f"  Device:       {results['device']}")
     print(f"  Backbone:     {backbone_path}")
     print(f"  Training log: {log_path}")
-    print(f"\nTo use the pre-trained backbone:")
+    print("\nTo use the pre-trained backbone:")
     print(f"  pipe = MitraSETIPipeline(model_path='{backbone_path}')")
 
 
