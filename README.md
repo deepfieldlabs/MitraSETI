@@ -12,7 +12,7 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70%2B-orange?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.70+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-  <a href="https://pypi.org/project/mitraseti/"><img src="https://img.shields.io/badge/version-0.1.0-purple?style=flat-square" alt="Version 0.1.0"></a>
+  <a href="https://pypi.org/project/mitraseti/"><img src="https://img.shields.io/badge/version-0.2.0-purple?style=flat-square" alt="Version 0.2.0"></a>
   <a href="https://github.com/deepfieldlabs/MitraSETI/stargazers"><img src="https://img.shields.io/github/stars/deepfieldlabs/MitraSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
 </p>
 
@@ -129,9 +129,10 @@ turboSETI reports raw hits. MitraSETI reports *classified candidates* — signal
 | Stage | Component | What It Does | Technology |
 |---|---|---|---|
 | **1. Ingest** | `FilterbankReader` | Reads `.fil` (Sigproc) and `.h5` (HDF5/BL) files; handles 3D data, large-file subsetting, blimpy fallback | Rust (`core/src/filterbank.rs`), h5py, blimpy |
-| **2. De-Doppler** | `DedopplerEngine` | Brute-force drift-rate search across all channels; finds narrowband signals drifting due to relative acceleration | Rust (`core/src/dedoppler.rs`), rayon parallelism |
-| **3. RFI Rejection** | `RFIFilter` | Eliminates known-band interference, zero-drift signals, broadband events; persistence scoring across observations | Rust (`core/src/rfi_filter.rs`) |
-| **4. Clustering** | `_cluster_hits` | Deduplicates nearby hits in frequency/drift space; keeps highest-SNR per cluster | Python (pipeline.py) |
+| **2. De-Doppler** | `DedopplerEngine` | Taylor tree O(N log N) or brute-force drift-rate search across all channels; finds narrowband signals drifting due to relative acceleration | Rust (`core/src/dedoppler.rs`), rayon parallelism |
+| **2b. SK Filter** | `compute_spectral_kurtosis` | Adaptive spectral kurtosis RFI excision using median + MAD thresholds | Python (pipeline.py) |
+| **3. RFI Rejection** | `RFIFilter` + `RFIDatabase` | Eliminates known-band interference, zero-drift signals, broadband events; matches against 27 cataloged RFI sources | Rust + Python |
+| **4. Clustering** | `_cluster_hdbscan` | HDBSCAN density-based deduplication; keeps highest-SNR per cluster | Python (pipeline.py, hdbscan) |
 | **5a. Rule Filter** | Stage 1 classifier | Fast pass over all signals: checks drift rate range, SNR thresholds, boundary artifacts; eliminates 99%+ obvious RFI | Python (pipeline.py) |
 | **5b. ML Inference** | Stage 2 classifier | CNN+Transformer on surviving candidates; produces 9-class probabilities, confidence, RFI probability | PyTorch (`inference/signal_classifier.py`) |
 | **5c. OOD Detection** | `RadioOODDetector` | Ensemble of MSP + Energy + Spectral distance; flags signals outside training distribution as anomalies | PyTorch (`inference/ood_detector.py`) |
@@ -376,23 +377,38 @@ The desktop app includes:
 
 ## CLI Usage
 
-Process filterbank files directly from the command line:
+MitraSETI provides a unified CLI via [Click](https://click.palletsprojects.com/):
 
 ```bash
 # Process a single file
-python pipeline.py observation.fil
+mitraseti search observation.fil
 
-# Process multiple files
-python pipeline.py data/*.fil data/*.h5
+# Process multiple files with FITS export
+mitraseti search data/*.fil data/*.h5 --fits
 
-# Specify model weights and output
-python pipeline.py observation.h5 \
-    --model models/signal_classifier_v1.pt \
-    --ood-cal models/ood_calibration.json \
-    --json-output results.json
+# Stream observations for 7 days
+mitraseti stream --days 7
 
-# Process with custom database
-python pipeline.py observation.fil --db results.sqlite
+# Run speed benchmarks
+mitraseti benchmark
+
+# Export candidates to FITS catalog
+mitraseti export --fits
+
+# Cross-match radio detections with AstroLens optical data
+mitraseti crossmatch --radius 120
+
+# Generate publication report
+mitraseti report
+
+# Query known RFI database
+mitraseti rfi --freq 1575420000
+
+# Show signal persistence across epochs
+mitraseti persistence --source TRAPPIST-1
+
+# Show configured artifact paths
+mitraseti paths
 ```
 
 **Example output:**
@@ -543,19 +559,33 @@ This multi-modal approach opens discovery pathways that single-wavelength analys
 
 ---
 
-## What's Coming Next
-
-**v0.2.0 Roadmap:**
+## What's New in v0.2.0
 
 | Feature | Description |
 |---|---|
-| **Taylor tree de-Doppler** | O(N log N) algorithm replacing brute-force O(N²) — order-of-magnitude speedup on large files |
-| **CLI tool** | Standalone `mitraseti` command for headless operation on HPC clusters |
-| **REST API extensions** | Batch upload, observation scheduling, webhook notifications |
-| **Pre-trained model zoo** | Models trained on GBT, Parkes, MeerKAT, and ATA datasets |
+| **Taylor tree de-Doppler** | O(N log N) algorithm — 4.3x faster than brute-force on Voyager-1 data |
+| **HDBSCAN clustering** | Density-based hit deduplication replacing greedy method |
+| **Adaptive spectral kurtosis** | RFI excision using median + MAD adaptive thresholds (Nita & Gary 2010) |
+| **Known RFI database** | 27 cataloged terrestrial interference sources for automated labeling |
+| **FITS catalog export** | Standard astronomical format via astropy for interoperability |
+| **Cross-epoch persistence** | Track recurring signals across multiple observations of the same target |
+| **Astropy cross-matching** | SkyCoord KD-tree matching between radio and optical catalogs |
+| **Click CLI** | `mitraseti search`, `stream`, `benchmark`, `export`, `crossmatch`, `report` |
+| **Interestingness scoring** | Composite ranking of candidates by SNR, drift, RFI probability, OOD score |
+| **Periodicity detection** | FFT-based search for periodic/pulsed signals |
+| **Attention heatmaps** | Transformer self-attention visualization for ML interpretability |
+| **Injection & recovery** | Signal injection benchmarks with 2D completeness contour maps |
+| **ON/OFF cadence filter** | Standard SETI RFI rejection using observation cadence patterns |
+
+## Roadmap
+
+| Feature | Description |
+|---|---|
 | **GPU-accelerated de-Doppler** | CUDA and Metal compute shaders for the de-Doppler search |
+| **Pre-trained model zoo** | Models trained on GBT, Parkes, MeerKAT, and ATA datasets |
 | **Real-time SDR input** | Direct ingestion from software-defined radios (RTL-SDR, USRP) |
 | **Cloud deployment** | AWS / GCP Terraform modules for scalable processing |
+| **PyPI distribution** | `pip install mitraseti` for easy adoption |
 
 ---
 
