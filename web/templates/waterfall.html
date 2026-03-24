@@ -228,6 +228,14 @@
                 <label>Contrast</label>
                 <input type="range" id="contrast" min="0.5" max="3" step="0.1" value="1.2" oninput="renderSpectrogram()">
             </div>
+            <div>
+                <label>Drift Lines</label>
+                <select id="drift-overlay" onchange="renderSpectrogram()">
+                    <option value="all">All Detections</option>
+                    <option value="candidates">Candidates Only</option>
+                    <option value="off">Hidden</option>
+                </select>
+            </div>
             <div class="zoom-controls">
                 <label>Zoom</label>
                 <button class="zoom-btn" onclick="zoomIn()">+</button>
@@ -414,6 +422,19 @@ function getColor(value, cmap) {
     ];
 }
 
+// ── Detected signals for drift line overlay ──
+let detectedSignals = [
+    { freq_frac: 0.47, drift_px_per_row: 0.15, snr: 18.4, classification: 'narrowband_drifting', is_candidate: true, rfi_probability: 0.12 },
+    { freq_frac: 0.55, drift_px_per_row: -0.08, snr: 11.2, classification: 'narrowband_drifting', is_candidate: false, rfi_probability: 0.35 },
+    { freq_frac: 0.35, drift_px_per_row: 0.0, snr: 25.1, classification: 'rfi_stationary', is_candidate: false, rfi_probability: 0.92 },
+];
+
+function driftLineColor(sig) {
+    if (sig.rfi_probability > 0.7) return 'rgba(255, 51, 102, 0.85)';
+    if (sig.is_candidate) return 'rgba(0, 255, 136, 0.9)';
+    return 'rgba(255, 170, 0, 0.8)';
+}
+
 // ── Render spectrogram ──
 function renderSpectrogram() {
     if (!spectrogramData) return;
@@ -429,8 +450,6 @@ function renderSpectrogram() {
     for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
             let val = spectrogramData[y * w + x];
-
-            // Apply brightness and contrast
             val = ((val - 0.5) * contrast + 0.5) * brightness;
             val = Math.max(0, Math.min(1, val));
 
@@ -444,7 +463,72 @@ function renderSpectrogram() {
     }
 
     ctx.putImageData(imageData, 0, 0);
+
+    // Drift line overlay
+    const overlay = document.getElementById('drift-overlay').value;
+    if (overlay !== 'off' && detectedSignals.length > 0) {
+        drawDriftLines(overlay);
+    }
+
     updateColorbar();
+    updateSignalSidebar();
+}
+
+function drawDriftLines(filter) {
+    const w = canvas.width;
+    const h = canvas.height;
+
+    for (const sig of detectedSignals) {
+        if (filter === 'candidates' && !sig.is_candidate) continue;
+
+        const color = driftLineColor(sig);
+        const startX = sig.freq_frac * w;
+
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 6;
+
+        ctx.beginPath();
+        ctx.moveTo(startX, 0);
+        ctx.lineTo(startX + sig.drift_px_per_row * h, h);
+        ctx.stroke();
+
+        // Label at top of line
+        ctx.setLineDash([]);
+        ctx.shadowBlur = 0;
+        ctx.font = '10px Inter, sans-serif';
+        ctx.fillStyle = color;
+        const label = sig.is_candidate ? `SNR ${sig.snr.toFixed(1)} ★` :
+                      sig.rfi_probability > 0.7 ? `RFI (${sig.snr.toFixed(0)})` :
+                      `SNR ${sig.snr.toFixed(1)}`;
+        ctx.fillText(label, startX + 4, 14);
+
+        ctx.restore();
+    }
+}
+
+function updateSignalSidebar() {
+    const container = document.getElementById('detected-signals');
+    if (!detectedSignals.length) {
+        container.innerHTML = '<div class="detail-row"><span class="key">No signals detected</span></div>';
+        return;
+    }
+    const sorted = [...detectedSignals].sort((a, b) => b.snr - a.snr);
+    container.innerHTML = sorted.map((sig, i) => {
+        const color = sig.is_candidate ? 'var(--accent-green)' :
+                      sig.rfi_probability > 0.7 ? 'var(--accent-rose)' :
+                      'var(--accent-amber)';
+        const badge = sig.is_candidate ? '★ Candidate' :
+                      sig.rfi_probability > 0.7 ? 'RFI' :
+                      sig.classification.replace(/_/g, ' ');
+        return `<div class="detail-row">
+            <span class="key">Signal ${i + 1}</span>
+            <span class="val" style="color: ${color};">SNR ${sig.snr.toFixed(1)} · ${badge}</span>
+        </div>`;
+    }).join('');
 }
 
 // ── Update colorbar ──
