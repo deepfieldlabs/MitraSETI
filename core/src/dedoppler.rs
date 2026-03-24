@@ -396,7 +396,10 @@ impl DedopplerEngine {
 
             // Extract candidates from the final tree layer.
             // Row d in the tree = total drift of d channels (in the sign direction).
-            let limit = max_drift_channels.min(n_padded);
+            // The tree covers drifts 0..n_padded-1; cap at that even if
+            // max_drift_channels is larger (fine-resolution files with few
+            // time steps).
+            let limit = if n_padded == 0 { 0 } else { max_drift_channels.min(n_padded - 1) };
             for d in 0..=limit {
                 let drift_channels = d as i64 * sign;
                 let drift_rate = drift_channels as f64 * drift_step;

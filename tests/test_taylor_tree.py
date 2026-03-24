@@ -266,6 +266,34 @@ def test_multiple_signals():
     print(f"  PASS: Detected {found}/{len(injections)} injected signals")
 
 
+def test_fine_resolution_few_timesteps():
+    """Regression: fine frequency resolution with few time steps.
+
+    When channel_bw is very small (sub-Hz) and n_times is small,
+    max_drift_channels >> n_padded.  The tree must clamp the drift
+    range to n_padded-1 without panicking.  This reproduces the
+    Voyager1 crash (16t × 524K channels, foff ~ 3e-6 MHz).
+    """
+    try:
+        import mitraseti_core as _core
+    except ImportError:
+        import astroseti_core as _core
+
+    n_times, n_chans = 16, 4096
+    signal_ch = 2048
+    drift_ch = 3
+
+    data = _make_spectrogram(n_times, n_chans, signal_ch, drift_ch, signal_amplitude=60.0)
+    header = _make_header(n_chans, n_times, foff=-2.8e-06, tsamp=18.25)
+
+    params = _core.SearchParams(max_drift_rate=4.0, min_snr=5.0, use_taylor_tree=True)
+    engine = _core.DedopplerEngine(params)
+
+    result = engine.search(data.ravel().tolist(), n_times, n_chans, header)
+    print(f"  PASS: No crash — {len(result.candidates)} candidates "
+          f"(fine-res: max_drift >> n_padded)")
+
+
 def main():
     print("=" * 60)
     print("Taylor Tree De-Doppler Tests")
@@ -276,6 +304,7 @@ def main():
         ("Negative drift detection", test_negative_drift),
         ("Slow drift detection", test_slow_drift),
         ("SNR threshold filtering", test_snr_threshold),
+        ("Fine-resolution few-timesteps (Voyager regression)", test_fine_resolution_few_timesteps),
         ("Performance comparison", test_performance_speedup),
         ("Multiple signal detection", test_multiple_signals),
     ]
