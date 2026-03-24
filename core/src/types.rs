@@ -246,7 +246,10 @@ impl SearchParams {
     fn __repr__(&self) -> String {
         format!(
             "SearchParams(max_drift={:.2} Hz/s, min_snr={:.1}, workers={}, rfi={}, taylor={})",
-            self.max_drift_rate, self.min_snr, self.n_workers, self.rfi_rejection,
+            self.max_drift_rate,
+            self.min_snr,
+            self.n_workers,
+            self.rfi_rejection,
             self.use_taylor_tree,
         )
     }

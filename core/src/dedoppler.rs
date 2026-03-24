@@ -372,8 +372,7 @@ impl DedopplerEngine {
         }
 
         let drift_step = channel_bw_hz / obs_length;
-        let max_drift_channels =
-            (self.params.max_drift_rate / drift_step).ceil() as usize;
+        let max_drift_channels = (self.params.max_drift_rate / drift_step).ceil() as usize;
 
         let n_layers = if n_times <= 1 {
             0
@@ -399,7 +398,11 @@ impl DedopplerEngine {
             // The tree covers drifts 0..n_padded-1; cap at that even if
             // max_drift_channels is larger (fine-resolution files with few
             // time steps).
-            let limit = if n_padded == 0 { 0 } else { max_drift_channels.min(n_padded - 1) };
+            let limit = if n_padded == 0 {
+                0
+            } else {
+                max_drift_channels.min(n_padded - 1)
+            };
             for d in 0..=limit {
                 let drift_channels = d as i64 * sign;
                 let drift_rate = drift_channels as f64 * drift_step;
@@ -476,9 +479,7 @@ impl DedopplerEngine {
 
                 // drift_bit = 1: shift by 1 channel in the drift direction
                 let f_shifted = f as i64 + sign;
-                let v1_shifted = if t1 < n_times
-                    && f_shifted >= 0
-                    && (f_shifted as usize) < n_chans
+                let v1_shifted = if t1 < n_times && f_shifted >= 0 && (f_shifted as usize) < n_chans
                 {
                     data[[t1, f_shifted as usize]]
                 } else {
@@ -518,12 +519,11 @@ impl DedopplerEngine {
 
                         for f in 0..n_chans {
                             let f_shifted = f as i64 + ch_shift;
-                            let second_val =
-                                if f_shifted >= 0 && (f_shifted as usize) < n_chans {
-                                    prev[[row_second, f_shifted as usize]]
-                                } else {
-                                    0.0
-                                };
+                            let second_val = if f_shifted >= 0 && (f_shifted as usize) < n_chans {
+                                prev[[row_second, f_shifted as usize]]
+                            } else {
+                                0.0
+                            };
                             entries.push((row_out, f, prev[[row_first, f]] + second_val));
                         }
                     }
