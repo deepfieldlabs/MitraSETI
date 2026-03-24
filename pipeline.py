@@ -307,6 +307,195 @@ class MitraSETIPipeline:
             raise ValueError(f"Unsupported file format: {ext} (expected .fil or .h5)")
 
     # ------------------------------------------------------------------
+    # Spectral Kurtosis RFI Excision
+    # ------------------------------------------------------------------
+
+    _SK_LOWER = 0.3
+    _SK_UPPER = 2.5
+
+    @staticmethod
+    def compute_spectral_kurtosis(
+        data: np.ndarray,
+        sk_lower: float = 0.3,
+        sk_upper: float = 2.5,
+    ) -> Dict[str, Any]:
+        """Compute per-channel spectral kurtosis and flag RFI channels.
+
+        The spectral kurtosis estimator (Nita & Gary, 2010) for each
+        frequency channel is:
+
+            SK = (M+1)/(M-1) * (M * sum(S_i^2) / (sum(S_i))^2 - 1)
+
+        where M is the number of time integrations and S_i is the power
+        in the channel at time step i.
+
+        For Gaussian noise, SK ≈ 1.  Constant-power RFI produces SK ≈ 0,
+        impulsive RFI produces SK >> 1.
+
+        Returns dict with sk_values, rfi_mask (True = flagged), and stats.
+        """
+        n_times, n_chans = data.shape
+        M = n_times
+
+        power = np.abs(data).astype(np.float64)
+        power[power < 1e-30] = 1e-30
+
+        s1 = power.sum(axis=0)
+        s2 = (power ** 2).sum(axis=0)
+
+        s1_sq = s1 ** 2
+        s1_sq[s1_sq < 1e-60] = 1e-60
+
+        sk = ((M + 1) / max(M - 1, 1)) * (M * s2 / s1_sq - 1)
+
+        rfi_mask = (sk < sk_lower) | (sk > sk_upper)
+        n_flagged = int(rfi_mask.sum())
+
+        return {
+            "sk_values": sk,
+            "rfi_mask": rfi_mask,
+            "n_flagged": n_flagged,
+            "fraction_flagged": n_flagged / n_chans if n_chans > 0 else 0,
+            "sk_median": float(np.median(sk)),
+            "sk_std": float(np.std(sk)),
+        }
+
+    def _apply_sk_mask(
+        self, data: np.ndarray, header: Dict[str, Any]
+    ) -> tuple[np.ndarray, Dict[str, Any]]:
+        """Apply spectral kurtosis RFI mask to the data.
+
+        Replaces flagged channels with per-channel median (preserves
+        statistical properties for non-RFI channels).
+        """
+        sk_result = self.compute_spectral_kurtosis(
+            data, self._SK_LOWER, self._SK_UPPER
+        )
+        mask = sk_result["rfi_mask"]
+        n_flagged = sk_result["n_flagged"]
+
+        if n_flagged > 0 and n_flagged < data.shape[1] * 0.5:
+            col_medians = np.median(data, axis=0)
+            data[:, mask] = col_medians[mask]
+            logger.info(
+                f"  SK-RFI: flagged {n_flagged}/{data.shape[1]} channels "
+                f"({sk_result['fraction_flagged']:.1%}), "
+                f"SK median={sk_result['sk_median']:.3f}"
+            )
+        elif n_flagged >= data.shape[1] * 0.5:
+            logger.warning(
+                f"  SK-RFI: would flag {n_flagged}/{data.shape[1]} channels "
+                f"(>{50}%) — skipping mask to avoid data loss"
+            )
+
+        return data, sk_result
+
+    # ------------------------------------------------------------------
+    # Candidate Waterfall Extraction
+    # ------------------------------------------------------------------
+
+    _WATERFALL_DIR = Path(os.environ.get(
+        "WATERFALL_DIR",
+        str(Path(__file__).parent.parent / "mitraseti_artifacts" / "candidate_waterfalls"),
+    ))
+
+    def _save_candidate_waterfall(
+        self,
+        data: np.ndarray,
+        candidate: Dict[str, Any],
+        header: Dict[str, Any],
+        filename: str,
+        n_freq: int = 512,
+    ) -> Optional[str]:
+        """Extract and save a waterfall PNG around a candidate with drift line.
+
+        Returns the path to the saved image, or None on failure.
+        """
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+        except ImportError:
+            return None
+
+        self._WATERFALL_DIR.mkdir(parents=True, exist_ok=True)
+
+        n_time_full, n_chans = data.shape
+        fch1 = header.get("fch1", 1420.0)
+        foff = header.get("foff", -0.00028)
+        tsamp = header.get("tsamp", 18.0)
+
+        freq_hz = candidate.get("frequency_hz", 0)
+        freq_mhz = freq_hz / 1e6 if freq_hz > 1e6 else freq_hz
+        drift_rate = candidate.get("drift_rate", 0)
+        snr = candidate.get("snr", 0)
+        classification = candidate.get("classification", "unknown")
+
+        if abs(foff) > 0:
+            center_ch = int((fch1 - freq_mhz) / abs(foff))
+        else:
+            center_ch = n_chans // 2
+        center_ch = max(0, min(center_ch, n_chans - 1))
+
+        half = n_freq // 2
+        ch_start = max(0, center_ch - half)
+        ch_end = min(n_chans, ch_start + n_freq)
+        ch_start = max(0, ch_end - n_freq)
+
+        snippet = data[:, ch_start:ch_end]
+
+        freq_start = fch1 + ch_start * foff
+        freq_end = fch1 + ch_end * foff
+        time_end = n_time_full * tsamp
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        fig.patch.set_facecolor("#080c14")
+        ax.set_facecolor("#080c14")
+
+        db_data = 10 * np.log10(np.abs(snippet) + 1e-10)
+        vmin = np.percentile(db_data, 5)
+        vmax = np.percentile(db_data, 99)
+
+        extent = [min(freq_start, freq_end), max(freq_start, freq_end), time_end, 0]
+        ax.imshow(
+            db_data, aspect="auto", cmap="viridis", vmin=vmin, vmax=vmax,
+            extent=extent, interpolation="nearest",
+        )
+
+        drift_ch_per_step = drift_rate * tsamp / (abs(foff) * 1e6) if abs(foff) > 0 else 0
+        drift_freq_start = freq_mhz
+        drift_freq_end = freq_mhz + drift_rate * time_end / 1e6
+
+        is_candidate = candidate.get("is_candidate", False)
+        rfi_prob = candidate.get("rfi_probability", 0)
+        line_color = "#00ff88" if is_candidate else "#ff3366" if rfi_prob > 0.7 else "#ffaa00"
+
+        ax.plot(
+            [drift_freq_start, drift_freq_end], [0, time_end],
+            color=line_color, linewidth=2, linestyle="--", alpha=0.85,
+        )
+
+        status = "CANDIDATE" if is_candidate else "RFI" if rfi_prob > 0.7 else classification
+        ax.set_title(
+            f"{filename} — {freq_mhz:.6f} MHz | SNR {snr:.1f} | "
+            f"Drift {drift_rate:.4f} Hz/s | {status}",
+            color="#e0e8f0", fontsize=11, fontweight=300, pad=10,
+        )
+        ax.set_xlabel("Frequency (MHz)", color="#8ca5c8", fontsize=10)
+        ax.set_ylabel("Time (s)", color="#8ca5c8", fontsize=10)
+        ax.tick_params(colors="#8ca5c8")
+        for spine in ax.spines.values():
+            spine.set_color("#1a3a5c")
+
+        safe_name = filename.replace("/", "_").replace(" ", "_")[:60]
+        freq_tag = f"{freq_mhz:.3f}".replace(".", "p")
+        out_path = self._WATERFALL_DIR / f"wf_{safe_name}_{freq_tag}_{status.lower()}.png"
+
+        fig.savefig(out_path, dpi=150, facecolor=fig.get_facecolor(), bbox_inches="tight")
+        plt.close(fig)
+        return str(out_path)
+
+    # ------------------------------------------------------------------
     # Processing stages
     # ------------------------------------------------------------------
 
@@ -752,6 +941,12 @@ class MitraSETIPipeline:
         header = file_info["header"]
         data = file_info["data"]
 
+        # Stage 1b: Spectral kurtosis RFI excision
+        t0 = time.perf_counter()
+        data, sk_result = self._apply_sk_mask(data, header)
+        file_info["data"] = data
+        timings["sk_rfi"] = time.perf_counter() - t0
+
         # Stage 2: De-Doppler search
         logger.info("  [2/4] Running de-Doppler search…")
         t0 = time.perf_counter()
@@ -791,6 +986,20 @@ class MitraSETIPipeline:
         classified = self._classify_candidates(filtered_candidates, data, header)
         timings["ml_inference"] = time.perf_counter() - t0
 
+        # Stage 5: Auto-extract candidate waterfall images
+        verified = [c for c in classified if c.get("is_candidate") or c.get("is_anomaly")]
+        waterfall_paths = []
+        for cand in verified[:20]:
+            try:
+                wf_path = self._save_candidate_waterfall(data, cand, header, fname)
+                if wf_path:
+                    cand["waterfall_path"] = wf_path
+                    waterfall_paths.append(wf_path)
+            except Exception:
+                pass
+        if waterfall_paths:
+            logger.info(f"  [5/5] Saved {len(waterfall_paths)} candidate waterfall images")
+
         timings["total"] = sum(timings.values())
 
         n_rfi = sum(1 for c in classified if c.get("classification", "").startswith("rfi_"))
@@ -813,6 +1022,12 @@ class MitraSETIPipeline:
             cls_dist[cls_name] = cls_dist.get(cls_name, 0) + 1
 
         metrics = {
+            "spectral_kurtosis": {
+                "channels_flagged": sk_result["n_flagged"],
+                "fraction_flagged": round(sk_result["fraction_flagged"], 4),
+                "sk_median": round(sk_result["sk_median"], 3),
+                "sk_std": round(sk_result["sk_std"], 3),
+            },
             "dedoppler": {
                 "data_points": data_points,
                 "throughput_mpts_per_s": round(data_points / 1e6 / dd_time, 2),
