@@ -79,7 +79,7 @@ def export_candidates_fits(
     t.meta["EXTNAME"] = "MITRASETI_CANDIDATES"
     t.meta["PIPELINE"] = "MitraSETI v0.2.0"
     t.meta["DATE"] = datetime.now().isoformat()
-    t.meta["AUTHOR"] = "Deep Field Labs"
+    t.meta["AUTHOR"] = "Saman Tabatabaeian"
 
     if file_info:
         t.meta["SRCFILE"] = str(file_info.get("filepath", ""))[:68]
