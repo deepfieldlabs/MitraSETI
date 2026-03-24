@@ -84,7 +84,9 @@ def test_skymap_export_json_schema():
 
 def test_skymap_export_file_exists():
     """The generated skymap_export.json should exist in the artifacts dir."""
-    skymap_file = Path(__file__).parent.parent.parent / "astrolens_artifacts" / "data" / "skymap_export.json"
+    skymap_file = (
+        Path(__file__).parent.parent.parent / "astrolens_artifacts" / "data" / "skymap_export.json"
+    )
     if not skymap_file.exists():
         print("  SKIP: skymap_export.json not yet generated")
         return
@@ -120,7 +122,12 @@ def test_cross_matching():
     ]
 
     astrolens_detections = [
-        {"ra_deg": 149.5, "dec_deg": 68.8, "classification": "supernova_candidate", "ood_score": 0.8},
+        {
+            "ra_deg": 149.5,
+            "dec_deg": 68.8,
+            "classification": "supernova_candidate",
+            "ood_score": 0.8,
+        },
         {"ra_deg": 300.0, "dec_deg": -10.0, "classification": "spiral", "ood_score": 0.3},
     ]
 
@@ -175,8 +182,12 @@ def test_sky_map_panel_imports():
         assert blip_radio.category == "signal"
 
         obs_astrolens = {
-            "name": "AstroLens: spiral", "ra": 150, "dec": 45,
-            "signals": 0, "candidates": 0, "source": "astrolens",
+            "name": "AstroLens: spiral",
+            "ra": 150,
+            "dec": 45,
+            "signals": 0,
+            "candidates": 0,
+            "source": "astrolens",
         }
         blip_al = _TargetBlip(obs_astrolens)
         assert blip_al.category == "astrolens", f"Expected 'astrolens', got '{blip_al.category}'"

@@ -55,6 +55,7 @@ def _check_turboseti() -> bool:
     """Check if turboSETI is installed."""
     try:
         import turbo_seti  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -97,12 +98,14 @@ def run_turboseti(filepath: str, max_drift: float = 4.0, min_snr: float = 10.0) 
                         parts = line.split()
                         if len(parts) >= 8:
                             try:
-                                hits.append({
-                                    "drift_rate": float(parts[1]),
-                                    "snr": float(parts[2]),
-                                    "frequency_mhz": float(parts[3]),
-                                    "frequency_hz": float(parts[3]) * 1e6,
-                                })
+                                hits.append(
+                                    {
+                                        "drift_rate": float(parts[1]),
+                                        "snr": float(parts[2]),
+                                        "frequency_mhz": float(parts[3]),
+                                        "frequency_hz": float(parts[3]) * 1e6,
+                                    }
+                                )
                                 n_hits += 1
                             except (ValueError, IndexError):
                                 continue
@@ -180,9 +183,9 @@ def run_comparison(
     }
 
     for fp in files:
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info(f"FILE: {fp.name}")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
 
         file_result = {
             "filename": fp.name,
@@ -299,13 +302,13 @@ def generate_html(results: Dict[str, Any], output_path: Path) -> None:
             turbo_cols = f"<td>{ts.get('hits', 'N/A')}</td><td>{ts.get('elapsed_s', 'N/A')}s</td>"
 
         html += f"""<tr>
-  <td>{f['filename'][:40]}</td>
-  <td>{f.get('file_size_mb', 0)} MB</td>
-  <td>{tt.get('hits', 0)}</td><td>{tt.get('elapsed_s', 0):.2f}s</td>
-  <td>{bf.get('hits', 0)}</td><td>{bf.get('elapsed_s', 0):.2f}s</td>
+  <td>{f["filename"][:40]}</td>
+  <td>{f.get("file_size_mb", 0)} MB</td>
+  <td>{tt.get("hits", 0)}</td><td>{tt.get("elapsed_s", 0):.2f}s</td>
+  <td>{bf.get("hits", 0)}</td><td>{bf.get("elapsed_s", 0):.2f}s</td>
   {turbo_cols}
-  <td class="pass">{f.get('speedup_tt_vs_bf', 0)}&times;</td>
-  <td>{overlap.get('both', 0)} shared, {overlap.get('taylor_only', 0)} TT-only</td>
+  <td class="pass">{f.get("speedup_tt_vs_bf", 0)}&times;</td>
+  <td>{overlap.get("both", 0)} shared, {overlap.get("taylor_only", 0)} TT-only</td>
 </tr>"""
 
     html += """</tbody></table>
@@ -360,7 +363,7 @@ def main():
 
     # Prefer smaller files for faster comparison
     all_files.sort(key=lambda f: f.stat().st_size)
-    files_to_use = all_files[:args.files]
+    files_to_use = all_files[: args.files]
 
     if not files_to_use:
         logger.error(f"No filterbank files found in {FILTERBANK_DIR}")
@@ -382,9 +385,9 @@ def main():
     generate_html(results, html_path)
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("COMPARISON SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"{'File':>40s}  {'TT hits':>8s}  {'TT time':>8s}  {'BF time':>8s}  {'Speedup':>8s}")
     for f in results["files"]:
         tt = f.get("mitraseti_taylor", {})

@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PeriodicityResult:
     """Result of periodicity analysis on a signal."""
+
     is_periodic: bool
     best_period_s: float
     period_significance: float
@@ -124,8 +125,8 @@ def detect_periodicity(
     if min_freq_idx >= max_freq_idx:
         return _null_result()
 
-    search_snr = snr_spectrum[min_freq_idx:max_freq_idx + 1]
-    search_freqs = freqs[min_freq_idx:max_freq_idx + 1]
+    search_snr = snr_spectrum[min_freq_idx : max_freq_idx + 1]
+    search_freqs = freqs[min_freq_idx : max_freq_idx + 1]
 
     peak_idx = int(np.argmax(search_snr))
     peak_snr = float(search_snr[peak_idx])
@@ -140,8 +141,11 @@ def detect_periodicity(
         for h in range(2, 5):
             harmonic_freq = peak_freq * h
             harmonic_idx = int(round(harmonic_freq * n_time * tsamp))
-            if 0 < harmonic_idx < len(snr_spectrum) and snr_spectrum[harmonic_idx] >= significance_threshold * 0.5:
-                    harmonics.append(1.0 / harmonic_freq)
+            if (
+                0 < harmonic_idx < len(snr_spectrum)
+                and snr_spectrum[harmonic_idx] >= significance_threshold * 0.5
+            ):
+                harmonics.append(1.0 / harmonic_freq)
 
     # Fold the time series at the best period
     folded = None
@@ -203,7 +207,9 @@ def batch_periodicity_search(
     results = []
     for ch in top_channels:
         result = detect_periodicity(
-            spec, tsamp=tsamp, freq_channel=int(ch),
+            spec,
+            tsamp=tsamp,
+            freq_channel=int(ch),
             significance_threshold=significance_threshold,
         )
         if result.period_significance > 0:

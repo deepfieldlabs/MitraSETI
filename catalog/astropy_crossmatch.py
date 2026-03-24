@@ -108,19 +108,21 @@ def crossmatch_radio_optical(
             r_orig_idx = radio_with_coords[ri][0]
             o_orig_idx = optical_with_coords[oi][0]
 
-            matches.append({
-                "radio_idx": r_orig_idx,
-                "optical_idx": o_orig_idx,
-                "separation_arcsec": round(float(sep_arcsec), 2),
-                "radio_ra": radio_with_coords[ri][1],
-                "radio_dec": radio_with_coords[ri][2],
-                "optical_ra": optical_with_coords[oi][1],
-                "optical_dec": optical_with_coords[oi][2],
-                "radio_snr": radio_candidates[r_orig_idx].get("snr", 0),
-                "optical_ood": optical_candidates[o_orig_idx].get("ood_score", 0),
-                "radio_source": radio_candidates[r_orig_idx].get("source_name", ""),
-                "optical_class": optical_candidates[o_orig_idx].get("classification", ""),
-            })
+            matches.append(
+                {
+                    "radio_idx": r_orig_idx,
+                    "optical_idx": o_orig_idx,
+                    "separation_arcsec": round(float(sep_arcsec), 2),
+                    "radio_ra": radio_with_coords[ri][1],
+                    "radio_dec": radio_with_coords[ri][2],
+                    "optical_ra": optical_with_coords[oi][1],
+                    "optical_dec": optical_with_coords[oi][2],
+                    "radio_snr": radio_candidates[r_orig_idx].get("snr", 0),
+                    "optical_ood": optical_candidates[o_orig_idx].get("ood_score", 0),
+                    "radio_source": radio_candidates[r_orig_idx].get("source_name", ""),
+                    "optical_class": optical_candidates[o_orig_idx].get("classification", ""),
+                }
+            )
             matched_radio_indices.add(r_orig_idx)
             matched_optical_indices.add(o_orig_idx)
 
@@ -133,8 +135,7 @@ def crossmatch_radio_optical(
         "n_optical_with_coords": len(optical_with_coords),
         "max_sep_arcsec": max_sep_arcsec,
         "mean_separation_arcsec": (
-            round(float(np.mean([m["separation_arcsec"] for m in matches])), 2)
-            if matches else 0
+            round(float(np.mean([m["separation_arcsec"] for m in matches])), 2) if matches else 0
         ),
     }
 
@@ -143,6 +144,7 @@ def load_astrolens_candidates(path: Optional[Path] = None) -> List[Dict[str, Any
     """Load AstroLens skymap export JSON."""
     if path is None:
         from paths import ASTROLENS_SKYMAP_FILE
+
         path = ASTROLENS_SKYMAP_FILE
 
     if not Path(path).exists():
@@ -158,6 +160,7 @@ def load_radio_candidates(path: Optional[Path] = None) -> List[Dict[str, Any]]:
     """Load MitraSETI streaming state candidates."""
     if path is None:
         from paths import STREAMING_STATE
+
         path = STREAMING_STATE
 
     if not Path(path).exists():

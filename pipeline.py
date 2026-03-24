@@ -346,9 +346,9 @@ class MitraSETIPipeline:
         power[power < 1e-30] = 1e-30
 
         s1 = power.sum(axis=0)
-        s2 = (power ** 2).sum(axis=0)
+        s2 = (power**2).sum(axis=0)
 
-        s1_sq = s1 ** 2
+        s1_sq = s1**2
         s1_sq[s1_sq < 1e-60] = 1e-60
 
         sk = ((M + 1) / max(M - 1, 1)) * (M * s2 / s1_sq - 1)
@@ -406,10 +406,12 @@ class MitraSETIPipeline:
     # Candidate Waterfall Extraction
     # ------------------------------------------------------------------
 
-    _WATERFALL_DIR = Path(os.environ.get(
-        "WATERFALL_DIR",
-        str(Path(__file__).parent.parent / "mitraseti_artifacts" / "candidate_waterfalls"),
-    ))
+    _WATERFALL_DIR = Path(
+        os.environ.get(
+            "WATERFALL_DIR",
+            str(Path(__file__).parent.parent / "mitraseti_artifacts" / "candidate_waterfalls"),
+        )
+    )
 
     def _save_candidate_waterfall(
         self,
@@ -425,6 +427,7 @@ class MitraSETIPipeline:
         """
         try:
             import matplotlib
+
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
         except ImportError:
@@ -467,8 +470,13 @@ class MitraSETIPipeline:
 
         extent = [min(freq_start, freq_end), max(freq_start, freq_end), time_end, 0]
         ax.imshow(
-            db_data, aspect="auto", cmap="viridis", vmin=vmin, vmax=vmax,
-            extent=extent, interpolation="nearest",
+            db_data,
+            aspect="auto",
+            cmap="viridis",
+            vmin=vmin,
+            vmax=vmax,
+            extent=extent,
+            interpolation="nearest",
         )
 
         drift_freq_start = freq_mhz
@@ -479,15 +487,22 @@ class MitraSETIPipeline:
         line_color = "#00ff88" if is_candidate else "#ff3366" if rfi_prob > 0.7 else "#ffaa00"
 
         ax.plot(
-            [drift_freq_start, drift_freq_end], [0, time_end],
-            color=line_color, linewidth=2, linestyle="--", alpha=0.85,
+            [drift_freq_start, drift_freq_end],
+            [0, time_end],
+            color=line_color,
+            linewidth=2,
+            linestyle="--",
+            alpha=0.85,
         )
 
         status = "CANDIDATE" if is_candidate else "RFI" if rfi_prob > 0.7 else classification
         ax.set_title(
             f"{filename} — {freq_mhz:.6f} MHz | SNR {snr:.1f} | "
             f"Drift {drift_rate:.4f} Hz/s | {status}",
-            color="#e0e8f0", fontsize=11, fontweight=300, pad=10,
+            color="#e0e8f0",
+            fontsize=11,
+            fontweight=300,
+            pad=10,
         )
         ax.set_xlabel("Frequency (MHz)", color="#8ca5c8", fontsize=10)
         ax.set_ylabel("Time (s)", color="#8ca5c8", fontsize=10)
@@ -732,7 +747,7 @@ class MitraSETIPipeline:
             if lab == -1:
                 # Noise points: keep top ones by SNR (they're unique)
                 members.sort(key=lambda c: c.get("snr", 0), reverse=True)
-                for m in members[:max(1, len(members) // 10)]:
+                for m in members[: max(1, len(members) // 10)]:
                     m.pop("_chan_idx", None)
                     result.append(m)
             else:
@@ -1168,6 +1183,7 @@ class MitraSETIPipeline:
         n_known_rfi = 0
         try:
             from catalog.rfi_database import RFIDatabase
+
             rfi_db = RFIDatabase()
             rfi_db.match_batch(classified)
             n_known_rfi = sum(1 for c in classified if c.get("known_rfi"))
@@ -1179,6 +1195,7 @@ class MitraSETIPipeline:
         # Score candidates by interestingness
         try:
             from inference.interestingness import rank_candidates
+
             classified = rank_candidates(classified, max_drift_rate=4.0)
         except Exception:
             pass
@@ -1186,6 +1203,7 @@ class MitraSETIPipeline:
         # Track signal persistence across epochs
         try:
             from catalog.persistence import PersistenceTracker
+
             tracker = PersistenceTracker()
             source = header.get("source_name", "unknown")
             verified = [c for c in classified if c.get("is_candidate")]
@@ -1203,15 +1221,23 @@ class MitraSETIPipeline:
         periodicity_info = {}
         try:
             from inference.periodicity import batch_periodicity_search
+
             tsamp = header.get("tsamp", 18.253611008)
             periodic_results = batch_periodicity_search(
-                data, tsamp=tsamp, n_channels=5, significance_threshold=5.0,
+                data,
+                tsamp=tsamp,
+                n_channels=5,
+                significance_threshold=5.0,
             )
             periodic_signals = [
-                {"channel": ch, "period_s": r.best_period_s,
-                 "significance": r.period_significance,
-                 "harmonics": r.harmonics}
-                for ch, r in periodic_results if r.is_periodic
+                {
+                    "channel": ch,
+                    "period_s": r.best_period_s,
+                    "significance": r.period_significance,
+                    "harmonics": r.harmonics,
+                }
+                for ch, r in periodic_results
+                if r.is_periodic
             ]
             periodicity_info = {
                 "channels_searched": 5,
@@ -1219,9 +1245,7 @@ class MitraSETIPipeline:
                 "n_periodic": len(periodic_signals),
             }
             if periodic_signals:
-                logger.info(
-                    f"  Periodicity: {len(periodic_signals)} periodic signal(s) detected"
-                )
+                logger.info(f"  Periodicity: {len(periodic_signals)} periodic signal(s) detected")
         except Exception:
             pass
 

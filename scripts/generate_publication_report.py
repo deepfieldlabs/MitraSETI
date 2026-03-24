@@ -84,12 +84,14 @@ def collect_data() -> Dict[str, Any]:
     comp_img = inj_dir / "completeness_curve.png" if inj_dir.exists() else None
     if comp_img and comp_img.exists():
         import base64
+
         data["completeness_img_b64"] = base64.b64encode(comp_img.read_bytes()).decode()
 
     # Speed comparison image
     speed_img = bench_dir / "speed_comparison.png" if bench_dir.exists() else None
     if speed_img and speed_img.exists():
         import base64
+
         data["speed_img_b64"] = base64.b64encode(speed_img.read_bytes()).decode()
 
     return data
@@ -173,8 +175,8 @@ against brute-force O(D&middot;N&middot;F) de-Doppler search across increasing d
         if speedups:
             max_s = max(s["speedup_x"] for s in speedups)
             html += f"""<div class="highlight">
-  Peak speedup: <strong class="pass">{max_s}&times;</strong> at {speedups[-1]['n_chans']:,} channels
-  (N_time = {speed.get('n_times', 16)}, {speed.get('repeats', 3)} trials)
+  Peak speedup: <strong class="pass">{max_s}&times;</strong> at {speedups[-1]["n_chans"]:,} channels
+  (N_time = {speed.get("n_times", 16)}, {speed.get("repeats", 3)} trials)
 </div>
 <table><thead><tr><th>Channels</th><th>Taylor (ms)</th><th>Brute-Force (ms)</th><th>Speedup</th></tr></thead><tbody>
 """
@@ -193,8 +195,8 @@ at controlled SNR and drift rates.  Recovery fraction measures pipeline complete
             html += f'<img src="data:image/png;base64,{data["completeness_img_b64"]}" alt="Completeness curves">\n'
 
         html += f"""<div class="card">
-  <p>Injections per point: <strong>{inj.get('n_injections_per_point', 0)}</strong> &bull;
-  Files used: <strong>{len(inj.get('files_used', []))}</strong></p>
+  <p>Injections per point: <strong>{inj.get("n_injections_per_point", 0)}</strong> &bull;
+  Files used: <strong>{len(inj.get("files_used", []))}</strong></p>
 </div>
 """
 
@@ -210,29 +212,33 @@ but not in OFF-target (reference) scans.  Direction-independent RFI is eliminate
         html += f"""<div class="stats">
   <div class="stat"><div class="val">{len(cadence)}</div><div class="lbl">Targets</div></div>
   <div class="stat"><div class="val">{total_on:,}</div><div class="lbl">ON Signals</div></div>
-  <div class="stat"><div class="val {'pass' if total_survivors else 'fail'}">{total_survivors}</div><div class="lbl">Survivors</div></div>
+  <div class="stat"><div class="val {"pass" if total_survivors else "fail"}">{total_survivors}</div><div class="lbl">Survivors</div></div>
 </div>
 """
         for r in cadence:
             stats = r.get("statistics", {})
-            html += f"""<h3>{r.get('target', 'Unknown')}</h3>
+            html += f"""<h3>{r.get("target", "Unknown")}</h3>
 <table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>
-  <tr><td>ON scans</td><td>{r.get('cadence', {}).get('on_scans', 0)}</td></tr>
-  <tr><td>OFF scans</td><td>{r.get('cadence', {}).get('off_scans', 0)}</td></tr>
-  <tr><td>Total ON signals</td><td>{stats.get('total_on_signals', 0):,}</td></tr>
-  <tr><td>Multi-ON consensus</td><td>{stats.get('multi_on_consensus', 0)}</td></tr>
-  <tr><td>OFF-matched (RFI)</td><td>{stats.get('off_matched_rfi', 0)}</td></tr>
-  <tr><td>Cadence survivors</td><td class="{'pass' if stats.get('cadence_survivors') else 'fail'}">{stats.get('cadence_survivors', 0)}</td></tr>
+  <tr><td>ON scans</td><td>{r.get("cadence", {}).get("on_scans", 0)}</td></tr>
+  <tr><td>OFF scans</td><td>{r.get("cadence", {}).get("off_scans", 0)}</td></tr>
+  <tr><td>Total ON signals</td><td>{stats.get("total_on_signals", 0):,}</td></tr>
+  <tr><td>Multi-ON consensus</td><td>{stats.get("multi_on_consensus", 0)}</td></tr>
+  <tr><td>OFF-matched (RFI)</td><td>{stats.get("off_matched_rfi", 0)}</td></tr>
+  <tr><td>Cadence survivors</td><td class="{"pass" if stats.get("cadence_survivors") else "fail"}">{stats.get("cadence_survivors", 0)}</td></tr>
 </tbody></table>
 """
             cands = r.get("candidates", [])
             if cands:
                 html += "<table><thead><tr><th>Freq (MHz)</th><th>Drift (Hz/s)</th><th>SNR</th><th>ON Detect</th></tr></thead><tbody>"
                 for c in cands[:10]:
-                    freq = c.get("frequency_hz", 0) / 1e6 if c.get("frequency_hz", 0) > 1e6 else c.get("frequency_mhz", 0)
-                    html += f"""<tr><td>{freq:.6f}</td><td>{c.get('drift_rate', 0):.4f}</td>
-<td class="pass">{c.get('snr', 0):.1f}</td>
-<td>{c.get('on_detections', '?')}/{c.get('on_scans_total', '?')}</td></tr>"""
+                    freq = (
+                        c.get("frequency_hz", 0) / 1e6
+                        if c.get("frequency_hz", 0) > 1e6
+                        else c.get("frequency_mhz", 0)
+                    )
+                    html += f"""<tr><td>{freq:.6f}</td><td>{c.get("drift_rate", 0):.4f}</td>
+<td class="pass">{c.get("snr", 0):.1f}</td>
+<td>{c.get("on_detections", "?")}/{c.get("on_scans_total", "?")}</td></tr>"""
                 html += "</tbody></table>"
 
     # Methodology
@@ -272,8 +278,9 @@ drift rate tolerance: 0.5&thinsp;Hz/s.</p>
 
 def main():
     parser = argparse.ArgumentParser(description="MitraSETI Publication Report Generator")
-    parser.add_argument("--title", type=str, default="MitraSETI Analysis Report",
-                        help="Report title")
+    parser.add_argument(
+        "--title", type=str, default="MitraSETI Analysis Report", help="Report title"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(

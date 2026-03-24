@@ -68,10 +68,16 @@ def measure_false_positive_rate(
     results = {"snr_thresholds": snr_thresholds, "n_trials": n_trials, "fpr": []}
 
     header = _core.FilterbankHeader(
-        nchans=n_chans, nifs=1, nbits=32, tsamp=18.253611008,
-        fch1=1420.5, foff=-2.7939677238464355e-06,
-        tstart=59000.0, source_name="NOISE_TEST",
-        ra=0.0, dec=0.0,
+        nchans=n_chans,
+        nifs=1,
+        nbits=32,
+        tsamp=18.253611008,
+        fch1=1420.5,
+        foff=-2.7939677238464355e-06,
+        tstart=59000.0,
+        source_name="NOISE_TEST",
+        ra=0.0,
+        dec=0.0,
     )
 
     for snr_thresh in snr_thresholds:
@@ -95,13 +101,15 @@ def measure_false_positive_rate(
             total_channels_searched += n_chans
 
         fpr = total_false_positives / (n_trials * n_chans)
-        results["fpr"].append({
-            "snr_threshold": snr_thresh,
-            "total_false_positives": total_false_positives,
-            "total_channels": n_trials * n_chans,
-            "fpr": round(fpr, 8),
-            "fpr_per_channel": round(total_false_positives / total_channels_searched, 8),
-        })
+        results["fpr"].append(
+            {
+                "snr_threshold": snr_thresh,
+                "total_false_positives": total_false_positives,
+                "total_channels": n_trials * n_chans,
+                "fpr": round(fpr, 8),
+                "fpr_per_channel": round(total_false_positives / total_channels_searched, 8),
+            }
+        )
 
         logger.info(
             f"  SNR>={snr_thresh:5.1f}: "
@@ -126,10 +134,7 @@ def compute_roc(fpr_data: Dict, tpr_data: Dict) -> Dict[str, Any]:
     """Combine FPR and TPR data into ROC points."""
     roc_points = []
 
-    fpr_by_snr = {
-        e["snr_threshold"]: e["fpr"]
-        for e in fpr_data.get("fpr", [])
-    }
+    fpr_by_snr = {e["snr_threshold"]: e["fpr"] for e in fpr_data.get("fpr", [])}
 
     tt_data = tpr_data.get("taylor_tree", {})
     snr_values = tpr_data.get("snr_values", [])
@@ -143,12 +148,14 @@ def compute_roc(fpr_data: Dict, tpr_data: Dict) -> Dict[str, Any]:
             closest_snr = min(fpr_by_snr.keys(), key=lambda x: abs(x - snr), default=snr)
             fpr = fpr_by_snr.get(closest_snr, 0)
 
-            roc_points.append({
-                "snr_threshold": snr,
-                "drift": drift_key,
-                "tpr": tpr,
-                "fpr": fpr,
-            })
+            roc_points.append(
+                {
+                    "snr_threshold": snr,
+                    "drift": drift_key,
+                    "tpr": tpr,
+                    "fpr": fpr,
+                }
+            )
 
     return {"roc_points": roc_points}
 
@@ -156,6 +163,7 @@ def compute_roc(fpr_data: Dict, tpr_data: Dict) -> Dict[str, Any]:
 def plot_roc_and_fpr(fpr_data: Dict, tpr_data: Dict, output_path: Path) -> None:
     """Generate ROC curve and FPR plot."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -200,8 +208,9 @@ def plot_roc_and_fpr(fpr_data: Dict, tpr_data: Dict, output_path: Path) -> None:
             fpr_roc.append(fpr)
 
         label = drift_key.replace("drift_", "drift=").replace(".0", "")
-        ax2.plot(fpr_roc, tpr_vals, "o-", color=colors[i], linewidth=2,
-                 markersize=5, label=f"{label} ch")
+        ax2.plot(
+            fpr_roc, tpr_vals, "o-", color=colors[i], linewidth=2, markersize=5, label=f"{label} ch"
+        )
 
     ax2.plot([0, 1], [0, 1], "--", color="#8ca5c8", alpha=0.3, linewidth=1)
     ax2.set_xlabel("False Positive Rate", color="#8ca5c8", fontsize=11)
@@ -217,7 +226,10 @@ def plot_roc_and_fpr(fpr_data: Dict, tpr_data: Dict, output_path: Path) -> None:
 
     fig.suptitle(
         "MitraSETI — False Positive Rate & ROC Analysis",
-        color="#4da6ff", fontsize=16, fontweight=300, y=0.98,
+        color="#4da6ff",
+        fontsize=16,
+        fontweight=300,
+        y=0.98,
     )
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
@@ -230,10 +242,15 @@ def main():
     parser = argparse.ArgumentParser(
         description="MitraSETI False Positive Rate & ROC Analysis",
     )
-    parser.add_argument("--n-noise-trials", type=int, default=30,
-                        help="Number of pure-noise trials per threshold (default: 30)")
-    parser.add_argument("--snr-steps", type=int, default=8,
-                        help="Number of SNR thresholds to test (default: 8)")
+    parser.add_argument(
+        "--n-noise-trials",
+        type=int,
+        default=30,
+        help="Number of pure-noise trials per threshold (default: 30)",
+    )
+    parser.add_argument(
+        "--snr-steps", type=int, default=8, help="Number of SNR thresholds to test (default: 8)"
+    )
     parser.add_argument("--snr-min", type=float, default=5.0, help="Min SNR (default: 5)")
     parser.add_argument("--snr-max", type=float, default=50.0, help="Max SNR (default: 50)")
     args = parser.parse_args()
@@ -248,7 +265,8 @@ def main():
 
     logger.info("Measuring false positive rate on pure noise")
     fpr_data = measure_false_positive_rate(
-        snr_thresholds, n_trials=args.n_noise_trials,
+        snr_thresholds,
+        n_trials=args.n_noise_trials,
     )
 
     tpr_data = load_injection_recovery()
@@ -271,9 +289,9 @@ def main():
     except Exception as e:
         logger.warning(f"Failed to generate plot: {e}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("FALSE POSITIVE RATE ANALYSIS")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"{'SNR Threshold':>15s}  {'False Positives':>16s}  {'FPR':>10s}")
     for e in fpr_data.get("fpr", []):
         print(f"{e['snr_threshold']:>15.1f}  {e['total_false_positives']:>16d}  {e['fpr']:>10.6f}")

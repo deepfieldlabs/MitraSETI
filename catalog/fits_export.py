@@ -37,6 +37,7 @@ def export_candidates_fits(
 
     if output_path is None:
         from paths import CANDIDATES_DIR
+
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = CANDIDATES_DIR / f"candidates_{ts}.fits"
 
@@ -66,9 +67,7 @@ def export_candidates_fits(
         "interestingness": np.array(
             [c.get("interestingness_score", 0) for c in candidates], dtype=np.float32
         ),
-        "known_rfi": np.array(
-            [c.get("known_rfi", False) for c in candidates], dtype=np.bool_
-        ),
+        "known_rfi": np.array([c.get("known_rfi", False) for c in candidates], dtype=np.bool_),
         "known_rfi_source": [c.get("known_rfi_source", "") for c in candidates],
     }
 
@@ -110,6 +109,7 @@ def export_skymap_fits(
 
     if output_path is None:
         from paths import CANDIDATES_DIR
+
         output_path = CANDIDATES_DIR / "unified_skymap.fits"
 
     output_path = Path(output_path)
@@ -119,34 +119,40 @@ def export_skymap_fits(
 
     # Extension 1: Radio candidates
     if radio_candidates:
-        radio_table = Table({
-            "ra_deg": np.array([c.get("ra", 0) for c in radio_candidates], dtype=np.float64),
-            "dec_deg": np.array([c.get("dec", 0) for c in radio_candidates], dtype=np.float64),
-            "frequency_mhz": np.array(
-                [c.get("frequency_hz", 0) / 1e6 for c in radio_candidates], dtype=np.float64
-            ),
-            "snr": np.array([c.get("snr", 0) for c in radio_candidates], dtype=np.float32),
-            "drift_rate": np.array(
-                [c.get("drift_rate", 0) for c in radio_candidates], dtype=np.float32
-            ),
-            "source_name": [c.get("source_name", "") for c in radio_candidates],
-        })
+        radio_table = Table(
+            {
+                "ra_deg": np.array([c.get("ra", 0) for c in radio_candidates], dtype=np.float64),
+                "dec_deg": np.array([c.get("dec", 0) for c in radio_candidates], dtype=np.float64),
+                "frequency_mhz": np.array(
+                    [c.get("frequency_hz", 0) / 1e6 for c in radio_candidates], dtype=np.float64
+                ),
+                "snr": np.array([c.get("snr", 0) for c in radio_candidates], dtype=np.float32),
+                "drift_rate": np.array(
+                    [c.get("drift_rate", 0) for c in radio_candidates], dtype=np.float32
+                ),
+                "source_name": [c.get("source_name", "") for c in radio_candidates],
+            }
+        )
         radio_table.meta["EXTNAME"] = "RADIO_CANDIDATES"
         hdu_list.append(fits.table_to_hdu(radio_table))
 
     # Extension 2: Optical anomalies
     if optical_candidates:
-        optical_table = Table({
-            "ra_deg": np.array([c.get("ra_deg", 0) for c in optical_candidates], dtype=np.float64),
-            "dec_deg": np.array(
-                [c.get("dec_deg", 0) for c in optical_candidates], dtype=np.float64
-            ),
-            "ood_score": np.array(
-                [c.get("ood_score", 0) for c in optical_candidates], dtype=np.float32
-            ),
-            "classification": [c.get("classification", "") for c in optical_candidates],
-            "source": [c.get("source", "astrolens") for c in optical_candidates],
-        })
+        optical_table = Table(
+            {
+                "ra_deg": np.array(
+                    [c.get("ra_deg", 0) for c in optical_candidates], dtype=np.float64
+                ),
+                "dec_deg": np.array(
+                    [c.get("dec_deg", 0) for c in optical_candidates], dtype=np.float64
+                ),
+                "ood_score": np.array(
+                    [c.get("ood_score", 0) for c in optical_candidates], dtype=np.float32
+                ),
+                "classification": [c.get("classification", "") for c in optical_candidates],
+                "source": [c.get("source", "astrolens") for c in optical_candidates],
+            }
+        )
         optical_table.meta["EXTNAME"] = "OPTICAL_ANOMALIES"
         hdu_list.append(fits.table_to_hdu(optical_table))
 

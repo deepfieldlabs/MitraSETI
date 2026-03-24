@@ -82,7 +82,7 @@ def dechirp_spectrogram(
 
     for t in range(n_times):
         elapsed = t * tsamp
-        shift_hz = 0.5 * acceleration_hz_s2 * elapsed ** 2
+        shift_hz = 0.5 * acceleration_hz_s2 * elapsed**2
         shift_channels = int(round(shift_hz / abs(foff_hz))) if abs(foff_hz) > 0 else 0
 
         if shift_channels == 0:
@@ -157,11 +157,16 @@ def run_chirp_search(
     logger.info("  Baseline (accel=0): running Taylor tree...")
     engine = _core.DedopplerEngine(params_tt)
     rust_header = _core.FilterbankHeader(
-        nchans=n_chans, nifs=1, nbits=32, tsamp=tsamp,
-        fch1=header["fch1"], foff=header["foff"],
+        nchans=n_chans,
+        nifs=1,
+        nbits=32,
+        tsamp=tsamp,
+        fch1=header["fch1"],
+        foff=header["foff"],
         tstart=header.get("tstart", 59000.0),
         source_name=header.get("source_name", "unknown"),
-        ra=0.0, dec=0.0,
+        ra=0.0,
+        dec=0.0,
     )
 
     # Limit data size
@@ -176,11 +181,16 @@ def run_chirp_search(
         use_data = data_orig[:, :trim].reshape(n_times, -1, factor).mean(axis=2)
         use_n_chans = use_data.shape[1]
         rust_header = _core.FilterbankHeader(
-            nchans=use_n_chans, nifs=1, nbits=32, tsamp=tsamp,
-            fch1=header["fch1"], foff=header["foff"] * factor,
+            nchans=use_n_chans,
+            nifs=1,
+            nbits=32,
+            tsamp=tsamp,
+            fch1=header["fch1"],
+            foff=header["foff"] * factor,
             tstart=header.get("tstart", 59000.0),
             source_name=header.get("source_name", "unknown"),
-            ra=0.0, dec=0.0,
+            ra=0.0,
+            dec=0.0,
         )
         foff_hz_eff = header["foff"] * factor * 1e6
     else:
@@ -189,8 +199,7 @@ def run_chirp_search(
     data_flat = use_data.astype(np.float32).ravel().tolist()
     baseline_result = engine.search(data_flat, n_times, use_n_chans, rust_header)
     baseline_freqs = {
-        (round(c.frequency_hz, 1), round(c.drift_rate, 3))
-        for c in baseline_result.candidates
+        (round(c.frequency_hz, 1), round(c.drift_rate, 3)) for c in baseline_result.candidates
     }
     result["baseline_hits"] = len(baseline_result.candidates)
     logger.info(f"    Baseline: {len(baseline_result.candidates)} hits above SNR {min_snr}")
@@ -218,12 +227,14 @@ def run_chirp_search(
         for c in dc_result.candidates:
             key = (round(c.frequency_hz, 1), round(c.drift_rate, 3))
             if key not in baseline_freqs:
-                new_hits.append({
-                    "frequency_hz": c.frequency_hz,
-                    "drift_rate": c.drift_rate,
-                    "snr": c.snr,
-                    "acceleration": accel,
-                })
+                new_hits.append(
+                    {
+                        "frequency_hz": c.frequency_hz,
+                        "drift_rate": c.drift_rate,
+                        "snr": c.snr,
+                        "acceleration": accel,
+                    }
+                )
 
         accel_entry = {
             "acceleration": accel,
@@ -237,7 +248,7 @@ def run_chirp_search(
         logger.info(
             f"    Total: {len(dc_result.candidates)}, "
             f"New (chirp-only): {len(new_hits)}, "
-            f"Time: {elapsed*1000:.0f} ms"
+            f"Time: {elapsed * 1000:.0f} ms"
         )
 
     # Deduplicate chirp candidates across accelerations
@@ -264,16 +275,24 @@ def main():
     parser = argparse.ArgumentParser(
         description="MitraSETI Doppler Acceleration (Chirp) Search",
     )
-    parser.add_argument("--file", type=str, default=None,
-                        help="Specific file to search (default: first available)")
-    parser.add_argument("--accel-max", type=float, default=0.1,
-                        help="Max acceleration magnitude in Hz/s² (default: 0.1)")
-    parser.add_argument("--accel-steps", type=int, default=9,
-                        help="Number of acceleration trials (default: 9)")
-    parser.add_argument("--min-snr", type=float, default=15.0,
-                        help="Minimum SNR threshold (default: 15)")
-    parser.add_argument("--max-files", type=int, default=3,
-                        help="Max files to process (default: 3)")
+    parser.add_argument(
+        "--file", type=str, default=None, help="Specific file to search (default: first available)"
+    )
+    parser.add_argument(
+        "--accel-max",
+        type=float,
+        default=0.1,
+        help="Max acceleration magnitude in Hz/s² (default: 0.1)",
+    )
+    parser.add_argument(
+        "--accel-steps", type=int, default=9, help="Number of acceleration trials (default: 9)"
+    )
+    parser.add_argument(
+        "--min-snr", type=float, default=15.0, help="Minimum SNR threshold (default: 15)"
+    )
+    parser.add_argument(
+        "--max-files", type=int, default=3, help="Max files to process (default: 3)"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -291,9 +310,9 @@ def main():
             return
         files = candidates[:1]
     else:
-        files = sorted(FILTERBANK_DIR.glob("*.h5"))[:args.max_files]
+        files = sorted(FILTERBANK_DIR.glob("*.h5"))[: args.max_files]
         if not files:
-            files = sorted(FILTERBANK_DIR.glob("*.fil"))[:args.max_files]
+            files = sorted(FILTERBANK_DIR.glob("*.fil"))[: args.max_files]
 
     if not files:
         logger.error(f"No filterbank files found in {FILTERBANK_DIR}")
@@ -304,12 +323,13 @@ def main():
 
     all_results = []
     for fp in files:
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info(f"Processing: {fp.name}")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
 
         result = run_chirp_search(
-            fp, accel_values,
+            fp,
+            accel_values,
             min_snr=args.min_snr,
         )
         if result:
@@ -330,9 +350,9 @@ def main():
 
     # Summary
     total_chirp = sum(len(r.get("unique_chirp_candidates", [])) for r in all_results)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("CHIRP SEARCH SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Files processed:    {len(all_results)}")
     print(f"  Accel range:        [{-args.accel_max}, +{args.accel_max}] Hz/s²")
     print(f"  Accel trials:       {args.accel_steps}")
@@ -346,7 +366,7 @@ def main():
         if chirp_cands:
             for c in chirp_cands[:5]:
                 print(
-                    f"      freq={c['frequency_hz']/1e6:.6f} MHz  "
+                    f"      freq={c['frequency_hz'] / 1e6:.6f} MHz  "
                     f"drift={c['drift_rate']:.4f} Hz/s  "
                     f"accel={c['acceleration']:.4f} Hz/s²  "
                     f"SNR={c['snr']:.1f}"

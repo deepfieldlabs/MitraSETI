@@ -159,7 +159,7 @@ def run_benchmark_suite(
 
             logger.info(
                 f"  {algo_name:12s}  {n_chans:>8,} chans × {n_times} ints  "
-                f"{np.mean(timings)*1000:8.1f} ms  "
+                f"{np.mean(timings) * 1000:8.1f} ms  "
                 f"{np.mean(throughputs):8.1f} Mpts/s"
             )
 
@@ -167,12 +167,14 @@ def run_benchmark_suite(
     speedups = []
     for tt, bf in zip(results["taylor_tree"], results["brute_force"], strict=False):
         speedup = bf["mean_s"] / tt["mean_s"] if tt["mean_s"] > 0 else float("inf")
-        speedups.append({
-            "n_chans": tt["n_chans"],
-            "speedup_x": round(speedup, 1),
-            "taylor_ms": round(tt["mean_s"] * 1000, 1),
-            "brute_ms": round(bf["mean_s"] * 1000, 1),
-        })
+        speedups.append(
+            {
+                "n_chans": tt["n_chans"],
+                "speedup_x": round(speedup, 1),
+                "taylor_ms": round(tt["mean_s"] * 1000, 1),
+                "brute_ms": round(bf["mean_s"] * 1000, 1),
+            }
+        )
     results["speedups"] = speedups
 
     return results
@@ -181,6 +183,7 @@ def run_benchmark_suite(
 def plot_benchmark(results: Dict[str, Any], output_path: Path) -> None:
     """Generate a publication-ready speed comparison figure."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -200,10 +203,18 @@ def plot_benchmark(results: Dict[str, Any], output_path: Path) -> None:
 
     # Left: Time vs data size
     ax1.set_facecolor("#080c14")
-    ax1.plot(chans_tt, time_tt, "o-", color="#00d4ff", linewidth=2, markersize=6,
-             label="Taylor Tree (this work)")
-    ax1.plot(chans_bf, time_bf, "s--", color="#ff3366", linewidth=2, markersize=6,
-             label="Brute-Force")
+    ax1.plot(
+        chans_tt,
+        time_tt,
+        "o-",
+        color="#00d4ff",
+        linewidth=2,
+        markersize=6,
+        label="Taylor Tree (this work)",
+    )
+    ax1.plot(
+        chans_bf, time_bf, "s--", color="#ff3366", linewidth=2, markersize=6, label="Brute-Force"
+    )
     ax1.set_xscale("log", base=2)
     ax1.set_yscale("log")
     ax1.set_xlabel("Frequency Channels", color="#8ca5c8", fontsize=11)
@@ -221,19 +232,22 @@ def plot_benchmark(results: Dict[str, Any], output_path: Path) -> None:
         ax1.annotate(
             f"{s['speedup_x']}×",
             xy=(s["n_chans"], time_tt[idx_tt]),
-            xytext=(0, -18), textcoords="offset points",
-            color="#00ff88", fontsize=9, fontweight=600, ha="center",
+            xytext=(0, -18),
+            textcoords="offset points",
+            color="#00ff88",
+            fontsize=9,
+            fontweight=600,
+            ha="center",
         )
 
     # Right: Throughput bar chart
     ax2.set_facecolor("#080c14")
     x = np.arange(len(chans_tt))
     w = 0.35
-    ax2.bar(x - w/2, tput_tt, w, color="#00d4ff", alpha=0.8, label="Taylor Tree")
-    ax2.bar(x + w/2, tput_bf, w, color="#ff3366", alpha=0.8, label="Brute-Force")
+    ax2.bar(x - w / 2, tput_tt, w, color="#00d4ff", alpha=0.8, label="Taylor Tree")
+    ax2.bar(x + w / 2, tput_bf, w, color="#ff3366", alpha=0.8, label="Brute-Force")
     ax2.set_xticks(x)
-    ax2.set_xticklabels([f"{c//1024}K" if c >= 1024 else str(c) for c in chans_tt],
-                        fontsize=9)
+    ax2.set_xticklabels([f"{c // 1024}K" if c >= 1024 else str(c) for c in chans_tt], fontsize=9)
     ax2.set_xlabel("Channels", color="#8ca5c8", fontsize=11)
     ax2.set_ylabel("Throughput (Mpoints/s)", color="#8ca5c8", fontsize=11)
     ax2.set_title("Processing Throughput", color="#e0e8f0", fontsize=14, fontweight=300)
@@ -245,13 +259,20 @@ def plot_benchmark(results: Dict[str, Any], output_path: Path) -> None:
 
     fig.suptitle(
         "MitraSETI — Taylor Tree vs Brute-Force De-Doppler Performance",
-        color="#4da6ff", fontsize=16, fontweight=300, y=0.98,
+        color="#4da6ff",
+        fontsize=16,
+        fontweight=300,
+        y=0.98,
     )
     fig.text(
-        0.5, 0.01,
+        0.5,
+        0.01,
         f"N_time = {results['n_times']} · {results['repeats']} repeats · "
         f"{results['timestamp'][:10]}",
-        ha="center", color="#8ca5c8", fontsize=9, alpha=0.6,
+        ha="center",
+        color="#8ca5c8",
+        fontsize=9,
+        alpha=0.6,
     )
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -264,8 +285,12 @@ def main():
     parser = argparse.ArgumentParser(description="MitraSETI Speed Benchmark")
     parser.add_argument("--repeats", type=int, default=3, help="Repetitions per size (default: 3)")
     parser.add_argument("--n-times", type=int, default=16, help="Time integrations (default: 16)")
-    parser.add_argument("--max-chans", type=int, default=131072,
-                        help="Max channels to test (default: 131072 = 128K)")
+    parser.add_argument(
+        "--max-chans",
+        type=int,
+        default=131072,
+        help="Max channels to test (default: 131072 = 128K)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -281,7 +306,7 @@ def main():
         ch *= 2
 
     logger.info(f"Speed benchmark: {len(sizes)} sizes, {args.repeats} repeats")
-    logger.info(f"  Sizes: {[f'{s//1024}K' for s in sizes]}")
+    logger.info(f"  Sizes: {[f'{s // 1024}K' for s in sizes]}")
 
     results = run_benchmark_suite(sizes, n_times=args.n_times, repeats=args.repeats)
 
@@ -297,13 +322,15 @@ def main():
     except Exception as e:
         logger.warning(f"Failed to generate plot: {e}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("SPEED BENCHMARK SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"{'Channels':>10s}  {'Taylor(ms)':>12s}  {'Brute(ms)':>12s}  {'Speedup':>8s}")
-    print(f"{'-'*10:>10s}  {'-'*12:>12s}  {'-'*12:>12s}  {'-'*8:>8s}")
+    print(f"{'-' * 10:>10s}  {'-' * 12:>12s}  {'-' * 12:>12s}  {'-' * 8:>8s}")
     for s in results["speedups"]:
-        print(f"{s['n_chans']:>10,}  {s['taylor_ms']:>12.1f}  {s['brute_ms']:>12.1f}  {s['speedup_x']:>7.1f}×")
+        print(
+            f"{s['n_chans']:>10,}  {s['taylor_ms']:>12.1f}  {s['brute_ms']:>12.1f}  {s['speedup_x']:>7.1f}×"
+        )
 
     max_speedup = max(s["speedup_x"] for s in results["speedups"])
     print(f"\n  Peak speedup: {max_speedup}× at {max(sizes):,} channels")

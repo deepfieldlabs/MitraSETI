@@ -35,72 +35,76 @@ class RFIEntry:
 # Authoritative catalog of known RFI sources in SETI search bands
 _RFI_CATALOG: List[RFIEntry] = [
     # GPS constellation
-    RFIEntry("GPS L1", "satellite_navigation", 1575.22, 1575.62, 0.0,
-             "GPS L1 C/A and P(Y) code"),
-    RFIEntry("GPS L2", "satellite_navigation", 1227.40, 1227.80, 0.0,
-             "GPS L2 P(Y) and L2C"),
-    RFIEntry("GPS L5", "satellite_navigation", 1176.25, 1176.65, 0.0,
-             "GPS L5 safety-of-life signal"),
+    RFIEntry("GPS L1", "satellite_navigation", 1575.22, 1575.62, 0.0, "GPS L1 C/A and P(Y) code"),
+    RFIEntry("GPS L2", "satellite_navigation", 1227.40, 1227.80, 0.0, "GPS L2 P(Y) and L2C"),
+    RFIEntry(
+        "GPS L5", "satellite_navigation", 1176.25, 1176.65, 0.0, "GPS L5 safety-of-life signal"
+    ),
     # GLONASS
-    RFIEntry("GLONASS L1", "satellite_navigation", 1598.0625, 1605.375, 0.0,
-             "GLONASS L1 FDMA band"),
-    RFIEntry("GLONASS L2", "satellite_navigation", 1242.9375, 1248.625, 0.0,
-             "GLONASS L2 FDMA band"),
+    RFIEntry(
+        "GLONASS L1", "satellite_navigation", 1598.0625, 1605.375, 0.0, "GLONASS L1 FDMA band"
+    ),
+    RFIEntry(
+        "GLONASS L2", "satellite_navigation", 1242.9375, 1248.625, 0.0, "GLONASS L2 FDMA band"
+    ),
     # Galileo
-    RFIEntry("Galileo E1", "satellite_navigation", 1575.22, 1575.62, 0.0,
-             "Galileo E1 open service"),
-    RFIEntry("Galileo E5a", "satellite_navigation", 1176.25, 1176.65, 0.0,
-             "Galileo E5a"),
-    RFIEntry("Galileo E5b", "satellite_navigation", 1207.14, 1207.34, 0.0,
-             "Galileo E5b"),
+    RFIEntry(
+        "Galileo E1", "satellite_navigation", 1575.22, 1575.62, 0.0, "Galileo E1 open service"
+    ),
+    RFIEntry("Galileo E5a", "satellite_navigation", 1176.25, 1176.65, 0.0, "Galileo E5a"),
+    RFIEntry("Galileo E5b", "satellite_navigation", 1207.14, 1207.34, 0.0, "Galileo E5b"),
     # Iridium
-    RFIEntry("Iridium", "satellite_comms", 1616.0, 1626.5, 0.1,
-             "Iridium LEO satellite constellation, exhibits drift"),
+    RFIEntry(
+        "Iridium",
+        "satellite_comms",
+        1616.0,
+        1626.5,
+        0.1,
+        "Iridium LEO satellite constellation, exhibits drift",
+    ),
     # Globalstar
-    RFIEntry("Globalstar UL", "satellite_comms", 1610.0, 1618.725, 0.05,
-             "Globalstar uplink band"),
-    RFIEntry("Globalstar DL", "satellite_comms", 2483.5, 2500.0, 0.05,
-             "Globalstar downlink"),
+    RFIEntry("Globalstar UL", "satellite_comms", 1610.0, 1618.725, 0.05, "Globalstar uplink band"),
+    RFIEntry("Globalstar DL", "satellite_comms", 2483.5, 2500.0, 0.05, "Globalstar downlink"),
     # Inmarsat
-    RFIEntry("Inmarsat L-band", "satellite_comms", 1525.0, 1559.0, 0.0,
-             "Inmarsat L-band downlink"),
+    RFIEntry("Inmarsat L-band", "satellite_comms", 1525.0, 1559.0, 0.0, "Inmarsat L-band downlink"),
     # Radio astronomy protected bands (should NOT be RFI but sometimes are)
-    RFIEntry("Hydrogen 21cm", "protected_band", 1400.0, 1427.0, 0.0,
-             "ITU-protected HI band — leakage indicates nearby RFI"),
-    RFIEntry("OH maser", "protected_band", 1610.6, 1613.8, 0.0,
-             "Hydroxyl radical maser lines"),
+    RFIEntry(
+        "Hydrogen 21cm",
+        "protected_band",
+        1400.0,
+        1427.0,
+        0.0,
+        "ITU-protected HI band — leakage indicates nearby RFI",
+    ),
+    RFIEntry("OH maser", "protected_band", 1610.6, 1613.8, 0.0, "Hydroxyl radical maser lines"),
     # Cellular
-    RFIEntry("LTE Band 13 UL", "cellular", 777.0, 787.0, 0.0,
-             "Verizon 700 MHz uplink"),
-    RFIEntry("LTE Band 13 DL", "cellular", 746.0, 756.0, 0.0,
-             "Verizon 700 MHz downlink"),
-    RFIEntry("LTE Band 71", "cellular", 617.0, 652.0, 0.0,
-             "T-Mobile 600 MHz"),
+    RFIEntry("LTE Band 13 UL", "cellular", 777.0, 787.0, 0.0, "Verizon 700 MHz uplink"),
+    RFIEntry("LTE Band 13 DL", "cellular", 746.0, 756.0, 0.0, "Verizon 700 MHz downlink"),
+    RFIEntry("LTE Band 71", "cellular", 617.0, 652.0, 0.0, "T-Mobile 600 MHz"),
     # Wi-Fi
-    RFIEntry("Wi-Fi 2.4 GHz", "wireless_lan", 2400.0, 2483.5, 0.0,
-             "IEEE 802.11b/g/n"),
-    RFIEntry("Wi-Fi 5 GHz", "wireless_lan", 5150.0, 5850.0, 0.0,
-             "IEEE 802.11a/n/ac"),
+    RFIEntry("Wi-Fi 2.4 GHz", "wireless_lan", 2400.0, 2483.5, 0.0, "IEEE 802.11b/g/n"),
+    RFIEntry("Wi-Fi 5 GHz", "wireless_lan", 5150.0, 5850.0, 0.0, "IEEE 802.11a/n/ac"),
     # Radar
-    RFIEntry("Airport radar", "radar", 2700.0, 2900.0, 0.0,
-             "S-band primary surveillance radar"),
-    RFIEntry("Weather radar", "radar", 2700.0, 3000.0, 0.0,
-             "NEXRAD S-band weather radar"),
+    RFIEntry("Airport radar", "radar", 2700.0, 2900.0, 0.0, "S-band primary surveillance radar"),
+    RFIEntry("Weather radar", "radar", 2700.0, 3000.0, 0.0, "NEXRAD S-band weather radar"),
     # Broadcast
-    RFIEntry("FM broadcast", "broadcast", 87.5, 108.0, 0.0,
-             "FM radio broadcast band"),
-    RFIEntry("TV UHF", "broadcast", 470.0, 698.0, 0.0,
-             "Digital TV UHF channels"),
+    RFIEntry("FM broadcast", "broadcast", 87.5, 108.0, 0.0, "FM radio broadcast band"),
+    RFIEntry("TV UHF", "broadcast", 470.0, 698.0, 0.0, "Digital TV UHF channels"),
     # LEO satellite downlinks (Starlink, OneWeb)
-    RFIEntry("Starlink DL", "satellite_comms", 10700.0, 12700.0, 0.2,
-             "Starlink Ku-band downlink, notable drift from LEO motion"),
-    RFIEntry("OneWeb DL", "satellite_comms", 10700.0, 12700.0, 0.2,
-             "OneWeb Ku-band downlink"),
+    RFIEntry(
+        "Starlink DL",
+        "satellite_comms",
+        10700.0,
+        12700.0,
+        0.2,
+        "Starlink Ku-band downlink, notable drift from LEO motion",
+    ),
+    RFIEntry("OneWeb DL", "satellite_comms", 10700.0, 12700.0, 0.2, "OneWeb Ku-band downlink"),
     # Common observatory-local RFI
-    RFIEntry("60 Hz harmonics", "local_rfi", 0.0, 0.0, 0.0,
-             "Power line harmonics — broadband"),
-    RFIEntry("Clock harmonics", "local_rfi", 0.0, 0.0, 0.0,
-             "Digital clock harmonics from electronics"),
+    RFIEntry("60 Hz harmonics", "local_rfi", 0.0, 0.0, 0.0, "Power line harmonics — broadband"),
+    RFIEntry(
+        "Clock harmonics", "local_rfi", 0.0, 0.0, 0.0, "Digital clock harmonics from electronics"
+    ),
 ]
 
 

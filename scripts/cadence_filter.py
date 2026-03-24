@@ -73,9 +73,7 @@ _BL_FILENAME_RE = re.compile(
     re.VERBOSE,
 )
 
-_SIMPLE_ON_OFF_RE = re.compile(
-    r"^(.+?)_(ON|OFF)_?(\d+)?\.(?:fil|h5)$", re.IGNORECASE
-)
+_SIMPLE_ON_OFF_RE = re.compile(r"^(.+?)_(ON|OFF)_?(\d+)?\.(?:fil|h5)$", re.IGNORECASE)
 
 
 def parse_filename(filepath: Path) -> Optional[Dict[str, Any]]:
@@ -115,9 +113,7 @@ def discover_cadence_groups(data_dir: Path) -> Dict[str, Dict[str, List[Dict]]]:
     Returns:
         {target_name: {"on": [file_info, ...], "off": [file_info, ...]}}
     """
-    groups: Dict[str, Dict[str, List[Dict]]] = defaultdict(
-        lambda: {"on": [], "off": []}
-    )
+    groups: Dict[str, Dict[str, List[Dict]]] = defaultdict(lambda: {"on": [], "off": []})
 
     for ext in ("*.fil", "*.h5"):
         for fp in sorted(data_dir.glob(ext)):
@@ -138,6 +134,7 @@ def discover_cadence_groups(data_dir: Path) -> Dict[str, Dict[str, List[Dict]]]:
 
 
 # ── Signal matching ───────────────────────────────────────────────────────────
+
 
 def signals_match(
     sig_a: Dict[str, Any],
@@ -169,8 +166,7 @@ def cross_match_signals(
 
     for sig in on_signals:
         in_off = any(
-            signals_match(sig, off_sig, freq_tol_hz, drift_tol_hz_s)
-            for off_sig in off_signals
+            signals_match(sig, off_sig, freq_tol_hz, drift_tol_hz_s) for off_sig in off_signals
         )
         if in_off:
             rfi.append(sig)
@@ -202,8 +198,7 @@ def multi_on_consensus(
     for sig in reference:
         count = 1
         for other_scan in on_scan_signals[1:]:
-            if any(signals_match(sig, other, freq_tol_hz, drift_tol_hz_s)
-                   for other in other_scan):
+            if any(signals_match(sig, other, freq_tol_hz, drift_tol_hz_s) for other in other_scan):
                 count += 1
         if count >= min_on_detections:
             sig["on_detections"] = count
@@ -214,6 +209,7 @@ def multi_on_consensus(
 
 
 # ── Pipeline runner ───────────────────────────────────────────────────────────
+
 
 def run_dedoppler_on_file(filepath: Path, min_snr: float = 10.0) -> List[Dict[str, Any]]:
     """Run the de-Doppler search on a single file and return hit list."""
@@ -251,18 +247,18 @@ def run_cadence_filter(
     on_files = cadence_group["on"]
     off_files = cadence_group["off"]
 
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info(f"CADENCE FILTER: {target}")
     logger.info(f"  ON scans:  {len(on_files)}")
     logger.info(f"  OFF scans: {len(off_files)}")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
 
     # Process ON scans
     on_scan_signals = []
     on_timings = []
     for i, fi in enumerate(on_files):
         fp = fi["filepath"]
-        logger.info(f"  Processing ON scan {i+1}/{len(on_files)}: {fp.name}")
+        logger.info(f"  Processing ON scan {i + 1}/{len(on_files)}: {fp.name}")
         t0 = time.perf_counter()
         signals = run_dedoppler_on_file(fp, min_snr=min_snr)
         elapsed = time.perf_counter() - t0
@@ -275,7 +271,7 @@ def run_cadence_filter(
     off_timings = []
     for i, fi in enumerate(off_files):
         fp = fi["filepath"]
-        logger.info(f"  Processing OFF scan {i+1}/{len(off_files)}: {fp.name}")
+        logger.info(f"  Processing OFF scan {i + 1}/{len(off_files)}: {fp.name}")
         t0 = time.perf_counter()
         signals = run_dedoppler_on_file(fp, min_snr=min_snr)
         elapsed = time.perf_counter() - t0
@@ -292,16 +288,21 @@ def run_cadence_filter(
         freq_tol_hz=freq_tol_hz,
         drift_tol_hz_s=drift_tol_hz_s,
     )
-    logger.info(f"  Multi-ON consensus: {total_on} total → {len(consensus)} in ≥{effective_min} scans")
+    logger.info(
+        f"  Multi-ON consensus: {total_on} total → {len(consensus)} in ≥{effective_min} scans"
+    )
 
     # ON/OFF cross-match
     passing, rfi_matched = cross_match_signals(
-        consensus, all_off_signals,
+        consensus,
+        all_off_signals,
         freq_tol_hz=freq_tol_hz,
         drift_tol_hz_s=drift_tol_hz_s,
     )
-    logger.info(f"  OFF rejection: {len(consensus)} → {len(passing)} surviving "
-                f"({len(rfi_matched)} matched to OFF = RFI)")
+    logger.info(
+        f"  OFF rejection: {len(consensus)} → {len(passing)} surviving "
+        f"({len(rfi_matched)} matched to OFF = RFI)"
+    )
 
     # Sort by SNR descending
     passing.sort(key=lambda x: x.get("snr", 0), reverse=True)
@@ -340,7 +341,7 @@ def run_cadence_filter(
         logger.info(f"\n  *** {len(passing)} CANDIDATES SURVIVED CADENCE FILTER ***")
         for c in passing[:10]:
             logger.info(
-                f"    freq={c.get('frequency_hz', 0)/1e6:.6f} MHz  "
+                f"    freq={c.get('frequency_hz', 0) / 1e6:.6f} MHz  "
                 f"drift={c.get('drift_rate', 0):.4f} Hz/s  "
                 f"SNR={c.get('snr', 0):.1f}  "
                 f"ON={c.get('on_detections', '?')}/{c.get('on_scans_total', '?')}"
@@ -361,7 +362,8 @@ def _sanitize_candidates(candidates: List[Dict]) -> List[Dict]:
                 entry[k] = v
             elif isinstance(v, dict):
                 entry[k] = {
-                    sk: sv for sk, sv in v.items()
+                    sk: sv
+                    for sk, sv in v.items()
                     if isinstance(sv, (str, int, float, bool, type(None)))
                 }
             elif isinstance(v, np.floating):
@@ -373,6 +375,7 @@ def _sanitize_candidates(candidates: List[Dict]) -> List[Dict]:
 
 
 # ── Report generation ─────────────────────────────────────────────────────────
+
 
 def generate_html_report(all_results: List[Dict[str, Any]], output_path: Path) -> None:
     """Generate an HTML summary of cadence filter results for all targets."""
@@ -398,7 +401,7 @@ def generate_html_report(all_results: List[Dict[str, Any]], output_path: Path) -
 </head>
 <body>
 <h1>MitraSETI — ON/OFF Cadence Filter</h1>
-<p class="timestamp">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+<p class="timestamp">Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
 """
     total_survivors = sum(r["statistics"]["cadence_survivors"] for r in all_results)
     total_signals = sum(r["statistics"]["total_on_signals"] for r in all_results)
@@ -407,7 +410,7 @@ def generate_html_report(all_results: List[Dict[str, Any]], output_path: Path) -
 <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0;">
   <div class="stat"><div class="val">{len(all_results)}</div><div class="lbl">Targets</div></div>
   <div class="stat"><div class="val">{total_signals:,}</div><div class="lbl">Total ON Signals</div></div>
-  <div class="stat"><div class="val {'pass' if total_survivors else 'fail'}">{total_survivors}</div><div class="lbl">Cadence Survivors</div></div>
+  <div class="stat"><div class="val {"pass" if total_survivors else "fail"}">{total_survivors}</div><div class="lbl">Cadence Survivors</div></div>
   <div class="stat"><div class="val">{(1 - total_survivors / max(total_signals, 1)) * 100:.1f}%</div><div class="lbl">RFI Rejection</div></div>
 </div>
 """
@@ -419,16 +422,16 @@ def generate_html_report(all_results: List[Dict[str, Any]], output_path: Path) -
         candidates = r.get("candidates", [])
 
         html += f"""
-<h2>{r['target']}</h2>
+<h2>{r["target"]}</h2>
 <div class="card">
   <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
-    <div class="stat"><div class="val">{cadence['on_scans']}</div><div class="lbl">ON Scans</div></div>
-    <div class="stat"><div class="val">{cadence['off_scans']}</div><div class="lbl">OFF Scans</div></div>
-    <div class="stat"><div class="val">{stats['total_on_signals']:,}</div><div class="lbl">ON Signals</div></div>
-    <div class="stat"><div class="val">{stats['multi_on_consensus']}</div><div class="lbl">Multi-ON</div></div>
-    <div class="stat"><div class="val">{stats['off_matched_rfi']}</div><div class="lbl">OFF Matched</div></div>
-    <div class="stat"><div class="val {'pass' if stats['cadence_survivors'] else 'fail'}">{stats['cadence_survivors']}</div><div class="lbl">Survivors</div></div>
-    <div class="stat"><div class="val">{timing['total_s']:.1f}s</div><div class="lbl">Time</div></div>
+    <div class="stat"><div class="val">{cadence["on_scans"]}</div><div class="lbl">ON Scans</div></div>
+    <div class="stat"><div class="val">{cadence["off_scans"]}</div><div class="lbl">OFF Scans</div></div>
+    <div class="stat"><div class="val">{stats["total_on_signals"]:,}</div><div class="lbl">ON Signals</div></div>
+    <div class="stat"><div class="val">{stats["multi_on_consensus"]}</div><div class="lbl">Multi-ON</div></div>
+    <div class="stat"><div class="val">{stats["off_matched_rfi"]}</div><div class="lbl">OFF Matched</div></div>
+    <div class="stat"><div class="val {"pass" if stats["cadence_survivors"] else "fail"}">{stats["cadence_survivors"]}</div><div class="lbl">Survivors</div></div>
+    <div class="stat"><div class="val">{timing["total_s"]:.1f}s</div><div class="lbl">Time</div></div>
   </div>
 """
         if candidates:
@@ -436,13 +439,17 @@ def generate_html_report(all_results: List[Dict[str, Any]], output_path: Path) -
   <th>Freq (MHz)</th><th>Drift (Hz/s)</th><th>SNR</th>
   <th>ON Detect</th><th>Classification</th></tr></thead><tbody>"""
             for c in candidates[:20]:
-                freq = c.get("frequency_hz", 0) / 1e6 if c.get("frequency_hz", 0) > 1e6 else c.get("frequency_mhz", 0)
+                freq = (
+                    c.get("frequency_hz", 0) / 1e6
+                    if c.get("frequency_hz", 0) > 1e6
+                    else c.get("frequency_mhz", 0)
+                )
                 html += f"""<tr>
   <td>{freq:.6f}</td>
-  <td>{c.get('drift_rate', 0):.4f}</td>
-  <td style="color: #00d4ff;">{c.get('snr', 0):.1f}</td>
-  <td>{c.get('on_detections', '?')}/{c.get('on_scans_total', '?')}</td>
-  <td>{c.get('classification', 'N/A')}</td>
+  <td>{c.get("drift_rate", 0):.4f}</td>
+  <td style="color: #00d4ff;">{c.get("snr", 0):.1f}</td>
+  <td>{c.get("on_detections", "?")}/{c.get("on_scans_total", "?")}</td>
+  <td>{c.get("classification", "N/A")}</td>
 </tr>"""
             html += "</tbody></table>"
         else:
@@ -463,23 +470,38 @@ def generate_html_report(all_results: List[Dict[str, Any]], output_path: Path) -
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="MitraSETI ON/OFF Cadence Filter",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--target", type=str, default=None,
-                        help="Filter specific target (e.g. TRAPPIST1, GJ699)")
-    parser.add_argument("--list-targets", action="store_true",
-                        help="List available targets with ON/OFF pairs and exit")
-    parser.add_argument("--freq-tol", type=float, default=50.0,
-                        help="Frequency matching tolerance in Hz (default: 50)")
-    parser.add_argument("--drift-tol", type=float, default=0.5,
-                        help="Drift rate matching tolerance in Hz/s (default: 0.5)")
-    parser.add_argument("--min-snr", type=float, default=10.0,
-                        help="Minimum SNR threshold (default: 10)")
-    parser.add_argument("--min-on", type=int, default=2,
-                        help="Minimum ON detections for consensus (default: 2)")
+    parser.add_argument(
+        "--target", type=str, default=None, help="Filter specific target (e.g. TRAPPIST1, GJ699)"
+    )
+    parser.add_argument(
+        "--list-targets",
+        action="store_true",
+        help="List available targets with ON/OFF pairs and exit",
+    )
+    parser.add_argument(
+        "--freq-tol",
+        type=float,
+        default=50.0,
+        help="Frequency matching tolerance in Hz (default: 50)",
+    )
+    parser.add_argument(
+        "--drift-tol",
+        type=float,
+        default=0.5,
+        help="Drift rate matching tolerance in Hz/s (default: 0.5)",
+    )
+    parser.add_argument(
+        "--min-snr", type=float, default=10.0, help="Minimum SNR threshold (default: 10)"
+    )
+    parser.add_argument(
+        "--min-on", type=int, default=2, help="Minimum ON detections for consensus (default: 2)"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -493,8 +515,10 @@ def main():
     if args.list_targets:
         print(f"\nAvailable targets with ON/OFF cadence pairs in {FILTERBANK_DIR}:\n")
         for target, scans in sorted(groups.items()):
-            print(f"  {target:20s}  ON: {len(scans['on']):2d} scans  "
-                  f"OFF: {len(scans['off']):2d} scans")
+            print(
+                f"  {target:20s}  ON: {len(scans['on']):2d} scans  "
+                f"OFF: {len(scans['off']):2d} scans"
+            )
             for fi in scans["on"][:3]:
                 print(f"    ON:  {fi['filepath'].name}")
             for fi in scans["off"][:2]:
@@ -541,21 +565,23 @@ def main():
     generate_html_report(all_results, html_path)
 
     # Print summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("CADENCE FILTER SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     total_survivors = 0
     for r in all_results:
         s = r["statistics"]
         survivors = s["cadence_survivors"]
         total_survivors += survivors
         status = f"*** {survivors} CANDIDATES ***" if survivors else "all RFI"
-        print(f"  {r['target']:15s}  "
-              f"ON={s['total_on_signals']:5d}  "
-              f"consensus={s['multi_on_consensus']:4d}  "
-              f"OFF_match={s['off_matched_rfi']:4d}  "
-              f"survivors={survivors:3d}  "
-              f"({status})")
+        print(
+            f"  {r['target']:15s}  "
+            f"ON={s['total_on_signals']:5d}  "
+            f"consensus={s['multi_on_consensus']:4d}  "
+            f"OFF_match={s['off_matched_rfi']:4d}  "
+            f"survivors={survivors:3d}  "
+            f"({status})"
+        )
 
     print(f"\n  Total cadence-verified candidates: {total_survivors}")
     print(f"  Report: {html_path}")

@@ -57,6 +57,7 @@ def extract_attention(
                 attn = output[1]
                 if attn is not None:
                     attention_weights[layer_name] = attn.detach().cpu().numpy()
+
         return hook_fn
 
     # Register hooks on MultiheadAttention self_attn in each encoder layer
@@ -84,7 +85,7 @@ def extract_attention(
         # Temporarily enable need_weights on all self_attn layers
         original_flags = []
         for layer in model.transformer.layers:
-            original_flags.append(getattr(layer.self_attn, '_qkv_same_embed_dim', True))
+            original_flags.append(getattr(layer.self_attn, "_qkv_same_embed_dim", True))
 
         x = tensor.transpose(1, 2)  # (1, T, F)
         cnn_out = model.cnn_backbone(x)  # (1, T, embed_dim)
@@ -154,6 +155,7 @@ def attention_to_spectrogram_heatmap(
 
     if len(importance) != n_time:
         from scipy.ndimage import zoom
+
         importance = zoom(importance, n_time / len(importance), order=1)
 
     heatmap = np.tile(importance, (n_freq, 1))
@@ -175,6 +177,7 @@ def plot_attention_overlay(
       - Bottom-right: temporal importance profile
     """
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 

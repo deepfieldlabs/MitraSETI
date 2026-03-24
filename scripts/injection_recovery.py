@@ -124,8 +124,10 @@ def check_recovery(
 
         cand_drift = c.get("drift_rate", 0)
 
-        if (abs(cand_ch - inj_ch) <= freq_tol_channels and
-                abs(cand_drift - inj_drift_hz_s) <= drift_tol_hz_s):
+        if (
+            abs(cand_ch - inj_ch) <= freq_tol_channels
+            and abs(cand_drift - inj_drift_hz_s) <= drift_tol_hz_s
+        ):
             return True
 
     return False
@@ -164,6 +166,7 @@ def run_injection_recovery(
     logger.info(f"Using {len(files_to_use)} files for injection/recovery")
 
     from pipeline import MitraSETIPipeline
+
     pipe = MitraSETIPipeline()
 
     results = {
@@ -179,9 +182,9 @@ def run_injection_recovery(
     rng = np.random.default_rng(42)
 
     for algo_name, use_taylor in [("taylor_tree", True), ("brute_force", False)]:
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info(f"Algorithm: {algo_name}")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
 
         params = _core.SearchParams(
             max_drift_rate=4.0,
@@ -226,7 +229,12 @@ def run_injection_recovery(
                     freq_ch = rng.integers(min_start, max_start)
 
                     data, injection = inject_signal(
-                        data, n_t, n_c, freq_ch, drift_ch, target_snr,
+                        data,
+                        n_t,
+                        n_c,
+                        freq_ch,
+                        drift_ch,
+                        target_snr,
                         seed=inj_idx,
                     )
 
@@ -263,7 +271,7 @@ def run_injection_recovery(
                 logger.info(
                     f"  drift={drift_ch:+5.1f}ch, SNR={target_snr:5.1f}: "
                     f"{recovered}/{total} = {completeness:.1%} "
-                    f"({avg_time*1000:.1f} ms avg)"
+                    f"({avg_time * 1000:.1f} ms avg)"
                 )
 
         results[algo_name] = algo_results
@@ -274,6 +282,7 @@ def run_injection_recovery(
 def plot_completeness(results: Dict[str, Any], output_path: Path) -> None:
     """Generate a publication-ready completeness curve plot."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.ticker import PercentFormatter
@@ -286,10 +295,12 @@ def plot_completeness(results: Dict[str, Any], output_path: Path) -> None:
 
     colors = plt.cm.viridis(np.linspace(0.2, 0.9, len(drift_values)))
 
-    for ax_idx, (algo, algo_label) in enumerate([
-        ("taylor_tree", "Taylor Tree (this work)"),
-        ("brute_force", "Brute-Force"),
-    ]):
+    for ax_idx, (algo, algo_label) in enumerate(
+        [
+            ("taylor_tree", "Taylor Tree (this work)"),
+            ("brute_force", "Brute-Force"),
+        ]
+    ):
         ax = axes[ax_idx]
         ax.set_facecolor("#080c14")
         ax.set_title(algo_label, color="#e0e8f0", fontsize=14, fontweight=300, pad=12)
@@ -310,23 +321,34 @@ def plot_completeness(results: Dict[str, Any], output_path: Path) -> None:
 
             label = f"drift = {drift_ch:+.0f} ch"
             ax.plot(
-                snr_values, completeness_vals,
-                marker="o", markersize=5, linewidth=2,
-                color=colors[i], label=label,
+                snr_values,
+                completeness_vals,
+                marker="o",
+                markersize=5,
+                linewidth=2,
+                color=colors[i],
+                label=label,
             )
 
         ax.axhline(y=0.9, color="#ff3366", linestyle="--", alpha=0.4, linewidth=1)
         ax.text(
-            snr_values[-1], 0.92, "90% threshold",
-            color="#ff3366", alpha=0.5, fontsize=9, ha="right",
+            snr_values[-1],
+            0.92,
+            "90% threshold",
+            color="#ff3366",
+            alpha=0.5,
+            fontsize=9,
+            ha="right",
         )
 
         ax.set_ylim(-0.05, 1.05)
         ax.set_xlim(min(snr_values) - 1, max(snr_values) + 1)
         ax.yaxis.set_major_formatter(PercentFormatter(1.0))
         ax.legend(
-            loc="lower right", fontsize=9,
-            facecolor="#0f192d", edgecolor="#1a3a5c",
+            loc="lower right",
+            fontsize=9,
+            facecolor="#0f192d",
+            edgecolor="#1a3a5c",
             labelcolor="#8ca5c8",
         )
         ax.tick_params(colors="#8ca5c8")
@@ -336,14 +358,21 @@ def plot_completeness(results: Dict[str, Any], output_path: Path) -> None:
 
     fig.suptitle(
         "MitraSETI Signal Injection & Recovery — Detection Efficiency",
-        color="#4da6ff", fontsize=16, fontweight=300, y=0.98,
+        color="#4da6ff",
+        fontsize=16,
+        fontweight=300,
+        y=0.98,
     )
     fig.text(
-        0.5, 0.01,
+        0.5,
+        0.01,
         f"Injections per point: {results['n_injections_per_point']} · "
         f"Files: {len(results['files_used'])} · "
         f"{results['timestamp'][:10]}",
-        ha="center", color="#8ca5c8", fontsize=9, alpha=0.6,
+        ha="center",
+        color="#8ca5c8",
+        fontsize=9,
+        alpha=0.6,
     )
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -356,9 +385,9 @@ def print_summary(results: Dict[str, Any]) -> None:
     """Print a summary table to stdout."""
     snr_values = results.get("snr_values", [])
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("SIGNAL INJECTION & RECOVERY — SUMMARY")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"Files used:           {len(results.get('files_used', []))}")
     print(f"Injections per point: {results.get('n_injections_per_point', 0)}")
     print(f"SNR range:            {min(snr_values):.0f} – {max(snr_values):.0f}")
@@ -407,13 +436,22 @@ def main():
     parser.add_argument("--snr-min", type=float, default=5.0, help="Minimum SNR (default: 5)")
     parser.add_argument("--snr-max", type=float, default=50.0, help="Maximum SNR (default: 50)")
     parser.add_argument("--snr-steps", type=int, default=8, help="Number of SNR steps (default: 8)")
-    parser.add_argument("--drift-values", type=str, default="-4,-2,0,2,4",
-                        help="Comma-separated drift values in channels (default: -4,-2,0,2,4)")
-    parser.add_argument("--n-injections", type=int, default=20,
-                        help="Injections per (SNR, drift) point (default: 20)")
+    parser.add_argument(
+        "--drift-values",
+        type=str,
+        default="-4,-2,0,2,4",
+        help="Comma-separated drift values in channels (default: -4,-2,0,2,4)",
+    )
+    parser.add_argument(
+        "--n-injections",
+        type=int,
+        default=20,
+        help="Injections per (SNR, drift) point (default: 20)",
+    )
     parser.add_argument("--files", type=int, default=5, help="Max files to use (default: 5)")
-    parser.add_argument("--min-snr", type=float, default=5.0,
-                        help="Pipeline min_snr threshold (default: 5.0)")
+    parser.add_argument(
+        "--min-snr", type=float, default=5.0, help="Pipeline min_snr threshold (default: 5.0)"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(

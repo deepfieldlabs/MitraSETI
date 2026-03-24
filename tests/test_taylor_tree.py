@@ -90,16 +90,18 @@ def test_taylor_vs_bruteforce():
 
     signal_freq_khz = round((header.fch1 + signal_ch * header.foff) * 1e6 / 1e3)
 
-    assert any(
-        abs(f - signal_freq_khz) < 10 for f in taylor_freqs
-    ), f"Taylor tree missed injected signal at {signal_freq_khz} kHz. Found: {taylor_freqs}"
+    assert any(abs(f - signal_freq_khz) < 10 for f in taylor_freqs), (
+        f"Taylor tree missed injected signal at {signal_freq_khz} kHz. Found: {taylor_freqs}"
+    )
 
-    assert any(
-        abs(f - signal_freq_khz) < 10 for f in brute_freqs
-    ), f"Brute-force missed injected signal at {signal_freq_khz} kHz. Found: {brute_freqs}"
+    assert any(abs(f - signal_freq_khz) < 10 for f in brute_freqs), (
+        f"Brute-force missed injected signal at {signal_freq_khz} kHz. Found: {brute_freqs}"
+    )
 
-    print(f"  PASS: Taylor found {len(result_taylor.candidates)} candidates, "
-          f"brute-force found {len(result_brute.candidates)}")
+    print(
+        f"  PASS: Taylor found {len(result_taylor.candidates)} candidates, "
+        f"brute-force found {len(result_brute.candidates)}"
+    )
     print(f"  Both detected signal near {signal_freq_khz} kHz")
 
 
@@ -125,7 +127,9 @@ def test_negative_drift():
     assert len(neg_drift_cands) > 0, "Taylor tree failed to detect negative-drift signal"
 
     best = max(neg_drift_cands, key=lambda c: c.snr)
-    print(f"  PASS: Detected negative drift signal — drift_rate={best.drift_rate:.4f} Hz/s, SNR={best.snr:.1f}")
+    print(
+        f"  PASS: Detected negative drift signal — drift_rate={best.drift_rate:.4f} Hz/s, SNR={best.snr:.1f}"
+    )
 
 
 def test_slow_drift():
@@ -157,7 +161,9 @@ def test_slow_drift():
     )
 
     best = max(result.candidates, key=lambda c: c.snr)
-    print(f"  PASS: Detected slow-drift signal — drift_rate={best.drift_rate:.4f} Hz/s, SNR={best.snr:.1f}")
+    print(
+        f"  PASS: Detected slow-drift signal — drift_rate={best.drift_rate:.4f} Hz/s, SNR={best.snr:.1f}"
+    )
 
 
 def test_snr_threshold():
@@ -214,8 +220,10 @@ def test_performance_speedup():
     brute_time = time.perf_counter() - t0
 
     speedup = brute_time / max(taylor_time, 1e-6)
-    print(f"  Taylor tree: {taylor_time*1000:.1f} ms ({result_taylor.processing_time_ms} ms core)")
-    print(f"  Brute-force: {brute_time*1000:.1f} ms ({result_brute.processing_time_ms} ms core)")
+    print(
+        f"  Taylor tree: {taylor_time * 1000:.1f} ms ({result_taylor.processing_time_ms} ms core)"
+    )
+    print(f"  Brute-force: {brute_time * 1000:.1f} ms ({result_brute.processing_time_ms} ms core)")
     print(f"  Speedup:     {speedup:.1f}x")
     print(f"  PASS: Performance comparison complete (speedup={speedup:.1f}x)")
 
@@ -289,8 +297,9 @@ def test_fine_resolution_few_timesteps():
     engine = _core.DedopplerEngine(params)
 
     result = engine.search(data.ravel().tolist(), n_times, n_chans, header)
-    print(f"  PASS: No crash — {len(result.candidates)} candidates "
-          f"(fine-res: max_drift >> n_padded)")
+    print(
+        f"  PASS: No crash — {len(result.candidates)} candidates (fine-res: max_drift >> n_padded)"
+    )
 
 
 def main():

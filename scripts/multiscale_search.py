@@ -98,10 +98,16 @@ def search_at_scale(
     n_times, n_chans = data_scaled.shape
 
     scaled_header = _core.FilterbankHeader(
-        nchans=n_chans, nifs=1, nbits=32, tsamp=tsamp,
-        fch1=fch1, foff=foff,
-        tstart=tstart, source_name=source_name,
-        ra=ra, dec=dec,
+        nchans=n_chans,
+        nifs=1,
+        nbits=32,
+        tsamp=tsamp,
+        fch1=fch1,
+        foff=foff,
+        tstart=tstart,
+        source_name=source_name,
+        ra=ra,
+        dec=dec,
     )
 
     params = _core.SearchParams(
@@ -119,13 +125,15 @@ def search_at_scale(
     for c in result.candidates:
         freq_idx = int(getattr(c, "channel", 0))
         actual_freq = fch1 + freq_idx * scale * foff_orig
-        hits.append({
-            "frequency": float(getattr(c, "frequency", actual_freq)),
-            "snr": float(getattr(c, "snr", 0)),
-            "drift_rate": float(getattr(c, "drift_rate", 0)),
-            "channel": freq_idx * scale,
-            "scale": scale,
-        })
+        hits.append(
+            {
+                "frequency": float(getattr(c, "frequency", actual_freq)),
+                "snr": float(getattr(c, "snr", 0)),
+                "drift_rate": float(getattr(c, "drift_rate", 0)),
+                "channel": freq_idx * scale,
+                "scale": scale,
+            }
+        )
 
     return hits, elapsed
 
@@ -197,8 +205,7 @@ def run_multiscale(
     unique_at_coarser_only = []
     for h in unique_at_coarser:
         found_at_1x = any(
-            abs(h["frequency"] - h1["frequency"]) < 0.01
-            for h1 in hits_by_scale.get(1, [])
+            abs(h["frequency"] - h1["frequency"]) < 0.01 for h1 in hits_by_scale.get(1, [])
         )
         if not found_at_1x:
             unique_at_coarser_only.append(h)
@@ -217,8 +224,7 @@ def run_multiscale(
     }
 
     logger.info(
-        f"  Merged: {len(merged)} total, "
-        f"{len(unique_at_coarser_only)} found only at coarser scales"
+        f"  Merged: {len(merged)} total, {len(unique_at_coarser_only)} found only at coarser scales"
     )
 
     return result
@@ -227,6 +233,7 @@ def run_multiscale(
 def plot_multiscale_summary(results: List[Dict], output_path: Path) -> None:
     """Generate multi-scale comparison visualization."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -244,22 +251,21 @@ def plot_multiscale_summary(results: List[Dict], output_path: Path) -> None:
     for ri, r in enumerate(results):
         hit_counts = [r["scales"].get(str(s), {}).get("n_hits", 0) for s in SCALES]
         x_pos = np.arange(len(SCALES)) + ri * 0.25
-        axes[0].bar(x_pos, hit_counts, width=0.2, alpha=0.8,
-                    label=Path(r["file"]).stem[:30])
+        axes[0].bar(x_pos, hit_counts, width=0.2, alpha=0.8, label=Path(r["file"]).stem[:30])
 
     axes[0].set_xticks(np.arange(len(SCALES)) + 0.25)
     axes[0].set_xticklabels(scale_labels, color="#8ca5c8")
     axes[0].set_ylabel("Hits", color="#8ca5c8")
     axes[0].set_title("Detections per Scale", color="#e0e8f0", fontsize=12)
     if len(results) <= 5:
-        axes[0].legend(facecolor="#0f192d", edgecolor="#1a3a5c",
-                       labelcolor="#8ca5c8", fontsize=8)
+        axes[0].legend(facecolor="#0f192d", edgecolor="#1a3a5c", labelcolor="#8ca5c8", fontsize=8)
 
     # Panel 2: timing comparison
     for _ri, r in enumerate(results):
         times = [r["scales"].get(str(s), {}).get("time_s", 0) for s in SCALES]
-        axes[1].plot(scale_labels, times, "o-", linewidth=2, markersize=6,
-                     label=Path(r["file"]).stem[:30])
+        axes[1].plot(
+            scale_labels, times, "o-", linewidth=2, markersize=6, label=Path(r["file"]).stem[:30]
+        )
 
     axes[1].set_ylabel("Time (seconds)", color="#8ca5c8")
     axes[1].set_title("Search Time per Scale", color="#e0e8f0", fontsize=12)
@@ -274,12 +280,21 @@ def plot_multiscale_summary(results: List[Dict], output_path: Path) -> None:
     axes[2].set_title("Broadband-Only Detections", color="#e0e8f0", fontsize=12)
 
     for bar, count in zip(bars, unique_counts, strict=False):
-        axes[2].text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2,
-                     str(count), va="center", color="#ff9f43", fontsize=10)
+        axes[2].text(
+            bar.get_width() + 0.1,
+            bar.get_y() + bar.get_height() / 2,
+            str(count),
+            va="center",
+            color="#ff9f43",
+            fontsize=10,
+        )
 
     fig.suptitle(
         "MitraSETI — Multi-Scale Taylor Tree Detection",
-        color="#4da6ff", fontsize=14, fontweight=300, y=0.98,
+        color="#4da6ff",
+        fontsize=14,
+        fontweight=300,
+        y=0.98,
     )
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     fig.savefig(output_path, dpi=150, facecolor=fig.get_facecolor(), bbox_inches="tight")
@@ -338,17 +353,19 @@ def main():
     except Exception as e:
         logger.warning(f"Failed to generate plot: {e}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("MULTI-SCALE DETECTION SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for r in results:
         name = Path(r["file"]).stem[:40]
         print(f"\n  {name}")
         for s in SCALES:
             sd = r["scales"].get(str(s), {})
             print(f"    {s}×: {sd.get('n_hits', 0):6d} hits ({sd.get('time_s', 0):.3f}s)")
-        print(f"    Merged: {r['merged_hits']} total, "
-              f"{r['unique_coarse_scale_detections']} broadband-only")
+        print(
+            f"    Merged: {r['merged_hits']} total, "
+            f"{r['unique_coarse_scale_detections']} broadband-only"
+        )
 
 
 if __name__ == "__main__":

@@ -67,10 +67,16 @@ def run_grid_injection(
     drift_vals = np.linspace(drift_range[0], drift_range[1], drift_steps)
 
     header = _core.FilterbankHeader(
-        nchans=n_chans, nifs=1, nbits=32, tsamp=18.253611008,
-        fch1=1420.5, foff=-2.7939677238464355e-06,
-        tstart=59000.0, source_name="COMPLETENESS_TEST",
-        ra=0.0, dec=0.0,
+        nchans=n_chans,
+        nifs=1,
+        nbits=32,
+        tsamp=18.253611008,
+        fch1=1420.5,
+        foff=-2.7939677238464355e-06,
+        tstart=59000.0,
+        source_name="COMPLETENESS_TEST",
+        ra=0.0,
+        dec=0.0,
     )
 
     grid = np.zeros((drift_steps, snr_steps))
@@ -121,7 +127,7 @@ def run_grid_injection(
 
             done += 1
             if done % 10 == 0:
-                logger.info(f"  Progress: {done}/{total} ({100*done/total:.0f}%)")
+                logger.info(f"  Progress: {done}/{total} ({100 * done / total:.0f}%)")
 
     return {
         "snr_values": snr_vals.tolist(),
@@ -136,6 +142,7 @@ def run_grid_injection(
 def plot_completeness(data: Dict, output_path: Path) -> None:
     """Generate publication-ready 2D completeness contour map."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -149,17 +156,26 @@ def plot_completeness(data: Dict, output_path: Path) -> None:
 
     # Main heatmap
     im = ax.imshow(
-        grid, aspect="auto", origin="lower", cmap="inferno",
+        grid,
+        aspect="auto",
+        origin="lower",
+        cmap="inferno",
         extent=[snr_vals[0], snr_vals[-1], drift_vals[0], drift_vals[-1]],
-        vmin=0, vmax=1, interpolation="bilinear",
+        vmin=0,
+        vmax=1,
+        interpolation="bilinear",
     )
 
     # Contour lines at key completeness levels
     X, Y = np.meshgrid(snr_vals, drift_vals)
     contours = ax.contour(
-        X, Y, grid, levels=[0.5, 0.8, 0.9, 0.95],
+        X,
+        Y,
+        grid,
+        levels=[0.5, 0.8, 0.9, 0.95],
         colors=["#ff3366", "#ff9f43", "#00d4ff", "#00ff88"],
-        linewidths=1.5, linestyles="--",
+        linewidths=1.5,
+        linestyles="--",
     )
     ax.clabel(contours, fmt="%.0f%%", fontsize=9, colors="white")
 
@@ -171,7 +187,9 @@ def plot_completeness(data: Dict, output_path: Path) -> None:
     ax.set_ylabel("Drift Rate (channels/observation)", color="#8ca5c8", fontsize=13)
     ax.set_title(
         "MitraSETI Detection Completeness\n(Taylor Tree De-Doppler)",
-        color="#e0e8f0", fontsize=15, fontweight=300,
+        color="#e0e8f0",
+        fontsize=15,
+        fontweight=300,
     )
     ax.tick_params(colors="#8ca5c8")
     for spine in ax.spines.values():
@@ -179,12 +197,16 @@ def plot_completeness(data: Dict, output_path: Path) -> None:
 
     # Annotation
     ax.text(
-        0.02, 0.98,
+        0.02,
+        0.98,
         f"Injections per cell: {data['n_injections']}\n"
         f"Grid: {len(drift_vals)}×{len(snr_vals)}\n"
         f"Data: {data['n_chans']} ch × {data['n_times']} t",
-        transform=ax.transAxes, color="#8ca5c8", fontsize=9,
-        va="top", ha="left",
+        transform=ax.transAxes,
+        color="#8ca5c8",
+        fontsize=9,
+        va="top",
+        ha="left",
         bbox=dict(boxstyle="round,pad=0.4", facecolor="#0f192d", edgecolor="#1a3a5c"),
     )
 
@@ -225,9 +247,9 @@ def main():
     plot_completeness(data, COMP_DIR / "completeness_contour.png")
 
     grid = np.array(data["grid"])
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("COMPLETENESS SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Grid: {grid.shape[0]} drift × {grid.shape[1]} SNR")
     print(f"  Mean completeness: {grid.mean():.1%}")
     print(f"  Min completeness:  {grid.min():.1%}")

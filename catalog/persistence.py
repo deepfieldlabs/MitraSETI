@@ -32,6 +32,7 @@ class PersistenceTracker:
     def __init__(self, state_path: Optional[Path] = None):
         if state_path is None:
             from paths import DATA_DIR
+
             state_path = DATA_DIR / "persistence_state.json"
 
         self._path = Path(state_path)
@@ -102,16 +103,18 @@ class PersistenceTracker:
                     break
 
             if not matched:
-                src["signal_history"].append({
-                    "frequency_mhz": round(freq_mhz, 6),
-                    "drift_rate": round(drift, 4),
-                    "first_seen": epoch_id,
-                    "last_seen": epoch_id,
-                    "epoch_count": 1,
-                    "max_snr": round(snr, 2),
-                    "snr_history": [round(snr, 2)],
-                    "classification": cand.get("classification", "unknown"),
-                })
+                src["signal_history"].append(
+                    {
+                        "frequency_mhz": round(freq_mhz, 6),
+                        "drift_rate": round(drift, 4),
+                        "first_seen": epoch_id,
+                        "last_seen": epoch_id,
+                        "epoch_count": 1,
+                        "max_snr": round(snr, 2),
+                        "snr_history": [round(snr, 2)],
+                        "classification": cand.get("classification", "unknown"),
+                    }
+                )
                 n_new += 1
 
         self._save()
@@ -126,26 +129,20 @@ class PersistenceTracker:
             "total_epochs": len(src["epochs"]),
         }
 
-    def get_persistent(
-        self, source_name: str, min_epochs: int = 2
-    ) -> List[Dict[str, Any]]:
+    def get_persistent(self, source_name: str, min_epochs: int = 2) -> List[Dict[str, Any]]:
         """Get signals that persist across multiple epochs."""
         source_key = source_name.strip().upper()
         src = self._state.get("sources", {}).get(source_key, {})
         history = src.get("signal_history", [])
 
-        return [
-            s for s in history
-            if s.get("epoch_count", 0) >= min_epochs
-        ]
+        return [s for s in history if s.get("epoch_count", 0) >= min_epochs]
 
     def get_all_sources(self) -> Dict[str, Dict[str, Any]]:
         """Summary of all tracked sources."""
         result = {}
         for source_key, src in self._state.get("sources", {}).items():
             n_persistent = sum(
-                1 for s in src.get("signal_history", [])
-                if s.get("epoch_count", 0) >= 2
+                1 for s in src.get("signal_history", []) if s.get("epoch_count", 0) >= 2
             )
             result[source_key] = {
                 "total_epochs": len(src.get("epochs", [])),

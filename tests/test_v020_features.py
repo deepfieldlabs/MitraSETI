@@ -31,8 +31,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # HDBSCAN Clustering
 # ──────────────────────────────────────────────────────────────────────
 
-class TestHDBSCANClustering:
 
+class TestHDBSCANClustering:
     def _make_candidates(self, n: int, n_clusters: int = 5):
         """Generate synthetic candidates in distinct clusters."""
         rng = np.random.default_rng(42)
@@ -41,16 +41,19 @@ class TestHDBSCANClustering:
             center_freq = 1420e6 + cluster_id * 1e6
             center_drift = cluster_id * 0.5
             for _ in range(n // n_clusters):
-                candidates.append({
-                    "frequency_hz": center_freq + rng.normal(0, 100),
-                    "drift_rate": center_drift + rng.normal(0, 0.05),
-                    "snr": rng.uniform(10, 100),
-                })
+                candidates.append(
+                    {
+                        "frequency_hz": center_freq + rng.normal(0, 100),
+                        "drift_rate": center_drift + rng.normal(0, 0.05),
+                        "snr": rng.uniform(10, 100),
+                    }
+                )
         return candidates
 
     def test_hdbscan_reduces_hits(self):
         """HDBSCAN should significantly reduce hit count."""
         from pipeline import MitraSETIPipeline
+
         pipe = MitraSETIPipeline.__new__(MitraSETIPipeline)
         candidates = self._make_candidates(100, n_clusters=5)
         header = {"fch1": 1420.0, "foff": -0.00028}
@@ -62,6 +65,7 @@ class TestHDBSCANClustering:
     def test_hdbscan_preserves_highest_snr(self):
         """Each cluster should keep the strongest signal."""
         from pipeline import MitraSETIPipeline
+
         pipe = MitraSETIPipeline.__new__(MitraSETIPipeline)
 
         candidates = [
@@ -78,6 +82,7 @@ class TestHDBSCANClustering:
     def test_greedy_fallback_for_small_sets(self):
         """Small candidate sets should use greedy fallback."""
         from pipeline import MitraSETIPipeline
+
         pipe = MitraSETIPipeline.__new__(MitraSETIPipeline)
 
         candidates = [
@@ -92,6 +97,7 @@ class TestHDBSCANClustering:
     def test_single_candidate_passthrough(self):
         """Single candidate should pass through unchanged."""
         from pipeline import MitraSETIPipeline
+
         pipe = MitraSETIPipeline.__new__(MitraSETIPipeline)
         candidates = [{"frequency_hz": 1420e6, "drift_rate": 0, "snr": 50}]
         result = pipe._cluster_hits(candidates, {"fch1": 1420.0, "foff": -0.00028})
@@ -103,10 +109,11 @@ class TestHDBSCANClustering:
 # RFI Database
 # ──────────────────────────────────────────────────────────────────────
 
-class TestRFIDatabase:
 
+class TestRFIDatabase:
     def test_gps_l1_match(self):
         from catalog.rfi_database import RFIDatabase
+
         db = RFIDatabase()
         result = db.match(1575.42)
         assert result is not None
@@ -115,6 +122,7 @@ class TestRFIDatabase:
 
     def test_iridium_match(self):
         from catalog.rfi_database import RFIDatabase
+
         db = RFIDatabase()
         result = db.match(1621.0)
         assert result is not None
@@ -122,6 +130,7 @@ class TestRFIDatabase:
 
     def test_no_match_in_clean_band(self):
         from catalog.rfi_database import RFIDatabase
+
         db = RFIDatabase()
         result = db.match(1420.405)  # hydrogen line center
         # May or may not match the protected band — check existence
@@ -130,6 +139,7 @@ class TestRFIDatabase:
 
     def test_batch_labeling(self):
         from catalog.rfi_database import RFIDatabase
+
         db = RFIDatabase()
         candidates = [
             {"frequency_hz": 1575.42e6, "drift_rate": 0.0},
@@ -142,14 +152,17 @@ class TestRFIDatabase:
 
     def test_custom_entries(self):
         from catalog.rfi_database import RFIDatabase
-        custom = [{
-            "source": "Test RFI",
-            "category": "test",
-            "freq_min_mhz": 999.0,
-            "freq_max_mhz": 1001.0,
-            "typical_drift_hz_s": 0.0,
-            "notes": "Test entry",
-        }]
+
+        custom = [
+            {
+                "source": "Test RFI",
+                "category": "test",
+                "freq_min_mhz": 999.0,
+                "freq_max_mhz": 1001.0,
+                "typical_drift_hz_s": 0.0,
+                "notes": "Test entry",
+            }
+        ]
         db = RFIDatabase(extra_entries=custom)
         result = db.match(1000.0)
         assert result is not None
@@ -157,6 +170,7 @@ class TestRFIDatabase:
 
     def test_summary(self):
         from catalog.rfi_database import RFIDatabase
+
         db = RFIDatabase()
         summary = db.summary()
         assert len(summary) > 0
@@ -167,16 +181,24 @@ class TestRFIDatabase:
 # FITS Catalog Export
 # ──────────────────────────────────────────────────────────────────────
 
-class TestFITSExport:
 
+class TestFITSExport:
     def test_export_candidates(self):
         from catalog.fits_export import export_candidates_fits
 
         candidates = [
-            {"frequency_hz": 1420e6, "drift_rate": 0.5, "snr": 25.0,
-             "classification": "narrowband", "confidence": 0.95,
-             "rfi_probability": 0.1, "ood_score": 0.7, "is_candidate": True,
-             "interestingness_score": 85.0, "known_rfi": False},
+            {
+                "frequency_hz": 1420e6,
+                "drift_rate": 0.5,
+                "snr": 25.0,
+                "classification": "narrowband",
+                "confidence": 0.95,
+                "rfi_probability": 0.1,
+                "ood_score": 0.7,
+                "is_candidate": True,
+                "interestingness_score": 85.0,
+                "known_rfi": False,
+            },
         ]
 
         with tempfile.NamedTemporaryFile(suffix=".fits", delete=False) as f:
@@ -188,6 +210,7 @@ class TestFITSExport:
             assert result.stat().st_size > 0
 
             from astropy.io import fits
+
             with fits.open(str(result)) as hdul:
                 assert len(hdul) >= 2
                 data = hdul[1].data
@@ -210,10 +233,25 @@ class TestFITSExport:
     def test_export_skymap(self):
         from catalog.fits_export import export_skymap_fits
 
-        radio = [{"ra": 180.0, "dec": 45.0, "frequency_hz": 1420e6,
-                   "snr": 20.0, "drift_rate": 0.5, "source_name": "TEST"}]
-        optical = [{"ra_deg": 180.1, "dec_deg": 45.1, "ood_score": 0.8,
-                     "classification": "anomaly", "source": "astrolens"}]
+        radio = [
+            {
+                "ra": 180.0,
+                "dec": 45.0,
+                "frequency_hz": 1420e6,
+                "snr": 20.0,
+                "drift_rate": 0.5,
+                "source_name": "TEST",
+            }
+        ]
+        optical = [
+            {
+                "ra_deg": 180.1,
+                "dec_deg": 45.1,
+                "ood_score": 0.8,
+                "classification": "anomaly",
+                "source": "astrolens",
+            }
+        ]
 
         with tempfile.NamedTemporaryFile(suffix=".fits", delete=False) as f:
             path = Path(f.name)
@@ -222,6 +260,7 @@ class TestFITSExport:
             assert result.exists()
 
             from astropy.io import fits
+
             with fits.open(str(result)) as hdul:
                 assert len(hdul) >= 3
         finally:
@@ -232,8 +271,8 @@ class TestFITSExport:
 # Persistence Tracking
 # ──────────────────────────────────────────────────────────────────────
 
-class TestPersistenceTracking:
 
+class TestPersistenceTracking:
     def test_record_and_retrieve(self):
         from catalog.persistence import PersistenceTracker
 
@@ -300,8 +339,8 @@ class TestPersistenceTracking:
 # Interestingness Score
 # ──────────────────────────────────────────────────────────────────────
 
-class TestInterestingnessScore:
 
+class TestInterestingnessScore:
     def test_high_snr_high_score(self):
         from inference.interestingness import compute_interestingness
 
@@ -353,8 +392,8 @@ class TestInterestingnessScore:
 # Periodicity Detection
 # ──────────────────────────────────────────────────────────────────────
 
-class TestPeriodicityDetection:
 
+class TestPeriodicityDetection:
     def test_detect_periodic_signal(self):
         from inference.periodicity import detect_periodicity
 
@@ -366,8 +405,7 @@ class TestPeriodicityDetection:
         for t in range(0, n_time, period_samples):
             spec[32, t] += 10.0  # bright pulse at channel 32
 
-        result = detect_periodicity(spec, tsamp=1.0, freq_channel=32,
-                                     significance_threshold=3.0)
+        result = detect_periodicity(spec, tsamp=1.0, freq_channel=32, significance_threshold=3.0)
         assert result.period_significance > 0
 
     def test_no_periodicity_in_noise(self):
@@ -398,8 +436,8 @@ class TestPeriodicityDetection:
 # Attention Maps
 # ──────────────────────────────────────────────────────────────────────
 
-class TestAttentionMaps:
 
+class TestAttentionMaps:
     def test_heatmap_shape(self):
         from inference.attention_maps import attention_to_spectrogram_heatmap
 
@@ -422,14 +460,13 @@ class TestAttentionMaps:
 # Astropy Cross-Matching
 # ──────────────────────────────────────────────────────────────────────
 
-class TestAstropyCrossMatch:
 
+class TestAstropyCrossMatch:
     def test_exact_match(self):
         from catalog.astropy_crossmatch import crossmatch_radio_optical
 
         radio = [{"ra": 180.0, "dec": 45.0, "snr": 20, "source_name": "TEST"}]
-        optical = [{"ra_deg": 180.0, "dec_deg": 45.0, "ood_score": 0.5,
-                     "classification": "galaxy"}]
+        optical = [{"ra_deg": 180.0, "dec_deg": 45.0, "ood_score": 0.5, "classification": "galaxy"}]
 
         result = crossmatch_radio_optical(radio, optical, max_sep_arcsec=10)
         assert result["n_matches"] == 1
@@ -470,8 +507,8 @@ class TestAstropyCrossMatch:
 # CLI Interface
 # ──────────────────────────────────────────────────────────────────────
 
-class TestCLI:
 
+class TestCLI:
     def test_cli_version(self):
         from click.testing import CliRunner
 
@@ -516,8 +553,8 @@ class TestCLI:
 # Spectral Kurtosis (adaptive thresholds)
 # ──────────────────────────────────────────────────────────────────────
 
-class TestSpectralKurtosisAdaptive:
 
+class TestSpectralKurtosisAdaptive:
     def test_gaussian_noise_low_flagging(self):
         """Pure Gaussian noise should flag very few channels."""
         from pipeline import MitraSETIPipeline
@@ -556,11 +593,12 @@ class TestSpectralKurtosisAdaptive:
 # Integration: Pipeline with all new features
 # ──────────────────────────────────────────────────────────────────────
 
-class TestPipelineIntegration:
 
+class TestPipelineIntegration:
     @pytest.fixture
     def pipeline(self):
         from pipeline import MitraSETIPipeline
+
         return MitraSETIPipeline()
 
     def test_pipeline_imports(self, pipeline):
@@ -569,6 +607,7 @@ class TestPipelineIntegration:
     def test_known_rfi_labeling_in_pipeline(self):
         """RFI database should be used during classification."""
         from catalog.rfi_database import RFIDatabase
+
         db = RFIDatabase()
         candidates = [
             {"frequency_hz": 1575.42e6, "drift_rate": 0.0, "snr": 15},
