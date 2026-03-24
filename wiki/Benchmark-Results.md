@@ -12,7 +12,7 @@ All benchmarks use real Breakthrough Listen observation data — no synthetic fi
 | **Rust build** | `--release` (optimized, LTO enabled) |
 | **turboSETI version** | 2.3.2 (via pip) |
 | **Python** | 3.10+ |
-| **MitraSETI version** | 0.1.0 |
+| **MitraSETI version** | 0.2.0 |
 
 ### What Each Tool Runs
 

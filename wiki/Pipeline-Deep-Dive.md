@@ -45,6 +45,20 @@ The de-Doppler search is the most compute-intensive stage. It searches for narro
 
 ### Algorithm
 
+MitraSETI supports two de-Doppler algorithms, selectable via `SearchParams.use_taylor_tree`:
+
+#### Taylor Tree (default, v0.2.0)
+
+The Taylor tree algorithm (Taylor 1974) achieves O(N_t × log₂(N_t) × N_f) complexity by recursively combining partial sums:
+
+1. **Build tree levels:** Starting from the normalized spectrogram (level 0), each subsequent level doubles the integration length by shifting and summing adjacent rows.
+2. **Read off drift rates:** Each tree level and shift combination corresponds to a specific drift rate, with the integrated SNR available without re-scanning the data.
+3. **Peak detection:** Identify frequency channels exceeding `min_snr` at each drift rate.
+
+This yields a 4.3x speedup over brute-force on Voyager-1 data (1M channels, 16 time steps).
+
+#### Brute-Force (legacy)
+
 1. **Noise estimation:** For each frequency channel, compute the median and MAD (Median Absolute Deviation) across time steps.
 
 2. **Normalization:** Convert raw power to SNR:
@@ -58,7 +72,9 @@ The de-Doppler search is the most compute-intensive stage. It searches for narro
 
 5. **Peak detection:** Identify local maxima in the integrated SNR across frequency for each drift rate.
 
-6. **Clustering:** Merge detections within ±5 kHz in frequency and ±0.5 Hz/s in drift rate, keeping the highest-SNR detection per cluster.
+#### Post-Detection (both algorithms)
+
+6. **Clustering (v0.2.0):** HDBSCAN density-based clustering in (frequency, drift_rate, log_snr) space, keeping the highest-SNR detection per cluster. Falls back to greedy merging for small datasets (<5 hits).
 
 ### Parameters
 
