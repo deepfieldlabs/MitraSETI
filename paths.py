@@ -105,6 +105,15 @@ ASTROLENS_ARTIFACTS_DIR = Path(
 ASTROLENS_CANDIDATES_FILE = ASTROLENS_ARTIFACTS_DIR / "data" / "anomaly_candidates.json"
 ASTROLENS_SKYMAP_FILE = ASTROLENS_ARTIFACTS_DIR / "data" / "skymap_export.json"
 
+# Additional output directories
+FITS_DIR = CANDIDATES_DIR / "fits"
+FITS_DIR.mkdir(parents=True, exist_ok=True)
+
+COMPLETENESS_DIR = ARTIFACTS_DIR / "completeness"
+COMPLETENESS_DIR.mkdir(parents=True, exist_ok=True)
+
+PERSISTENCE_STATE = DATA_DIR / "persistence_state.json"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility Functions

@@ -1,8 +1,9 @@
 """
 MitraSETI Catalog Module
 
-Query radio astronomy catalogs and cross-reference sky positions with
-optical anomalies from AstroLens.
+Query radio astronomy catalogs, cross-reference sky positions with
+optical anomalies from AstroLens, manage known RFI signatures,
+export FITS catalogs, and track signal persistence.
 """
 
 from .radio_catalogs import CatalogResult, RadioCatalogQuery

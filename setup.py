@@ -9,7 +9,7 @@ long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="mitraseti",
-    version="0.1.0",
+    version="0.2.0",
     author="Saman Tabatabaeian",
     author_email="saman@mitraseti.dev",
     description="Intelligent SETI Signal Analysis — Decode the Cosmos with Machine Intelligence",
@@ -39,6 +39,10 @@ setup(
         "Pillow>=9.5.0",
         "PyQt5>=5.15.0",
         "astroquery>=0.4.6",
+        "astropy>=6.0.0",
+        "hdbscan>=0.8.30",
+        "scikit-learn>=1.3.0",
+        "click>=8.1.0",
         "websockets>=11.0",
     ],
     extras_require={
@@ -51,7 +55,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "mitraseti=main:main",
+            "mitraseti=cli:cli",
         ],
     },
     classifiers=[

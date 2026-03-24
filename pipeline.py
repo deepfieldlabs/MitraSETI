@@ -310,14 +310,12 @@ class MitraSETIPipeline:
     # Spectral Kurtosis RFI Excision
     # ------------------------------------------------------------------
 
-    _SK_LOWER = 0.3
-    _SK_UPPER = 2.5
+    _SK_N_SIGMA = 3.0
 
     @staticmethod
     def compute_spectral_kurtosis(
         data: np.ndarray,
-        sk_lower: float = 0.3,
-        sk_upper: float = 2.5,
+        n_sigma: float = 3.0,
     ) -> Dict[str, Any]:
         """Compute per-channel spectral kurtosis and flag RFI channels.
 
@@ -332,12 +330,19 @@ class MitraSETIPipeline:
         For Gaussian noise, SK ≈ 1.  Constant-power RFI produces SK ≈ 0,
         impulsive RFI produces SK >> 1.
 
+        Uses adaptive thresholds (median ± n_sigma * MAD) rather than
+        fixed bounds, so it works on data at any power scale.
+
         Returns dict with sk_values, rfi_mask (True = flagged), and stats.
         """
         n_times, n_chans = data.shape
         M = n_times
 
-        power = np.abs(data).astype(np.float64)
+        # Per-channel bandpass removal: divide each channel by its median
+        # to normalize power levels before SK calculation
+        col_medians = np.median(data, axis=0).astype(np.float64)
+        col_medians[col_medians <= 0] = 1.0
+        power = (np.abs(data).astype(np.float64)) / col_medians[np.newaxis, :]
         power[power < 1e-30] = 1e-30
 
         s1 = power.sum(axis=0)
@@ -348,6 +353,13 @@ class MitraSETIPipeline:
 
         sk = ((M + 1) / max(M - 1, 1)) * (M * s2 / s1_sq - 1)
 
+        # Adaptive thresholds via median + MAD
+        sk_median = float(np.median(sk))
+        sk_mad = float(np.median(np.abs(sk - sk_median)))
+        sk_sigma = 1.4826 * sk_mad if sk_mad > 0 else float(np.std(sk))
+        sk_lower = sk_median - n_sigma * sk_sigma
+        sk_upper = sk_median + n_sigma * sk_sigma
+
         rfi_mask = (sk < sk_lower) | (sk > sk_upper)
         n_flagged = int(rfi_mask.sum())
 
@@ -356,8 +368,10 @@ class MitraSETIPipeline:
             "rfi_mask": rfi_mask,
             "n_flagged": n_flagged,
             "fraction_flagged": n_flagged / n_chans if n_chans > 0 else 0,
-            "sk_median": float(np.median(sk)),
-            "sk_std": float(np.std(sk)),
+            "sk_median": round(sk_median, 4),
+            "sk_std": round(sk_sigma, 4),
+            "sk_lower": round(sk_lower, 4),
+            "sk_upper": round(sk_upper, 4),
         }
 
     def _apply_sk_mask(
@@ -368,9 +382,7 @@ class MitraSETIPipeline:
         Replaces flagged channels with per-channel median (preserves
         statistical properties for non-RFI channels).
         """
-        sk_result = self.compute_spectral_kurtosis(
-            data, self._SK_LOWER, self._SK_UPPER
-        )
+        sk_result = self.compute_spectral_kurtosis(data, self._SK_N_SIGMA)
         mask = sk_result["rfi_mask"]
         n_flagged = sk_result["n_flagged"]
 
@@ -648,19 +660,24 @@ class MitraSETIPipeline:
 
         return snippet.astype(np.float32)
 
-    # Frequency clustering tolerance: hits within this many channels of
-    # each other and with similar drift rates are considered duplicates.
+    # Clustering config
     _CLUSTER_FREQ_TOL_CHANNELS = 64
     _CLUSTER_DRIFT_TOL = 0.5  # Hz/s
+    _HDBSCAN_MIN_CLUSTER = 5
+    _HDBSCAN_MAX_POINTS = 200_000
 
     def _cluster_hits(
         self, candidates: List[Dict[str, Any]], header: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Deduplicate de-Doppler hits by frequency/drift proximity.
+        """Deduplicate de-Doppler hits using HDBSCAN density clustering.
 
-        Many raw hits are the same physical signal detected at slightly
-        different frequency/drift combinations.  Group nearby hits and
-        keep only the strongest (highest SNR) per cluster.
+        Uses HDBSCAN in (frequency_channel, drift_rate, log_snr) space
+        for robust density-based deduplication.  Falls back to greedy
+        sequential clustering if HDBSCAN is unavailable or the dataset
+        is very small.
+
+        HDBSCAN achieves ~93% false-positive reduction vs greedy methods
+        (cf. GLOBULAR, AJ 2025).
         """
         if len(candidates) <= 1:
             return candidates
@@ -671,6 +688,70 @@ class MitraSETIPipeline:
         for c in candidates:
             c["_chan_idx"] = int((fch1 - c["frequency_hz"] / 1e6) / foff) if foff > 0 else 0
 
+        # Try HDBSCAN for large hit lists
+        if len(candidates) >= self._HDBSCAN_MIN_CLUSTER:
+            try:
+                return self._cluster_hdbscan(candidates)
+            except Exception:
+                pass
+
+        return self._cluster_greedy(candidates)
+
+    def _cluster_hdbscan(self, candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """HDBSCAN density-based clustering in (channel, drift, log_snr)."""
+        import hdbscan
+
+        subset = candidates
+        if len(candidates) > self._HDBSCAN_MAX_POINTS:
+            subset = sorted(candidates, key=lambda c: c.get("snr", 0), reverse=True)[
+                : self._HDBSCAN_MAX_POINTS
+            ]
+
+        chan_vals = np.array([c["_chan_idx"] for c in subset], dtype=np.float64)
+        drift_vals = np.array([c.get("drift_rate", 0) for c in subset], dtype=np.float64)
+        snr_vals = np.array([np.log1p(c.get("snr", 0)) for c in subset], dtype=np.float64)
+
+        # Normalize features to comparable scales
+        for arr in (chan_vals, drift_vals, snr_vals):
+            std = arr.std()
+            if std > 0:
+                arr -= arr.mean()
+                arr /= std
+
+        features = np.column_stack([chan_vals, drift_vals, snr_vals])
+
+        clusterer = hdbscan.HDBSCAN(
+            min_cluster_size=max(2, len(subset) // 500),
+            min_samples=1,
+            metric="euclidean",
+            cluster_selection_method="eom",
+        )
+        labels = clusterer.fit_predict(features)
+
+        result = []
+        label_set = set(labels)
+
+        for lab in label_set:
+            members = [subset[i] for i in range(len(subset)) if labels[i] == lab]
+            if lab == -1:
+                # Noise points: keep top ones by SNR (they're unique)
+                members.sort(key=lambda c: c.get("snr", 0), reverse=True)
+                for m in members[:max(1, len(members) // 10)]:
+                    m.pop("_chan_idx", None)
+                    result.append(m)
+            else:
+                best = max(members, key=lambda c: c.get("snr", 0))
+                best.pop("_chan_idx", None)
+                best["cluster_size"] = len(members)
+                result.append(best)
+
+        for c in candidates:
+            c.pop("_chan_idx", None)
+
+        return sorted(result, key=lambda c: c.get("snr", 0), reverse=True)
+
+    def _cluster_greedy(self, candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Fallback greedy sequential clustering."""
         candidates.sort(key=lambda c: c["_chan_idx"])
 
         clusters: List[List[Dict[str, Any]]] = []
@@ -1087,6 +1168,67 @@ class MitraSETIPipeline:
             "ood_calibrated": self._ood_calibrated,
         }
 
+        # Label known RFI sources
+        n_known_rfi = 0
+        try:
+            from catalog.rfi_database import RFIDatabase
+            rfi_db = RFIDatabase()
+            rfi_db.match_batch(classified)
+            n_known_rfi = sum(1 for c in classified if c.get("known_rfi"))
+            if n_known_rfi:
+                logger.info(f"  Known RFI: {n_known_rfi} signals matched database")
+        except Exception:
+            pass
+
+        # Score candidates by interestingness
+        try:
+            from inference.interestingness import rank_candidates
+            classified = rank_candidates(classified, max_drift_rate=4.0)
+        except Exception:
+            pass
+
+        # Track signal persistence across epochs
+        try:
+            from catalog.persistence import PersistenceTracker
+            tracker = PersistenceTracker()
+            source = header.get("source_name", "unknown")
+            verified = [c for c in classified if c.get("is_candidate")]
+            if verified:
+                persistence_result = tracker.record(source, verified)
+                logger.info(
+                    f"  Persistence: {persistence_result['new_signals']} new, "
+                    f"{persistence_result['matched_existing']} matched "
+                    f"(tracking {persistence_result['total_tracked']} signals)"
+                )
+        except Exception:
+            pass
+
+        # Run periodicity search on full spectrogram
+        periodicity_info = {}
+        try:
+            from inference.periodicity import batch_periodicity_search
+            tsamp = header.get("tsamp", 18.253611008)
+            periodic_results = batch_periodicity_search(
+                data, tsamp=tsamp, n_channels=5, significance_threshold=5.0,
+            )
+            periodic_signals = [
+                {"channel": ch, "period_s": r.best_period_s,
+                 "significance": r.period_significance,
+                 "harmonics": r.harmonics}
+                for ch, r in periodic_results if r.is_periodic
+            ]
+            periodicity_info = {
+                "channels_searched": 5,
+                "periodic_signals": periodic_signals,
+                "n_periodic": len(periodic_signals),
+            }
+            if periodic_signals:
+                logger.info(
+                    f"  Periodicity: {len(periodic_signals)} periodic signal(s) detected"
+                )
+        except Exception:
+            pass
+
         result = {
             "file_info": {
                 "filepath": filepath,
@@ -1102,6 +1244,7 @@ class MitraSETIPipeline:
             "metrics": metrics,
             "timing": timings,
             "summary": summary,
+            "periodicity": periodicity_info,
         }
 
         logger.info(
