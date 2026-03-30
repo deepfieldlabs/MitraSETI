@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 @click.group()
-@click.version_option("0.2.0", prog_name="MitraSETI")
+@click.version_option("0.3.0", prog_name="MitraSETI")
 @click.option("-v", "--verbose", is_flag=True, help="Verbose logging")
 def cli(verbose: bool):
     """MitraSETI — Rust-accelerated SETI signal analysis pipeline."""
@@ -273,6 +273,114 @@ def paths():
     click.echo(f"  Filterbank:    {FILTERBANK_DIR}")
     click.echo(f"  Models:        {MODELS_DIR}")
     click.echo(f"  Candidates:    {CANDIDATES_DIR}")
+
+
+@cli.command("gpu-search")
+@click.option("--file", "filepath", required=True, help="Filterbank file to process")
+@click.option("--snr", default=10.0, help="Minimum SNR threshold (default: 10)")
+@click.option("--max-drift", default=4.0, help="Max drift rate in Hz/s (default: 4)")
+def gpu_search(filepath: str, snr: float, max_drift: float):
+    """Run GPU-accelerated Taylor tree de-Doppler search."""
+    from core_gpu.taylor_tree_gpu import gpu_taylor_tree_search, is_gpu_available
+    from pipeline import MitraSETIPipeline
+
+    pipe = MitraSETIPipeline()
+    file_info = pipe._read_file(filepath)
+    data = file_info["data"]
+    header = file_info["header"]
+
+    click.echo(f"GPU available: {is_gpu_available()}")
+    click.echo(f"Data shape: {data.shape}")
+
+    result = gpu_taylor_tree_search(data, header, max_drift_rate=max_drift, min_snr=snr)
+
+    click.echo(f"\nBackend: {result.backend}")
+    click.echo(f"Processing time: {result.processing_time_ms:.1f} ms")
+    click.echo(f"Candidates: {len(result.candidates)}")
+
+    for c in result.candidates[:20]:
+        click.echo(
+            f"  freq={c.frequency_hz / 1e6:.6f} MHz  "
+            f"drift={c.drift_rate:.4f} Hz/s  "
+            f"SNR={c.snr:.1f}"
+        )
+
+
+@cli.command("chirp-search")
+@click.option("--file", "filepath", required=True, help="Filterbank file to process")
+@click.option("--chirp-max", default=0.1, help="Max chirp rate in Hz/s^2 (default: 0.1)")
+@click.option("--chirp-steps", default=9, help="Number of chirp rate trials (default: 9)")
+@click.option("--snr", default=10.0, help="Minimum SNR (default: 10)")
+def chirp_search_cmd(filepath: str, chirp_max: float, chirp_steps: int, snr: float):
+    """Run chirp rate (Doppler acceleration) search."""
+    from core_gpu.chirp_search import run_chirp_search
+    from pipeline import MitraSETIPipeline
+
+    pipe = MitraSETIPipeline()
+    file_info = pipe._read_file(filepath)
+    data = file_info["data"]
+    header = file_info["header"]
+
+    click.echo(f"Data shape: {data.shape}")
+    click.echo(f"Chirp range: [{-chirp_max}, +{chirp_max}] Hz/s^2")
+
+    result = run_chirp_search(
+        data, header,
+        chirp_max=chirp_max, chirp_steps=chirp_steps,
+        min_snr=snr,
+    )
+
+    click.echo(f"\nProcessing time: {result.processing_time_ms:.1f} ms")
+    click.echo(f"Baseline hits: {result.baseline_hits}")
+    click.echo(f"Chirp-only candidates: {result.chirp_only_count}")
+    click.echo(f"Total candidates: {len(result.candidates)}")
+
+    if result.best_chirp_rate is not None:
+        click.echo(f"Best chirp rate: {result.best_chirp_rate:.4f} Hz/s^2")
+
+    for c in result.candidates[:10]:
+        label = " [CHIRP-ONLY]" if c.is_chirp_only else ""
+        click.echo(
+            f"  freq={c.frequency_hz / 1e6:.6f} MHz  "
+            f"drift={c.drift_rate:.4f} Hz/s  "
+            f"chirp={c.chirp_rate:.4f} Hz/s^2  "
+            f"SNR={c.snr:.1f}{label}"
+        )
+
+
+@cli.command("matched-filter")
+@click.option("--file", "filepath", required=True, help="Filterbank file to process")
+@click.option("--snr", default=8.0, help="Minimum SNR (default: 8)")
+@click.option("--template-width", default=64, help="Template width in channels (default: 64)")
+def matched_filter_cmd(filepath: str, snr: float, template_width: int):
+    """Run matched filter bank search for signal templates."""
+    from core_gpu.matched_filter import run_matched_filter_search
+    from pipeline import MitraSETIPipeline
+
+    pipe = MitraSETIPipeline()
+    file_info = pipe._read_file(filepath)
+    data = file_info["data"]
+    header = file_info["header"]
+
+    click.echo(f"Data shape: {data.shape}")
+    click.echo(f"Template width: {template_width} channels")
+
+    result = run_matched_filter_search(
+        data, header,
+        min_snr=snr, template_width=template_width,
+    )
+
+    click.echo(f"\nTemplates tested: {result.templates_tested}")
+    click.echo(f"Processing time: {result.processing_time_ms:.1f} ms")
+    click.echo(f"Detections: {len(result.candidates)}")
+
+    for c in result.candidates[:15]:
+        click.echo(
+            f"  freq={c.frequency_hz / 1e6:.6f} MHz  "
+            f"t={c.time_idx}  "
+            f"SNR={c.snr:.1f}  "
+            f"template={c.template_name}"
+        )
 
 
 if __name__ == "__main__":

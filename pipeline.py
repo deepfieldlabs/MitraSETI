@@ -100,6 +100,16 @@ class MitraSETIPipeline:
                 "de-Doppler search and .fil reading will be disabled"
             )
 
+        # GPU backend (optional, used when available and data is large)
+        self._gpu_available = False
+        try:
+            from core_gpu.taylor_tree_gpu import is_gpu_available
+            self._gpu_available = is_gpu_available()
+            if self._gpu_available:
+                logger.info("GPU Taylor tree backend available (CuPy/CUDA)")
+        except ImportError:
+            pass
+
     def _init_ml(
         self,
         model_path: Optional[str],

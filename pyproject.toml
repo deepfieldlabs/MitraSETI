@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "mitraseti"
-version = "0.2.0"
+version = "0.3.0"
 description = "Intelligent SETI Signal Analysis — Decode the Cosmos with Machine Intelligence"
 readme = "README.md"
 license = { text = "MIT" }
@@ -45,6 +45,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = [
+    "cupy-cuda12x>=13.0.0",
+]
+jit = [
+    "numba>=0.59.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",

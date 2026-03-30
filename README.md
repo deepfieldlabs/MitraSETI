@@ -12,7 +12,7 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70%2B-orange?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.70+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
-  <a href="https://pypi.org/project/mitraseti/"><img src="https://img.shields.io/badge/version-0.2.0-purple?style=flat-square" alt="Version 0.2.0"></a>
+  <a href="https://pypi.org/project/mitraseti/"><img src="https://img.shields.io/badge/version-0.3.0-purple?style=flat-square" alt="Version 0.3.0"></a>
   <a href="https://github.com/deepfieldlabs/MitraSETI/stargazers"><img src="https://img.shields.io/github/stars/deepfieldlabs/MitraSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
 </p>
 
@@ -25,6 +25,9 @@ The Search for Extraterrestrial Intelligence generates terabytes of radio observ
 ## Key Features
 
 - **45x faster processing** on million-channel observations via parallel Rust de-Doppler search with rayon
+- **GPU-accelerated Taylor tree** — CuPy/CUDA de-Doppler search with Numba JIT fallback for 10-50x CPU speedup
+- **Chirp rate (Doppler acceleration) search** — detects second-order frequency drift that linear de-Doppler misses
+- **Matched filter bank** — 28 templates across 5 signal morphologies (narrowband, pulsed, broadband chirp, comb, modulated) with energy pre-filter
 - **Two-stage ML classification** — rule-based filtering eliminates 99%+ obvious RFI; CNN+Transformer inference runs only on survivors
 - **Out-of-distribution detection** — ensemble of MSP, Energy, and Spectral distance methods flags anomalous signals
 - **9-class signal taxonomy** — NARROWBAND_DRIFTING, NARROWBAND_STATIONARY, BROADBAND, PULSED, CHIRP, RFI_TERRESTRIAL, RFI_SATELLITE, NOISE, CANDIDATE_ET
@@ -93,7 +96,17 @@ turboSETI reports raw hits. MitraSETI reports *classified candidates* — signal
                     │                  └────────┬────────┘  │
                     └──────────────────────────┼────────────┘
                                                │
-                          ┌────────────────────▼────────────────────┐
+            ┌──────────────────────────────────┼──────────────────────────────────┐
+            │              GPU / JIT LAYER (core_gpu)                            │
+            │                                                                    │
+            │  ┌──────────────────┐ ┌─────────────────┐ ┌──────────────────────┐ │
+            │  │ Taylor Tree GPU  │ │  Chirp Rate     │ │  Matched Filter Bank │ │
+            │  │ CuPy / Numba JIT│ │  Search (9 f̈)   │ │  28 templates + FFT  │ │
+            │  └────────┬─────────┘ └────────┬────────┘ └──────────┬───────────┘ │
+            └───────────┼────────────────────┼─────────────────────┼─────────────┘
+                        └────────────────────┼─────────────────────┘
+                                             │
+                          ┌──────────────────▼─────────────────────┐
                           │          PYTHON ML LAYER                │
                           │                                        │
                           │  Stage 1: Rule-Based Filter (all hits) │
@@ -131,6 +144,9 @@ turboSETI reports raw hits. MitraSETI reports *classified candidates* — signal
 | **1. Ingest** | `FilterbankReader` | Reads `.fil` (Sigproc) and `.h5` (HDF5/BL) files; handles 3D data, large-file subsetting, blimpy fallback | Rust (`core/src/filterbank.rs`), h5py, blimpy |
 | **2. De-Doppler** | `DedopplerEngine` | Taylor tree O(N log N) or brute-force drift-rate search across all channels; finds narrowband signals drifting due to relative acceleration | Rust (`core/src/dedoppler.rs`), rayon parallelism |
 | **2b. SK Filter** | `compute_spectral_kurtosis` | Adaptive spectral kurtosis RFI excision using median + MAD thresholds | Python (pipeline.py) |
+| **2c. GPU Taylor Tree** | `gpu_taylor_tree_search` | GPU-accelerated Taylor tree via CuPy with Numba JIT CPU fallback; 10-50x faster than NumPy | CuPy / Numba (`core_gpu/taylor_tree_gpu.py`) |
+| **2d. Chirp Search** | `run_chirp_search` | Doppler acceleration (f̈) search over 9 chirp rate trials; detects accelerating transmitters | NumPy (`core_gpu/chirp_search.py`) |
+| **2e. Matched Filter** | `run_matched_filter_search` | FFT cross-correlation against 28 templates (5 morphologies) with energy pre-filter | NumPy/SciPy (`core_gpu/matched_filter.py`) |
 | **3. RFI Rejection** | `RFIFilter` + `RFIDatabase` | Eliminates known-band interference, zero-drift signals, broadband events; matches against 27 cataloged RFI sources | Rust + Python |
 | **4. Clustering** | `_cluster_hdbscan` | HDBSCAN density-based deduplication; keeps highest-SNR per cluster | Python (pipeline.py, hdbscan) |
 | **5a. Rule Filter** | Stage 1 classifier | Fast pass over all signals: checks drift rate range, SNR thresholds, boundary artifacts; eliminates 99%+ obvious RFI | Python (pipeline.py) |
@@ -407,6 +423,15 @@ mitraseti rfi --freq 1575420000
 # Show signal persistence across epochs
 mitraseti persistence --source TRAPPIST-1
 
+# GPU-accelerated Taylor tree search
+mitraseti gpu-search observation.fil
+
+# Chirp rate (Doppler acceleration) search
+mitraseti chirp-search observation.fil --chirp-rates 9
+
+# Matched filter bank search
+mitraseti matched-filter observation.fil --min-snr 8
+
 # Show configured artifact paths
 mitraseti paths
 ```
@@ -559,6 +584,20 @@ This multi-modal approach opens discovery pathways that single-wavelength analys
 
 ---
 
+## What's New in v0.3.0
+
+| Feature | Description |
+|---|---|
+| **GPU Taylor tree** | CuPy/CUDA-accelerated de-Doppler search with automatic NumPy fallback |
+| **Numba JIT backend** | Compiled CPU Taylor tree — 10-50x faster than pure NumPy, no GPU required |
+| **Chirp rate search** | Doppler acceleration (f̈) search over 9 quadratic chirp rate trials |
+| **Matched filter bank** | 28 templates across 5 signal morphologies with FFT cross-correlation |
+| **Energy pre-filter** | Chi-squared channel power test reduces matched filter search space by 5-10x |
+| **GPU benchmark CLI** | `gpu-search`, `chirp-search`, `matched-filter` commands added to Click CLI |
+| **Serverless architecture** | Terraform-based AWS Lambda + Step Functions infrastructure (`Infra-MitraSeti/`) |
+
+---
+
 ## What's New in v0.2.0
 
 | Feature | Description |
@@ -579,13 +618,16 @@ This multi-modal approach opens discovery pathways that single-wavelength analys
 
 ## Roadmap
 
-| Feature | Description |
-|---|---|
-| **GPU-accelerated de-Doppler** | CUDA and Metal compute shaders for the de-Doppler search |
-| **Pre-trained model zoo** | Models trained on GBT, Parkes, MeerKAT, and ATA datasets |
-| **Real-time SDR input** | Direct ingestion from software-defined radios (RTL-SDR, USRP) |
-| **Cloud deployment** | AWS / GCP Terraform modules for scalable processing |
-| **PyPI distribution** | `pip install mitraseti` for easy adoption |
+| Feature | Description | Status |
+|---|---|---|
+| **GPU-accelerated de-Doppler** | CuPy/CUDA Taylor tree with Numba JIT fallback | Done (v0.3.0) |
+| **Chirp rate search** | Doppler acceleration detection | Done (v0.3.0) |
+| **Matched filter bank** | Multi-morphology signal detection | Done (v0.3.0) |
+| **Cloud deployment** | AWS Lambda + Step Functions via Terraform | Done (v0.3.0) |
+| **Pre-trained model zoo** | Models trained on GBT, Parkes, MeerKAT, and ATA datasets | Planned |
+| **Real-time SDR input** | Direct ingestion from software-defined radios (RTL-SDR, USRP) | Planned |
+| **fastDD integration** | Alternative de-Doppler with better high-drift-rate sensitivity | Research |
+| **PyPI distribution** | `pip install mitraseti` for easy adoption | Planned |
 
 ---
 
