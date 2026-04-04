@@ -154,16 +154,16 @@ def run_chirp_search(
 
     # Baseline: zero chirp rate (standard linear search)
     baseline = gpu_taylor_tree_search(
-        spectrogram, header,
-        max_drift_rate=max_drift_rate, min_snr=min_snr,
+        spectrogram,
+        header,
+        max_drift_rate=max_drift_rate,
+        min_snr=min_snr,
     )
     baseline_keys = {
-        (round(c.frequency_hz, 1), round(c.drift_rate, 3))
-        for c in baseline.candidates
+        (round(c.frequency_hz, 1), round(c.drift_rate, 3)) for c in baseline.candidates
     }
     baseline_snrs = {
-        (round(c.frequency_hz, 1), round(c.drift_rate, 3)): c.snr
-        for c in baseline.candidates
+        (round(c.frequency_hz, 1), round(c.drift_rate, 3)): c.snr for c in baseline.candidates
     }
 
     all_candidates: List[ChirpCandidate] = []
@@ -187,17 +187,16 @@ def run_chirp_search(
 
         dechirped = dechirp_spectrogram(spectrogram, accel, tsamp, foff_hz)
         result = gpu_taylor_tree_search(
-            dechirped, header,
-            max_drift_rate=max_drift_rate, min_snr=min_snr,
+            dechirped,
+            header,
+            max_drift_rate=max_drift_rate,
+            min_snr=min_snr,
         )
 
         for c in result.candidates:
             key = (round(c.frequency_hz, 1), round(c.drift_rate, 3))
             is_new = key not in baseline_keys
-            is_stronger = (
-                not is_new
-                and c.snr > baseline_snrs.get(key, 0) * 1.1
-            )
+            is_stronger = not is_new and c.snr > baseline_snrs.get(key, 0) * 1.1
 
             if is_new or is_stronger:
                 cc = ChirpCandidate(
@@ -230,8 +229,10 @@ def run_chirp_search(
 
     logger.info(
         "Chirp search: %d trials, %d baseline, %d chirp-only, %.1f ms",
-        len(chirp_rates), len(baseline.candidates),
-        len(chirp_only_candidates), elapsed_ms,
+        len(chirp_rates),
+        len(baseline.candidates),
+        len(chirp_only_candidates),
+        elapsed_ms,
     )
 
     return ChirpSearchResult(

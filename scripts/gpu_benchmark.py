@@ -160,6 +160,7 @@ def benchmark_numpy(
 
     # Force NumPy by temporarily disabling GPU
     import core_gpu.taylor_tree_gpu as mod
+
     orig = mod._GPU_AVAILABLE
     mod._GPU_AVAILABLE = False
 
@@ -305,7 +306,9 @@ def main():
 
     # Print summary table
     print(f"\n{'=' * 70}")
-    print(f"{'Channels':>10} {'Rust (ms)':>12} {'GPU (ms)':>12} {'NumPy (ms)':>12} {'GPU/Rust':>10}")
+    print(
+        f"{'Channels':>10} {'Rust (ms)':>12} {'GPU (ms)':>12} {'NumPy (ms)':>12} {'GPU/Rust':>10}"
+    )
     print(f"{'-' * 70}")
     for sp in results["speedups"]:
         rust = f"{sp['rust_ms']:.1f}" if sp.get("rust_ms") else "N/A"

@@ -104,6 +104,7 @@ class MitraSETIPipeline:
         self._gpu_available = False
         try:
             from core_gpu.taylor_tree_gpu import is_gpu_available
+
             self._gpu_available = is_gpu_available()
             if self._gpu_available:
                 logger.info("GPU Taylor tree backend available (CuPy/CUDA)")

@@ -277,7 +277,7 @@ def _matched_filter_fft(
     and local noise.
     """
     # Normalise template
-    template_energy = np.sqrt(np.sum(template ** 2))
+    template_energy = np.sqrt(np.sum(template**2))
     if template_energy < 1e-10:
         return np.zeros_like(data)
 
@@ -384,7 +384,9 @@ def run_matched_filter_search(
     n_active = int(np.sum(active_mask))
     logger.debug(
         "Pre-filter: %d / %d channels active (%.1f%% reduction)",
-        n_active, n_chans, 100.0 * (1.0 - n_active / max(n_chans, 1)),
+        n_active,
+        n_chans,
+        100.0 * (1.0 - n_active / max(n_chans, 1)),
     )
 
     if n_active == 0:
@@ -410,7 +412,11 @@ def run_matched_filter_search(
         # Zero out inactive channels so no spurious peaks appear
         snr_map[:, ~active_mask] = 0.0
         peaks = _extract_peaks(
-            snr_map, min_snr, header, name, params,
+            snr_map,
+            min_snr,
+            header,
+            name,
+            params,
             max_peaks=max_candidates_per_template,
         )
 
@@ -431,7 +437,9 @@ def run_matched_filter_search(
 
     logger.info(
         "Matched filter: %d templates, %d detections, %.1f ms",
-        len(templates), len(final), elapsed_ms,
+        len(templates),
+        len(final),
+        elapsed_ms,
     )
 
     return MatchedFilterResult(

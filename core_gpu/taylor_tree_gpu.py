@@ -323,9 +323,7 @@ def _build_taylor_tree_vectorised(
             second_block = prev[second_start : second_start + n_drifts_prev, :]
 
             # d_bit=0 half: no extra shift
-            curr[out_start : out_start + n_drifts_prev, :] = (
-                first_block + second_block
-            )
+            curr[out_start : out_start + n_drifts_prev, :] = first_block + second_block
 
             # d_bit=1 half: shift second block
             second_shifted = xp.roll(second_block, -shift_amount, axis=1)
@@ -334,9 +332,9 @@ def _build_taylor_tree_vectorised(
             elif shift_amount < 0:
                 second_shifted[:, : abs(shift_amount)] = 0.0
 
-            curr[
-                out_start + n_drifts_prev : out_start + n_drifts_curr, :
-            ] = first_block + second_shifted
+            curr[out_start + n_drifts_prev : out_start + n_drifts_curr, :] = (
+                first_block + second_shifted
+            )
 
         prev = curr
 
@@ -350,9 +348,7 @@ def _build_taylor_tree_vectorised(
 if _NUMBA_AVAILABLE:
 
     @njit(cache=True, parallel=True)
-    def _build_taylor_tree_numba_core(
-        data, n_times, n_chans, n_padded, n_layers, sign
-    ):
+    def _build_taylor_tree_numba_core(data, n_times, n_chans, n_padded, n_layers, sign):
         """Numba-compiled Taylor tree — 10-50x faster than NumPy on CPU.
 
         Same algorithm as the pure-Python version but compiled to native
@@ -419,9 +415,7 @@ if _NUMBA_AVAILABLE:
     def _build_taylor_tree_numba(data, n_times, n_chans, n_padded, n_layers, sign):
         """Wrapper to call the Numba-compiled core with proper types."""
         data_f32 = np.ascontiguousarray(data, dtype=np.float32)
-        return _build_taylor_tree_numba_core(
-            data_f32, n_times, n_chans, n_padded, n_layers, sign
-        )
+        return _build_taylor_tree_numba_core(data_f32, n_times, n_chans, n_padded, n_layers, sign)
 
 
 # ---------------------------------------------------------------------------
@@ -583,8 +577,15 @@ def gpu_taylor_tree_search(
     for sign in [1, -1]:
         tree = build_fn(data_norm, n_times, n_chans, n_padded, n_layers, sign)
         candidates = _extract_candidates(
-            tree, header, sign, n_chans, n_padded, n_times,
-            max_drift_channels, drift_step, min_snr,
+            tree,
+            header,
+            sign,
+            n_chans,
+            n_padded,
+            n_times,
+            max_drift_channels,
+            drift_step,
+            min_snr,
         )
         all_candidates.extend(candidates)
 
@@ -596,7 +597,10 @@ def gpu_taylor_tree_search(
 
     logger.info(
         "GPU Taylor tree (%s): %.1f ms, %d signals → %d candidates",
-        backend, elapsed_ms, total_signals, len(clustered),
+        backend,
+        elapsed_ms,
+        total_signals,
+        len(clustered),
     )
 
     return GPUSearchResult(

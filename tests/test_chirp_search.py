@@ -70,8 +70,10 @@ class TestChirpSearch:
         data = np.random.randn(8, 256).astype(np.float32)
         header = _make_header(256)
         result = run_chirp_search(
-            data, header,
-            chirp_max=0.05, chirp_steps=3,
+            data,
+            header,
+            chirp_max=0.05,
+            chirp_steps=3,
             min_snr=20.0,
         )
         assert isinstance(result, ChirpSearchResult)
@@ -88,8 +90,10 @@ class TestChirpSearch:
                 data[t, ch] += 50
         header = _make_header(512)
         result = run_chirp_search(
-            data, header,
-            chirp_max=0.05, chirp_steps=3,
+            data,
+            header,
+            chirp_max=0.05,
+            chirp_steps=3,
             min_snr=8.0,
         )
         assert result.baseline_hits > 0
@@ -106,7 +110,7 @@ class TestChirpSearch:
         for t in range(n_times):
             elapsed = t * tsamp
             # Quadratic drift: 0.5 * a * t^2
-            shift_ch = int(round(0.5 * accel * elapsed ** 2 / foff_hz))
+            shift_ch = int(round(0.5 * accel * elapsed**2 / foff_hz))
             linear_ch = t  # +1 channel per time step linear drift
             ch = 500 + linear_ch + shift_ch
             if 0 <= ch < n_chans:
@@ -114,8 +118,10 @@ class TestChirpSearch:
 
         header = _make_header(n_chans)
         result = run_chirp_search(
-            data, header,
-            chirp_max=0.1, chirp_steps=5,
+            data,
+            header,
+            chirp_max=0.1,
+            chirp_steps=5,
             min_snr=5.0,
         )
         assert len(result.candidates) > 0
@@ -126,8 +132,10 @@ class TestChirpSearch:
         data = np.random.randn(8, 256).astype(np.float32)
         header = _make_header(256)
         result = run_chirp_search(
-            data, header,
-            chirp_max=0.05, chirp_steps=3,
+            data,
+            header,
+            chirp_max=0.05,
+            chirp_steps=3,
             min_snr=25.0,
         )
         assert result.chirp_only_count == 0

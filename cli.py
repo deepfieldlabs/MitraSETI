@@ -300,9 +300,7 @@ def gpu_search(filepath: str, snr: float, max_drift: float):
 
     for c in result.candidates[:20]:
         click.echo(
-            f"  freq={c.frequency_hz / 1e6:.6f} MHz  "
-            f"drift={c.drift_rate:.4f} Hz/s  "
-            f"SNR={c.snr:.1f}"
+            f"  freq={c.frequency_hz / 1e6:.6f} MHz  drift={c.drift_rate:.4f} Hz/s  SNR={c.snr:.1f}"
         )
 
 
@@ -325,8 +323,10 @@ def chirp_search_cmd(filepath: str, chirp_max: float, chirp_steps: int, snr: flo
     click.echo(f"Chirp range: [{-chirp_max}, +{chirp_max}] Hz/s^2")
 
     result = run_chirp_search(
-        data, header,
-        chirp_max=chirp_max, chirp_steps=chirp_steps,
+        data,
+        header,
+        chirp_max=chirp_max,
+        chirp_steps=chirp_steps,
         min_snr=snr,
     )
 
@@ -366,8 +366,10 @@ def matched_filter_cmd(filepath: str, snr: float, template_width: int):
     click.echo(f"Template width: {template_width} channels")
 
     result = run_matched_filter_search(
-        data, header,
-        min_snr=snr, template_width=template_width,
+        data,
+        header,
+        min_snr=snr,
+        template_width=template_width,
     )
 
     click.echo(f"\nTemplates tested: {result.templates_tested}")
