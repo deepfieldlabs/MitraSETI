@@ -48,12 +48,34 @@ def main():
         s3.download_file(input_bucket, input_key, local_path)
         logger.info("Downloaded to %s (%.1f MB)", local_path, os.path.getsize(local_path) / 1e6)
 
-    # Run MitraSETI pipeline
     sys.path.insert(0, "/app")
     from pipeline import MitraSETIPipeline
 
     pipeline = MitraSETIPipeline()
-    result = pipeline.process_file(local_path)
+
+    try:
+        result = pipeline.process_file(local_path)
+    except Exception as e:
+        logger.error("Pipeline crashed: %s", e, exc_info=True)
+        elapsed = time.perf_counter() - t_start
+        output = {
+            "job_id": job_id,
+            "input_file": f"s3://{input_bucket}/{input_key}",
+            "processing_time_seconds": round(elapsed, 2),
+            "status": "error",
+            "error": str(e),
+            "pipeline_version": "0.3.0",
+        }
+        results_key = f"jobs/{job_id}/results.json"
+        s3.put_object(
+            Bucket=results_bucket, Key=results_key,
+            Body=json.dumps(output, default=str, indent=2),
+            ContentType="application/json",
+        )
+        _update_job_status(job_id, "error", output)
+        os.unlink(local_path)
+        logger.info("Job %s failed: %s (%.1fs)", job_id, e, elapsed)
+        return
 
     elapsed = time.perf_counter() - t_start
 
