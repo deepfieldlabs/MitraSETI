@@ -16,6 +16,21 @@
   <a href="https://github.com/deepfieldlabs/MitraSETI/stargazers"><img src="https://img.shields.io/github/stars/deepfieldlabs/MitraSETI?style=flat-square&color=yellow" alt="GitHub Stars"></a>
 </p>
 
+<p align="center">
+  <a href="https://mitraseti-dev.deepfieldlabs.dev"><img src="https://img.shields.io/badge/☁️_MitraSETI_Cloud-Start_Free-blueviolet?style=for-the-badge" alt="MitraSETI Cloud"></a>
+</p>
+
+> ### ☁️ MitraSETI Cloud
+> The managed cloud version of MitraSETI is available at [mitraseti-dev.deepfieldlabs.dev](https://mitraseti-dev.deepfieldlabs.dev).
+>
+> Upload observation files, run signal detection and ML classification pipelines, and visualise results — directly in your browser.
+>
+> **Free Explorer tier** — .h5 and .fil support, 10 files/month, 50 MB per file, no credit card required.
+> **Researcher** ($99/mo) — up to 1 GB files, 500 files/month, REST API, FITS export, priority processing.
+> **Institution** ($499/mo) — team accounts, 5 GB files, 5,000 files/month, multi-region, data residency controls.
+>
+> Built and operated by [DeepField Labs](https://deepfieldlabs.dev).
+
 ---
 
 The Search for Extraterrestrial Intelligence generates terabytes of radio observation data, yet the standard analysis tool — [turboSETI](https://github.com/UCBerkeleySETI/turbo_seti) — is a pure-Python, batch-only pipeline with no machine learning, no RFI learning, and no way to distinguish a drifting ET signal from a drifting satellite. MitraSETI replaces this bottleneck with a **Rust-powered de-Doppler engine** (up to **45x faster** on real Breakthrough Listen data), a **CNN + Transformer classifier** that automatically rejects RFI and flags anomalies, and a **streaming observation mode** that can run multi-day campaigns unattended — complete with desktop and web interfaces for real-time monitoring.
