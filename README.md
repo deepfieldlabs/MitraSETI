@@ -17,11 +17,11 @@
 </p>
 
 <p align="center">
-  <a href="https://mitraseti-dev.deepfieldlabs.dev"><img src="https://img.shields.io/badge/☁️_MitraSETI_Cloud-Start_Free-blueviolet?style=for-the-badge" alt="MitraSETI Cloud"></a>
+  <a href="https://mitraseti.deepfieldlabs.dev"><img src="https://img.shields.io/badge/☁️_MitraSETI_Cloud-Start_Free-blueviolet?style=for-the-badge" alt="MitraSETI Cloud"></a>
 </p>
 
 > ### ☁️ MitraSETI Cloud
-> The managed cloud version of MitraSETI is available at [mitraseti-dev.deepfieldlabs.dev](https://mitraseti-dev.deepfieldlabs.dev).
+> The managed cloud version of MitraSETI is available at [mitraseti.deepfieldlabs.dev](https://mitraseti.deepfieldlabs.dev).
 >
 > Upload observation files, run signal detection and ML classification pipelines, and visualise results — directly in your browser.
 >

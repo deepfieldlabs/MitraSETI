@@ -2,7 +2,7 @@
 
 **Intelligent SETI Signal Analysis — Rust-Accelerated Processing with Machine Learning Classification**
 
-> **☁️ [MitraSETI Cloud](https://mitraseti-dev.deepfieldlabs.dev)** — The managed cloud version is available. Upload your data, run automated pipelines, and visualise results in your browser. Free Explorer tier — no installation, no credit card required. Built by [DeepField Labs](https://deepfieldlabs.dev).
+> **☁️ [MitraSETI Cloud](https://mitraseti.deepfieldlabs.dev)** — The managed cloud version is available. Upload your data, run automated pipelines, and visualise results in your browser. Free Explorer tier — no installation, no credit card required. Built by [DeepField Labs](https://deepfieldlabs.dev).
 
 MitraSETI is a ground-up reimagination of the SETI signal analysis pipeline, combining a **Rust-powered de-Doppler engine** (up to 45x faster on real Breakthrough Listen data), a **CNN + Transformer classifier** that automatically rejects RFI and flags anomalies, and a **streaming observation mode** for multi-day unattended campaigns — with desktop and web interfaces for real-time monitoring.
 
