@@ -1,10 +1,10 @@
 # MitraSETI Wiki
 
-**Intelligent SETI Signal Analysis — Rust-Accelerated Processing with Machine Learning Classification**
+**Intelligent Radio Signal Analysis — Rust-Accelerated Processing with Machine Learning Classification**
 
 > **☁️ [MitraSETI Cloud](https://mitraseti.deepfieldlabs.dev)** — The managed cloud version is available. Upload your data, run automated pipelines, and visualise results in your browser. Free Explorer tier — no installation, no credit card required. Built by [DeepField Labs](https://deepfieldlabs.dev).
 
-MitraSETI is a ground-up reimagination of the SETI signal analysis pipeline, combining a **Rust-powered de-Doppler engine** (up to 45x faster on real Breakthrough Listen data), a **CNN + Transformer classifier** that automatically rejects RFI and flags anomalies, and a **streaming observation mode** for multi-day unattended campaigns — with desktop and web interfaces for real-time monitoring.
+MitraSETI is a ground-up reimagination of the radio signal analysis pipeline, combining a **Rust-powered de-Doppler engine** (up to 45x faster on real Breakthrough Listen data), a **CNN + Transformer classifier** that automatically rejects RFI and flags anomalies, and a **streaming observation mode** for multi-day unattended campaigns — with desktop and web interfaces for real-time monitoring.
 
 ---
 
@@ -79,7 +79,7 @@ MitraSETI is a ground-up reimagination of the SETI signal analysis pipeline, com
 - **Taylor tree de-Doppler** — O(N log N) algorithm, 4.3x faster than brute-force (v0.2.0)
 - **Two-stage ML classification** — rule-based filtering + CNN+Transformer inference
 - **Out-of-distribution detection** — ensemble of MSP, Energy, and Spectral distance methods
-- **9-class signal taxonomy** — from NARROWBAND_DRIFTING to CANDIDATE_ET
+- **9-class signal taxonomy** — from NARROWBAND_DRIFTING to CANDIDATE_SIGNAL
 - **HDBSCAN density clustering** — replaces greedy deduplication for robust false-positive reduction (v0.2.0)
 - **Adaptive spectral kurtosis** — RFI excision using median + MAD thresholds (v0.2.0)
 - **Known RFI database** — 27 cataloged terrestrial interference sources (v0.2.0)

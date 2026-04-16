@@ -136,7 +136,7 @@ Additionally, a **feature projection** layer produces a 128-dimensional feature 
 | 5 | `RFI_TERRESTRIAL` | Terrestrial radio frequency interference — cell towers, WiFi, power lines, vehicles. |
 | 6 | `RFI_SATELLITE` | Satellite downlink interference — GPS, Iridium, communication satellites. |
 | 7 | `NOISE` | Background noise with no detectable signal — statistical fluctuation. |
-| 8 | `CANDIDATE_ET` | Passes all filters and does not match known RFI patterns — requires human review. This class is the rarest and most significant. |
+| 8 | `CANDIDATE_SIGNAL` | Passes all filters and does not match known RFI patterns — requires human review. This class is the rarest and most significant. |
 
 ---
 

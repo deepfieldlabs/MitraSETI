@@ -219,11 +219,11 @@ Returns 1.0 if the signal falls within a known band, 0.0 otherwise.
 
 ### Zero-Drift Filter (weight: 0.30)
 
-Signals with |drift rate| < 0.05 Hz/s are likely terrestrial — a true ET signal from a rotating/orbiting body would exhibit non-zero Doppler drift. Score scales inversely with drift rate magnitude.
+Signals with |drift rate| < 0.05 Hz/s are likely terrestrial — a genuine signal from a rotating/orbiting body would exhibit non-zero Doppler drift. Score scales inversely with drift rate magnitude.
 
 ### Broadband Filter (weight: 0.20)
 
-Signals with bandwidth > 500 Hz receive a high broadband score. ET signals are expected to be narrowband (concentrated in a few Hz), while broadband emission is typically natural astrophysical sources or wideband RFI.
+Signals with bandwidth > 500 Hz receive a high broadband score. Signals of interest are expected to be narrowband (concentrated in a few Hz), while broadband emission is typically natural astrophysical sources or wideband RFI.
 
 ### Persistence Filter (weight: 0.10)
 

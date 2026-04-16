@@ -272,7 +272,7 @@ Async SQLite via `aiosqlite` for structured signal storage:
 |-------|---------|
 | `signals` | All detected signals with classification, confidence, coordinates |
 | `observations` | Processing metadata per file — timing, counts, status |
-| `candidates` | Promoted ET candidates with catalog matches and notes |
+| `candidates` | Promoted signal candidates with catalog matches and notes |
 
 Indexed on: `snr`, `is_candidate`, `observation_id`, `classification`, `status`.
 

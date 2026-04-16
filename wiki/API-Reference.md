@@ -198,7 +198,7 @@ Update a signal's classification, verification status, or notes. Used by researc
 
 ```json
 {
-  "classification": "candidate_et",
+  "classification": "candidate_signal",
   "is_verified": true,
   "notes": "Confirmed drifting signal at Voyager-1 carrier frequency"
 }
@@ -222,7 +222,7 @@ curl -X PATCH http://localhost:8000/signals/1 \
 
 ### `GET /candidates`
 
-List signals promoted to ET candidate status, ordered by SNR (descending). This is a convenience endpoint equivalent to `GET /signals?is_candidate=true`.
+List signals promoted to candidate status, ordered by SNR (descending). This is a convenience endpoint equivalent to `GET /signals?is_candidate=true`.
 
 **Response:**
 
@@ -287,7 +287,7 @@ Aggregate processing statistics across all observations.
     "rfi_terrestrial": 45210,
     "rfi_satellite": 42000,
     "noise": 8,
-    "candidate_et": 0
+    "candidate_signal": 0
   }
 }
 ```

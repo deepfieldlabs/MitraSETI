@@ -135,7 +135,7 @@ A (ON)  → B (OFF) → A (ON)  → C (OFF) → A (ON)  → D (OFF)
 target    ref #1     target    ref #2     target    ref #3
 ```
 
-A genuine ET signal should appear in all ON (A) observations and be absent from all OFF (B, C, D) observations. Any signal present in both ON and OFF pointings is local RFI.
+A genuine signal of interest should appear in all ON (A) observations and be absent from all OFF (B, C, D) observations. Any signal present in both ON and OFF pointings is local RFI.
 
 ### Implementation
 

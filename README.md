@@ -5,7 +5,7 @@
 <h1 align="center">MitraSETI</h1>
 
 <p align="center">
-  <strong>Intelligent SETI Signal Analysis — Rust-Accelerated Processing with Machine Learning Classification</strong>
+  <strong>Intelligent Radio Signal Analysis — Rust-Accelerated Processing with Machine Learning Classification</strong>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 
 ---
 
-The Search for Extraterrestrial Intelligence generates terabytes of radio observation data, yet the standard analysis tool — [turboSETI](https://github.com/UCBerkeleySETI/turbo_seti) — is a pure-Python, batch-only pipeline with no machine learning, no RFI learning, and no way to distinguish a drifting ET signal from a drifting satellite. MitraSETI replaces this bottleneck with a **Rust-powered de-Doppler engine** (up to **45x faster** on real Breakthrough Listen data), a **CNN + Transformer classifier** that automatically rejects RFI and flags anomalies, and a **streaming observation mode** that can run multi-day campaigns unattended — complete with desktop and web interfaces for real-time monitoring.
+Radio telescope observations generate terabytes of data, yet the standard analysis tool — [turboSETI](https://github.com/UCBerkeleySETI/turbo_seti) — is a pure-Python, batch-only pipeline with no machine learning, no RFI learning, and no way to distinguish a genuine narrowband signal from interference. MitraSETI replaces this bottleneck with a **Rust-powered de-Doppler engine** (up to **45x faster** on real Breakthrough Listen data), a **CNN + Transformer classifier** that automatically rejects RFI and flags anomalies, and a **streaming observation mode** that can run multi-day campaigns unattended — complete with desktop and web interfaces for real-time monitoring.
 
 ---
 
@@ -45,7 +45,7 @@ The Search for Extraterrestrial Intelligence generates terabytes of radio observ
 - **Matched filter bank** — 28 templates across 5 signal morphologies (narrowband, pulsed, broadband chirp, comb, modulated) with energy pre-filter
 - **Two-stage ML classification** — rule-based filtering eliminates 99%+ obvious RFI; CNN+Transformer inference runs only on survivors
 - **Out-of-distribution detection** — ensemble of MSP, Energy, and Spectral distance methods flags anomalous signals
-- **9-class signal taxonomy** — NARROWBAND_DRIFTING, NARROWBAND_STATIONARY, BROADBAND, PULSED, CHIRP, RFI_TERRESTRIAL, RFI_SATELLITE, NOISE, CANDIDATE_ET
+- **9-class signal taxonomy** — NARROWBAND_DRIFTING, NARROWBAND_STATIONARY, BROADBAND, PULSED, CHIRP, RFI_TERRESTRIAL, RFI_SATELLITE, NOISE, CANDIDATE_SIGNAL
 - **Streaming observation mode** — continuous multi-day campaigns with auto-training, self-correcting thresholds, and daily HTML reports
 - **Catalog cross-matching** — SIMBAD, NVSS, FIRST, and ATNF Pulsar catalogs with 24-hour caching
 - **AstroLens integration** — optical + radio cross-reference for multi-modal discovery
@@ -221,7 +221,7 @@ MLP classification head → 9 classes
 
 | Class | Description |
 |---|---|
-| `NARROWBAND_DRIFTING` | Narrowband signal with non-zero drift rate — the primary ET signature |
+| `NARROWBAND_DRIFTING` | Narrowband signal with non-zero drift rate — the primary signal of interest |
 | `NARROWBAND_STATIONARY` | Narrowband, zero drift — likely local RFI |
 | `BROADBAND` | Wideband emission |
 | `PULSED` | Periodic pulsed signal |
@@ -229,7 +229,7 @@ MLP classification head → 9 classes
 | `RFI_TERRESTRIAL` | Terrestrial radio frequency interference |
 | `RFI_SATELLITE` | Satellite downlink interference |
 | `NOISE` | Background noise, no signal present |
-| `CANDIDATE_ET` | Passes all filters — requires human review |
+| `CANDIDATE_SIGNAL` | Passes all filters — requires human review |
 
 ### Two-Stage Classification
 
@@ -529,7 +529,7 @@ MitraSETI exposes a REST API via FastAPI. Key endpoints:
 | `GET` | `/signals` | List detected signals with filters (SNR, drift rate, classification, RFI score) |
 | `GET` | `/signals/{id}` | Get a single signal by ID |
 | `PATCH` | `/signals/{id}` | Update signal classification, verification status, or notes |
-| `GET` | `/candidates` | List signals promoted to ET candidate status, ordered by SNR |
+| `GET` | `/candidates` | List signals promoted to candidate status, ordered by SNR |
 | `GET` | `/stats` | Aggregate processing statistics across all observations |
 | `GET` | `/catalog/crossref` | Cross-reference coordinates against SIMBAD, NVSS, FIRST, ATNF Pulsar catalogs |
 | `GET` | `/astrolens/crossref` | Check for AstroLens optical anomalies near a radio position |
@@ -556,7 +556,7 @@ curl "http://localhost:8000/catalog/crossref?ra=286.86&dec=12.17&radius_arcmin=5
 
 ## Comparison with turboSETI
 
-MitraSETI is **not** a fork of turboSETI — it is a ground-up reimagination of the SETI signal analysis pipeline, built for the era of machine learning and massive data volumes.
+MitraSETI is **not** a fork of turboSETI — it is a ground-up reimagination of the radio signal analysis pipeline, built for the era of machine learning and massive data volumes.
 
 <p align="center">
   <img src="assets/mitraseti_comparison.png" alt="MitraSETI vs turboSETI" width="800">
@@ -629,7 +629,7 @@ This multi-modal approach opens discovery pathways that single-wavelength analys
 | **Periodicity detection** | FFT-based search for periodic/pulsed signals |
 | **Attention heatmaps** | Transformer self-attention visualization for ML interpretability |
 | **Injection & recovery** | Signal injection benchmarks with 2D completeness contour maps |
-| **ON/OFF cadence filter** | Standard SETI RFI rejection using observation cadence patterns |
+| **ON/OFF cadence filter** | Standard RFI rejection using observation cadence patterns |
 
 ## Roadmap
 
@@ -676,7 +676,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
   <br>
   <sub>Created by <a href="https://www.linkedin.com/in/samantabatabaeian/">Saman Tabatabaeian</a> · <a href="https://github.com/deepfieldlabs">Deep Field Labs</a></sub>
   <br><br>
-  <strong>Built for the search for extraterrestrial intelligence.</strong>
+  <strong>Built for intelligent radio signal analysis at scale.</strong>
   <br>
   If you find this useful, please <strong>star the repo</strong> — it helps the project reach more researchers.
 </p>

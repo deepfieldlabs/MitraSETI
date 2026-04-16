@@ -108,7 +108,7 @@ Radio frequency interference dominates real observation data. The RFI filter app
 |--------|--------|-----------------|
 | **Known-band** | 0.40 | Signals in documented RFI bands (GPS L1/L2/L5, GLONASS, Iridium, WiFi 2.4/5 GHz, LTE, satellite TV, radar, HI 21cm) |
 | **Zero-drift** | 0.30 | Signals with \|drift\| < 0.05 Hz/s — likely terrestrial origin (no Doppler shift from relative motion) |
-| **Broadband** | 0.20 | Signals with bandwidth > 500 Hz — real ET signals are expected to be narrowband |
+| **Broadband** | 0.20 | Signals with bandwidth > 500 Hz — genuine signals of interest are expected to be narrowband |
 | **Persistence** | 0.10 | Signals that appear consistently across multiple observations (placeholder for cross-observation tracking) |
 
 ### Composite Score
